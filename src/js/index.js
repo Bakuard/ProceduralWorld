@@ -1,87 +1,91 @@
-import {mapGenerator, tileTypes} from './mapGenerator.js';
+import {sizeUnitsConverter} from './sizeMeasurementUnits.js';
+import {MapGenerator, mapObjectTypes} from './mapGenerator.js';
 
-const sizeMeasurementUnits = {
-    tileWidth: 60,
-    tileHeight: 60,
-    chunkSizePerTile: 4,
-    worldWidthPerChunk: 3,
-    worldHeightPerChunk: 3,
-    getWorldWidthPerTile() {
-        return this.worldWidthPerChunk * this.chunkSizePerTile;
-    },
-    getWorldHeightPerTile() {
-        return this.worldHeightPerChunk * this.chunkSizePerTile;
-    },
-    getChunkWidthPerPixel() {
-        return this.chunkSizePerTile * this.tileWidth;
-    },
-    getChunkHeightPerPixel() {
-        return this.chunkSizePerTile * this.tileHeight;
-    },
-    getWorldWidthPerPixel() {
-        return this.getChunkWidthPerPixel() * this.worldWidthPerChunk;
-    },
-    getWorldHeightPerPixel() {
-        return this.getChunkHeightPerPixel() * this.worldHeightPerChunk;
-    },
-    getXPerChunkFor(xPerPixel) {
-        return Math.floor(xPerPixel / this.getChunkWidthPerPixel());
-    },
-    getYPerChunkFor(yPerPixel) {
-        return Math.floor(yPerPixel / this.getChunkHeightPerPixel());
-    },
-    getXPerPixel(xPerChunk) {
-        return xPerChunk * this.getChunkWidthPerPixel();
-    },
-    getYPerPixel(yPerChunk) {
-        return yPerChunk * this.getChunkHeightPerPixel();
-    },
-    getDistanceXPerChunk(distanceXPerPixel) {
-        return Math.floor(distanceXPerPixel / this.getChunkWidthPerPixel());
-    },
-    getDistanceYPerChunk(distanceYPerPixel) {
-        return Math.floor(distanceYPerPixel / this.getChunkHeightPerPixel());
-    }
-};
+const mapGenerator = new MapGenerator();
 const physicsGroups = {};
 let player;
 let cursor;
 let map;
 
-function generateTile(tileNumberX, tileNumberY) {
-    const tileType = mapGenerator(tileNumberX, tileNumberY);
+function createPlayer(scene) {
+    scene.anims.create({
+        key: 'stay',
+        frames: scene.anims.generateFrameNames('character', { start: 0, end: 1 }),
+        frameRate: 4,
+        repeat: -1
+    });
+    scene.anims.create({
+        key: 'walk',
+        frames: scene.anims.generateFrameNames('character', { start: 4, end: 7 }),
+        frameRate: 7,
+        repeat: -1
+    });
 
-    const topPerPixel = tileNumberY * sizeMeasurementUnits.tileHeight;
-    const leftPerPixel = tileNumberX * sizeMeasurementUnits.tileWidth;
-    const physicsGroup = physicsGroups[tileType];
-    const tile = physicsGroup.create(leftPerPixel, topPerPixel, tileType)
-        .setDisplaySize(sizeMeasurementUnits.tileWidth, sizeMeasurementUnits.tileHeight)
-        .setSize(sizeMeasurementUnits.tileWidth, sizeMeasurementUnits.tileHeight)
+    const player = scene.physics.add.sprite(100, 100, 'character', '0')
+        .setBodySize(50, 60)
+        .setOrigin(0.5, 1)
+        .play('stay')
+        .refreshBody();
+    scene.physics.add.collider(player, physicsGroups[mapObjectTypes.waterTile]);
+    player.speed = 200;
+    player.movement = new Phaser.Math.Vector2(0, 0);
+    player.depth = player.y + 100;
+
+    return player;
+}
+
+function generateTile(tileNumberX, tileNumberY) {
+    const objectType = mapGenerator.getLandscape();
+
+    const topPerPixel = sizeUnitsConverter.getYPerPixelFromTile(tileNumberY);
+    const leftPerPixel = sizeUnitsConverter.getXPerPixelFromTile(tileNumberX);
+    const physicsGroup = physicsGroups[objectType];
+    const tile = physicsGroup.create(leftPerPixel, topPerPixel, objectType)
+        .setDisplaySize(sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight)
+        .setSize(sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight)
         .setOrigin(0, 0)
         .refreshBody();
-    tile.depth = 0;
-    tile.physicsGroup = physicsGroup;
+    tile.depth = topPerPixel;
 
     return tile;
+}
+
+function generateTree() {
+    const tree = mapGenerator.getTree();
+    if(tree) {
+        const physicsGroup = physicsGroups[mapObjectTypes.littleOak];
+        const treeObject = physicsGroup.create(tree.xPerPixel, tree.yPerPixel, mapObjectTypes.littleOak)
+            .setOrigin(0.5, 1)
+            .refreshBody();
+        treeObject.depth = tree.yPerPixel + 100;
+        return treeObject;
+    }
+    return null;
 }
 
 function Chunk(chunkNumberX, chunkNumberY) {
     this.chunkNumberX = chunkNumberX;
     this.chunkNumberY = chunkNumberY;
-    this.top = chunkNumberY * sizeMeasurementUnits.getChunkHeightPerPixel();
-    this.left = chunkNumberX * sizeMeasurementUnits.getChunkWidthPerPixel();
+    this.top = sizeUnitsConverter.getYPerPixel(chunkNumberY);
+    this.left = sizeUnitsConverter.getXPerPixel(chunkNumberX);
     this.objects = [];
-    this.destroy = function() {
+
+    Chunk.prototype.destroy ??= function() {
         for(let obj of this.objects)
             obj.destroy();
     };
-    this.generate = function() {
-        const tileNumberX = this.chunkNumberX * sizeMeasurementUnits.chunkSizePerTile;
-        const tileNumberY = this.chunkNumberY * sizeMeasurementUnits.chunkSizePerTile;
-        for(let y = 0; y < sizeMeasurementUnits.chunkSizePerTile; y++)
-            for(let x = 0; x < sizeMeasurementUnits.chunkSizePerTile; x++) {
+    Chunk.prototype.generate ??= function() {
+        const tileNumberX = sizeUnitsConverter.getXPerTileFromChunk(this.chunkNumberX);
+        const tileNumberY = sizeUnitsConverter.getYPerTileFromChunk(this.chunkNumberY);
+        for(let y = 0; y < sizeUnitsConverter.chunkSizePerTile; y++)
+            for(let x = 0; x < sizeUnitsConverter.chunkSizePerTile; x++) {
+                mapGenerator.generate(tileNumberX + x, tileNumberY + y);
                 const tile = generateTile(tileNumberX + x, tileNumberY + y);
                 this.objects.push(tile);
+
+                const tree = generateTree();
+                if(tree)
+                    this.objects.push(tree);
             }
     };
 
@@ -92,37 +96,37 @@ function Map() {
     this.topPerChunk = 0;
     this.leftPerChunk = 0;
     this.chunks = [];
-    this.getChunk = function(xPerChunk, yPerChunk) {
+    Map.prototype.getChunk ??= function(xPerChunk, yPerChunk) {
         const localXPerChunk = xPerChunk - this.leftPerChunk;
         const localYPerChunk = yPerChunk - this.topPerChunk;
-        const index = localXPerChunk + localYPerChunk * sizeMeasurementUnits.worldWidthPerChunk;
+        const index = localXPerChunk + localYPerChunk * sizeUnitsConverter.worldWidthPerChunk;
         return !this.checkChunkIsOutOfBorder(xPerChunk, yPerChunk, this.leftPerChunk, this.topPerChunk) ? this.chunks[index] : null;
     };
-    this.checkChunkIsOutOfBorder = function(xPerChunk, yPerChunk, leftPerChunk, topPerChunk) {
+    Map.prototype.checkChunkIsOutOfBorder ??= function(xPerChunk, yPerChunk, leftPerChunk, topPerChunk) {
         return xPerChunk < leftPerChunk
-            || xPerChunk >= leftPerChunk + sizeMeasurementUnits.worldWidthPerChunk
+            || xPerChunk >= leftPerChunk + sizeUnitsConverter.worldWidthPerChunk
             || yPerChunk < topPerChunk
-            || yPerChunk >= topPerChunk + sizeMeasurementUnits.worldHeightPerChunk;
+            || yPerChunk >= topPerChunk + sizeUnitsConverter.worldHeightPerChunk;
     };
-    this.checkDistanceToBorder = function(xPerPixel, yPerPixel, allowedDistancePerPixel) {
-        const topPerPixel = sizeMeasurementUnits.getYPerPixel(this.topPerChunk);
-        const leftPerPixel = sizeMeasurementUnits.getXPerPixel(this.leftPerChunk);
-        const bottomPerPixel = topPerPixel + sizeMeasurementUnits.getWorldHeightPerPixel();
-        const rightPerPixel = leftPerPixel + sizeMeasurementUnits.getWorldWidthPerPixel();
+    Map.prototype.checkDistanceToBorder ??= function(xPerPixel, yPerPixel, allowedDistancePerPixel) {
+        const topPerPixel = sizeUnitsConverter.getYPerPixel(this.topPerChunk);
+        const leftPerPixel = sizeUnitsConverter.getXPerPixel(this.leftPerChunk);
+        const bottomPerPixel = topPerPixel + sizeUnitsConverter.getWorldHeightPerPixel();
+        const rightPerPixel = leftPerPixel + sizeUnitsConverter.getWorldWidthPerPixel();
         return xPerPixel - leftPerPixel <= allowedDistancePerPixel
                 || rightPerPixel - xPerPixel <= allowedDistancePerPixel
                 || yPerPixel - topPerPixel <= allowedDistancePerPixel
                 || bottomPerPixel - yPerPixel <= allowedDistancePerPixel;
     };
-    this.generateChunksFor = function(xPerPixel, yPerPixel) {
-        const newTopPerChunk = sizeMeasurementUnits.getYPerChunkFor(yPerPixel) - Math.floor(sizeMeasurementUnits.worldHeightPerChunk / 2);
-        const newLeftPerChunk = sizeMeasurementUnits.getXPerChunkFor(xPerPixel) - Math.floor(sizeMeasurementUnits.worldWidthPerChunk / 2);
+    Map.prototype.generateChunksFor ??= function(xPerPixel, yPerPixel) {
+        const newTopPerChunk = sizeUnitsConverter.getYPerChunk(yPerPixel) - Math.floor(sizeUnitsConverter.worldHeightPerChunk / 2);
+        const newLeftPerChunk = sizeUnitsConverter.getXPerChunk(xPerPixel) - Math.floor(sizeUnitsConverter.worldWidthPerChunk / 2);
         const newChunks = [];
-        for(let y = 0; y < sizeMeasurementUnits.worldHeightPerChunk; y++)
-            for(let x = 0; x < sizeMeasurementUnits.worldWidthPerChunk; x++) {
+        for(let y = 0; y < sizeUnitsConverter.worldHeightPerChunk; y++)
+            for(let x = 0; x < sizeUnitsConverter.worldWidthPerChunk; x++) {
                 let chunk = this.getChunk(x + newLeftPerChunk, y + newTopPerChunk);
                 chunk = chunk ?? new Chunk(x + newLeftPerChunk, y + newTopPerChunk);
-                newChunks[x + y * sizeMeasurementUnits.worldWidthPerChunk] = chunk;
+                newChunks[x + y * sizeUnitsConverter.worldWidthPerChunk] = chunk;
             }
 
         for(let chunk of this.chunks)
@@ -147,46 +151,46 @@ function movePlayer() {
     } else {
         player.setFlipX(cursor.left.isDown);
         player.anims.play('walk', true);
+        player.depth = player.y + 100;
     }
+}
+
+function addImageFromAtlas(scene, atlasName, frameName, imageName) {
+    const frame = scene.textures.getFrame(atlasName, frameName);
+    scene.textures.addSpriteSheetFromAtlas(imageName, {
+        atlas: atlasName,
+        frame: frameName,
+        frameWidth: frame.width,
+        frameHeight: frame.height
+    });
 }
 
 
 function preload() {
     this.load.setBaseURL('../resources');
-    this.load.image('water', 'water_tile.jpg');
-    this.load.image('sand', 'sand_tile.jpg');
-    this.load.image('grass', 'grass_tile.jpg');
+    this.load.image(mapObjectTypes.waterTile, 'water_tile.jpg');
+    this.load.image(mapObjectTypes.sandTile, 'sand_tile.jpg');
+    this.load.image(mapObjectTypes.grassTile, 'grass_tile.jpg');
     this.load.atlas('character', 'character.png', 'character.json');
+    this.load.atlas('trees', 'trees.png', 'trees.json');
+    this.load.on('complete', () => {
+        addImageFromAtlas(this, 'trees', '0', mapObjectTypes.littleOak);
+        addImageFromAtlas(this, 'trees', '1', mapObjectTypes.bigOak);
+        addImageFromAtlas(this, 'trees', '2', mapObjectTypes.heightOak);
+        addImageFromAtlas(this, 'trees', '3', mapObjectTypes.deadLittleOak);
+        addImageFromAtlas(this, 'trees', '4', mapObjectTypes.deadBigOak);
+        addImageFromAtlas(this, 'trees', '5', mapObjectTypes.deadHeightOak);
+    });
 }
 
 function create() {
-    physicsGroups.grass = this.physics.add.staticGroup();
-    physicsGroups.water = this.physics.add.staticGroup();
-    physicsGroups.sand = this.physics.add.staticGroup();
+    for(let physicsGroupName of Object.values(mapObjectTypes))
+        physicsGroups[physicsGroupName] = this.physics.add.staticGroup();
+
+    player = createPlayer(this);
 
     map = new Map();
-    map.generateChunksFor(500, 500);
-
-    this.anims.create({
-        key: 'stay',
-        frames: this.anims.generateFrameNames('character', { start: 0, end: 1 }),
-        frameRate: 4,
-        repeat: -1
-    });
-    this.anims.create({
-        key: 'walk',
-        frames: this.anims.generateFrameNames('character', { start: 4, end: 7 }),
-        frameRate: 7,
-        repeat: -1
-    });
-
-    player = this.physics.add.sprite(500, 50, 'character', '0')
-        .setBodySize(50, 60)
-        .play('stay');
-    this.physics.add.collider(player, physicsGroups.water);
-    player.speed = 200;
-    player.movement = new Phaser.Math.Vector2(0, 0);
-    player.depth = 100;
+    map.generateChunksFor(player.x, player.y);
 
     cursor = this.input.keyboard.addKeys({
         left: Phaser.Input.Keyboard.KeyCodes.A,
@@ -201,7 +205,7 @@ function create() {
 function update() {
     movePlayer();
 
-    if(map.checkDistanceToBorder(player.x, player.y, sizeMeasurementUnits.getChunkWidthPerPixel()))
+    if(map.checkDistanceToBorder(player.x, player.y, sizeUnitsConverter.getChunkWidthPerPixel() * 4))
         map.generateChunksFor(player.x, player.y);
 }
 
@@ -222,7 +226,7 @@ const config = {
     physics: {
         default: 'arcade',
         arcade: {
-            debug: true
+            debug: false
         }
     }
 };

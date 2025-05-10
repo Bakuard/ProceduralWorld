@@ -58,8 +58,6 @@
     }
   },
   "meta": {
-    "app": "sprite-sheet-to-json",
-    "version": "1.0.0",
     "image": "character.png",
     "format": "RGBA8888",
     "size": {"w": 300, "h": 164},

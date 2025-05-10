@@ -1,0 +1,52 @@
+{
+    "frames": {
+        "0": {
+            "frame": {"x": 0, "y": 44, "w": 95, "h": 136},
+            "rotated": false,
+            "trimmed": true,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 95, "h": 136},
+            "sourceSize": {"w": 95, "h": 136}
+        },
+        "1": {
+            "frame": {"x": 113, "y": 0, "w": 140, "h": 180},
+            "rotated": false,
+            "trimmed": true,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 140, "h": 180},
+            "sourceSize": {"w": 140, "h": 180}
+        },
+        "2": {
+            "frame": {"x": 261, "y": 0, "w": 146, "h": 180},
+            "rotated": false,
+            "trimmed": true,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 146, "h": 180},
+            "sourceSize": {"w": 146, "h": 180}
+        },
+        "3": {
+            "frame": {"x": 0, "y": 224, "w": 95, "h": 138},
+            "rotated": false,
+            "trimmed": true,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 95, "h": 138},
+            "sourceSize": {"w": 95, "h": 138}
+        },
+        "4": {
+            "frame": {"x": 125, "y": 180, "w": 115, "h": 182},
+            "rotated": false,
+            "trimmed": true,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 115, "h": 182},
+            "sourceSize": {"w": 115, "h": 182}
+        },
+        "5": {
+            "frame": {"x": 273, "y": 186, "w": 134, "h": 175},
+            "rotated": false,
+            "trimmed": true,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 134, "h": 175},
+            "sourceSize": {"w": 134, "h": 175}
+        }
+    },
+    "meta": {
+        "image": "trees.png",
+        "format": "RGBA8888",
+        "size": {"w": 408, "h": 362},
+        "scale": "1"
+    }
+}
