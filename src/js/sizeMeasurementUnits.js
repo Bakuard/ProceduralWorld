@@ -2,13 +2,13 @@ export const sizeUnitsConverter = {
     tileWidth: 60,
     tileHeight: 60,
     chunkSizePerTile: 5,
-    worldWidthPerChunk: 7,
-    worldHeightPerChunk: 5,
-    getWorldWidthPerTile() {
-        return this.worldWidthPerChunk * this.chunkSizePerTile;
+    worldWidthPerChunk: 3,
+    worldHeightPerChunk: 3,
+    getWorldWidthPerPixel() {
+        return this.getChunkWidthPerPixel() * this.worldWidthPerChunk;
     },
-    getWorldHeightPerTile() {
-        return this.worldHeightPerChunk * this.chunkSizePerTile;
+    getWorldHeightPerPixel() {
+        return this.getChunkHeightPerPixel() * this.worldHeightPerChunk;
     },
     getChunkWidthPerPixel() {
         return this.chunkSizePerTile * this.tileWidth;
@@ -16,22 +16,16 @@ export const sizeUnitsConverter = {
     getChunkHeightPerPixel() {
         return this.chunkSizePerTile * this.tileHeight;
     },
-    getWorldWidthPerPixel() {
-        return this.getChunkWidthPerPixel() * this.worldWidthPerChunk;
-    },
-    getWorldHeightPerPixel() {
-        return this.getChunkHeightPerPixel() * this.worldHeightPerChunk;
-    },
-    getXPerChunk(xPerPixel) {
+    getXPerChunkFromPixel(xPerPixel) {
         return Math.floor(xPerPixel / this.getChunkWidthPerPixel());
     },
-    getYPerChunk(yPerPixel) {
+    getYPerChunkFromPixel(yPerPixel) {
         return Math.floor(yPerPixel / this.getChunkHeightPerPixel());
     },
-    getXPerTile(xPerPixel) {
+    getXPerTileFromPixel(xPerPixel) {
         return Math.floor(xPerPixel / this.tileWidth);
     },
-    getYPerTile(yPerPixel) {
+    getYPerTileFromPixel(yPerPixel) {
         return Math.floor(yPerPixel / this.tileHeight);
     },
     getXPerTileFromChunk(xPerChunk) {
@@ -40,10 +34,10 @@ export const sizeUnitsConverter = {
     getYPerTileFromChunk(yPerChunk) {
         return yPerChunk * this.chunkSizePerTile;
     },
-    getXPerPixel(xPerChunk) {
+    getXPerPixelFromChunk(xPerChunk) {
         return xPerChunk * this.getChunkWidthPerPixel();
     },
-    getYPerPixel(yPerChunk) {
+    getYPerPixelFromChunk(yPerChunk) {
         return yPerChunk * this.getChunkHeightPerPixel();
     },
     getXPerPixelFromTile(xPerTile) {
@@ -52,13 +46,7 @@ export const sizeUnitsConverter = {
     getYPerPixelFromTile(yPerTile) {
         return yPerTile * this.tileHeight;
     },
-    getDistanceXPerChunk(distanceXPerPixel) {
-        return Math.floor(distanceXPerPixel / this.getChunkWidthPerPixel());
-    },
-    getDistanceYPerChunk(distanceYPerPixel) {
-        return Math.floor(distanceYPerPixel / this.getChunkHeightPerPixel());
-    },
     doesTileContainPixel(xPerTile, yPerTile, xPerPixel, yPerPixel) {
-        return this.getXPerTile(xPerPixel) === xPerTile && this.getYPerTile(yPerPixel) === yPerTile;
+        return this.getXPerTileFromPixel(xPerPixel) === xPerTile && this.getYPerTileFromPixel(yPerPixel) === yPerTile;
     }
 };
