@@ -214,8 +214,8 @@ function updateMinimap() {
     minimap.graphic.depth = sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk);
 
     minimap.camera.setScroll(
-        sizeUnitsConverter.getXPerPixelFromChunk(map.leftPerChunk),
-        sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk)
+        sizeUnitsConverter.getXPerPixelFromChunk(map.leftPerChunk) + sizeUnitsConverter.getWorldWidthPerPixel() * 0.4,
+        sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk) + sizeUnitsConverter.getWorldHeightPerPixel() * 0.4
     );
     minimap.camera.ignore(ignoringObjects);
 }
@@ -262,7 +262,7 @@ function create() {
     player = createPlayer(this);
     this.cameras.main.startFollow(player);
 
-    map = new Map(1);
+    map = new Map(4);
     map.generateChunksFor(player.x, player.y);
 
     userInput = this.input.keyboard.addKeys({

@@ -2,8 +2,8 @@ export const sizeUnitsConverter = {
     tileWidth: 60,
     tileHeight: 60,
     chunkSizePerTile: 5,
-    worldWidthPerChunk: 3,
-    worldHeightPerChunk: 3,
+    worldWidthPerChunk: 11,
+    worldHeightPerChunk: 11,
     getWorldWidthPerPixel() {
         return this.getChunkWidthPerPixel() * this.worldWidthPerChunk;
     },
