@@ -1,52 +1,67 @@
-export const sizeUnitsConverter = {
-    tileWidth: 60,
-    tileHeight: 60,
-    chunkSizePerTile: 5,
-    worldWidthPerChunk: 11,
-    worldHeightPerChunk: 11,
-    getWorldWidthPerPixel() {
-        return this.getChunkWidthPerPixel() * this.worldWidthPerChunk;
-    },
-    getWorldHeightPerPixel() {
-        return this.getChunkHeightPerPixel() * this.worldHeightPerChunk;
-    },
-    getChunkWidthPerPixel() {
-        return this.chunkSizePerTile * this.tileWidth;
-    },
-    getChunkHeightPerPixel() {
-        return this.chunkSizePerTile * this.tileHeight;
-    },
-    getXPerChunkFromPixel(xPerPixel) {
-        return Math.floor(xPerPixel / this.getChunkWidthPerPixel());
-    },
-    getYPerChunkFromPixel(yPerPixel) {
-        return Math.floor(yPerPixel / this.getChunkHeightPerPixel());
-    },
-    getXPerTileFromPixel(xPerPixel) {
-        return Math.floor(xPerPixel / this.tileWidth);
-    },
-    getYPerTileFromPixel(yPerPixel) {
-        return Math.floor(yPerPixel / this.tileHeight);
-    },
-    getXPerTileFromChunk(xPerChunk) {
-        return xPerChunk * this.chunkSizePerTile;
-    },
-    getYPerTileFromChunk(yPerChunk) {
-        return yPerChunk * this.chunkSizePerTile;
-    },
-    getXPerPixelFromChunk(xPerChunk) {
-        return xPerChunk * this.getChunkWidthPerPixel();
-    },
-    getYPerPixelFromChunk(yPerChunk) {
-        return yPerChunk * this.getChunkHeightPerPixel();
-    },
-    getXPerPixelFromTile(xPerTile) {
-        return xPerTile * this.tileWidth;
-    },
-    getYPerPixelFromTile(yPerTile) {
-        return yPerTile * this.tileHeight;
-    },
-    doesTileContainPixel(xPerTile, yPerTile, xPerPixel, yPerPixel) {
-        return this.getXPerTileFromPixel(xPerPixel) === xPerTile && this.getYPerTileFromPixel(yPerPixel) === yPerTile;
-    }
+export function SizeUnitsConverter(tileWidth, tileHeight, chunkSizePerTile, worldWidthPerChunk, worldHeightPerChunk) {
+    this.tileWidth = tileWidth;
+    this.tileHeight = tileHeight;
+    this.chunkSizePerTile = chunkSizePerTile;
+    this.worldWidthPerChunk = worldWidthPerChunk;
+    this.worldHeightPerChunk = worldHeightPerChunk;
+};
+
+SizeUnitsConverter.prototype.getWorldWidthPerPixel = function() {
+    return this.getChunkWidthPerPixel() * this.worldWidthPerChunk;
+};
+
+SizeUnitsConverter.prototype.getWorldHeightPerPixel = function() {
+    return this.getChunkHeightPerPixel() * this.worldHeightPerChunk;
+};
+
+SizeUnitsConverter.prototype.getChunkWidthPerPixel = function() {
+    return this.chunkSizePerTile * this.tileWidth;
+};
+
+SizeUnitsConverter.prototype.getChunkHeightPerPixel = function() {
+    return this.chunkSizePerTile * this.tileHeight;
+};
+
+SizeUnitsConverter.prototype.getXPerChunkFromPixel = function(xPerPixel) {
+    return Math.floor(xPerPixel / this.getChunkWidthPerPixel());
+};
+
+SizeUnitsConverter.prototype.getYPerChunkFromPixel = function(yPerPixel) {
+    return Math.floor(yPerPixel / this.getChunkHeightPerPixel());
+};
+
+SizeUnitsConverter.prototype.getXPerTileFromPixel = function(xPerPixel) {
+    return Math.floor(xPerPixel / this.tileWidth);
+};
+
+SizeUnitsConverter.prototype.getYPerTileFromPixel = function(yPerPixel) {
+    return Math.floor(yPerPixel / this.tileHeight);
+};
+
+SizeUnitsConverter.prototype.getXPerTileFromChunk = function(xPerChunk) {
+    return xPerChunk * this.chunkSizePerTile;
+};
+
+SizeUnitsConverter.prototype.getYPerTileFromChunk = function(yPerChunk) {
+    return yPerChunk * this.chunkSizePerTile;
+};
+
+SizeUnitsConverter.prototype.getXPerPixelFromChunk = function(xPerChunk) {
+    return xPerChunk * this.getChunkWidthPerPixel();
+};
+
+SizeUnitsConverter.prototype.getYPerPixelFromChunk = function(yPerChunk) {
+    return yPerChunk * this.getChunkHeightPerPixel();
+};
+
+SizeUnitsConverter.prototype.getXPerPixelFromTile = function(xPerTile) {
+    return xPerTile * this.tileWidth;
+};
+
+SizeUnitsConverter.prototype.getYPerPixelFromTile = function(yPerTile) {
+    return yPerTile * this.tileHeight;
+};
+
+SizeUnitsConverter.prototype.doesTileContainPixel = function(xPerTile, yPerTile, xPerPixel, yPerPixel) {
+    return this.getXPerTileFromPixel(xPerPixel) === xPerTile && this.getYPerTileFromPixel(yPerPixel) === yPerTile;
 };

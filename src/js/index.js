@@ -1,10 +1,11 @@
-import {sizeUnitsConverter} from './sizeMeasurementUnits.js';
+import {SizeUnitsConverter} from './sizeMeasurementUnits.js';
 import {objectTypes} from "./objectTypes.js";
-import {MapGenerator} from './mapGenerator.js';
+import {MapGenerator} from "./mapGenerator.js";
 
-const mapGenerator = new MapGenerator();
 const physicsGroups = {};
 const minimap = {};
+let sizeUnitsConverter;
+let mapGenerator;
 let player;
 let userInput;
 let map;
@@ -182,8 +183,6 @@ function addImageFromAtlas(scene, atlasName, frameName, imageName) {
 function switchMinimap() {
     if(Phaser.Input.Keyboard.JustDown(userInput.switchMinimap)) {
         minimap.camera.setVisible(!minimap.camera.visible);
-        minimap.graphic.clear();
-
         updateMinimap();
     }
 }
@@ -214,14 +213,22 @@ function updateMinimap() {
     minimap.graphic.depth = sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk);
 
     minimap.camera.setScroll(
-        sizeUnitsConverter.getXPerPixelFromChunk(map.leftPerChunk) + sizeUnitsConverter.getWorldWidthPerPixel() * 0.4,
-        sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk) + sizeUnitsConverter.getWorldHeightPerPixel() * 0.4
+        sizeUnitsConverter.getXPerPixelFromChunk(map.leftPerChunk),
+        sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk)
     );
+    minimap.camera.setBounds(
+        sizeUnitsConverter.getXPerPixelFromChunk(map.leftPerChunk),
+        sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk),
+        sizeUnitsConverter.getWorldWidthPerPixel(),
+        sizeUnitsConverter.getWorldHeightPerPixel()
+    )
     minimap.camera.ignore(ignoringObjects);
 }
 
-function createMinimap(scene) {
-    minimap.scale = 0.2;
+function createMinimap(scene, scale) {
+    minimap.maxScale = 1;
+    minimap.minScale = scale;
+    minimap.scale = Math.min(scale, minimap.maxScale);
     minimap.minimapWidthPerPixel = sizeUnitsConverter.getWorldWidthPerPixel() * minimap.scale;
     minimap.minimapHeightPerPixel = sizeUnitsConverter.getWorldHeightPerPixel() * minimap.scale;
     minimap.screenXPerPixel = (config.width - minimap.minimapWidthPerPixel) / 2;
@@ -235,6 +242,45 @@ function createMinimap(scene) {
     minimap.graphic = scene.add.graphics();
 
     scene.cameras.main.ignore(minimap.graphic);
+
+    //minimap zoom
+    scene.input.on('wheel', event => {
+        if(minimap.camera.visible
+            && event.position.x >= minimap.camera.x
+            && event.position.x <= minimap.camera.x + minimap.camera.width
+            && event.position.y >= minimap.camera.y
+            && event.position.y <= minimap.camera.y + minimap.camera.height) {
+            const delta = event.deltaY > 0 ? -0.1 : 0.1;
+            minimap.scale = Phaser.Math.Clamp(minimap.scale + delta, minimap.minScale, minimap.maxScale);
+            minimap.camera.setZoom(minimap.scale);
+        }
+    });
+
+    //minimap drag-to-scroll
+    let isDragging = false;
+    let dragStart = new Phaser.Math.Vector2();
+
+    scene.input.on('pointerdown', pointer => {
+        if(pointer.leftButtonDown()) {
+            isDragging = true;
+            dragStart.set(pointer.x, pointer.y);
+        }
+    });
+
+    scene.input.on('pointerup', () => {
+        isDragging = false;
+    });
+
+    scene.input.on('pointermove', pointer => {
+        if(!isDragging) return;
+
+        minimap.camera.setScroll(
+            minimap.camera.scrollX - (pointer.x - dragStart.x) / minimap.camera.zoom,
+            minimap.camera.scrollY - (pointer.y - dragStart.y) / minimap.camera.zoom
+        );
+
+        dragStart.set(pointer.x, pointer.y);
+    });
 }
 
 
@@ -259,11 +305,16 @@ function create() {
     for(let physicsGroupName of Object.values(objectTypes))
         physicsGroups[physicsGroupName] = this.physics.add.staticGroup();
 
+    sizeUnitsConverter = new SizeUnitsConverter(60, 60, 5, 11, 11);
+    mapGenerator = new MapGenerator(sizeUnitsConverter);
+
     player = createPlayer(this);
     this.cameras.main.startFollow(player);
 
     map = new Map(4);
     map.generateChunksFor(player.x, player.y);
+
+    createMinimap(this, 0.2);
 
     userInput = this.input.keyboard.addKeys({
         left: Phaser.Input.Keyboard.KeyCodes.A,
@@ -272,8 +323,6 @@ function create() {
         down: Phaser.Input.Keyboard.KeyCodes.S,
         switchMinimap: Phaser.Input.Keyboard.KeyCodes.M
     });
-
-    createMinimap(this);
 }
 
 function update() {

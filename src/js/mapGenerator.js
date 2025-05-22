@@ -1,9 +1,4 @@
-import {sizeUnitsConverter} from './sizeMeasurementUnits.js';
 import {objectTypes} from "./objectTypes.js";
-
-function randomNumberInRange(randomValue, min, max) {
-    return randomValue * (max - min) + min;
-}
 
 function randomIntegerInRange(randomValue, min, max) {
     return Math.floor(randomValue * (max - min + 1)) + min;
@@ -77,7 +72,7 @@ function createOffsetVectors(count, vectorLength) {
     return vectors;
 }
 
-export function MapGenerator(seed, octaves, persistence, frequency, frequencyMod, treeCellSizePerTile) {
+export function MapGenerator(sizeUnitsConverter, seed, octaves, persistence, frequency, frequencyMod, treeCellSizePerTile) {
     this.seed = seed ?? randomIntegerInRange(Math.random(), 0, 1_000_000);
     this.octaves = octaves ?? 16;
     this.persistence = persistence ?? 0.5;
