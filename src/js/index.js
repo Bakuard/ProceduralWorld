@@ -9,28 +9,42 @@ let mapGenerator;
 let player;
 let userInput;
 let map;
+let slimeSpawnTimer;
 
-function createPlayer(scene) {
+function addImageFromAtlas(scene, atlasName, frameName, imageName) {
+    const frame = scene.textures.getFrame(atlasName, frameName);
+    scene.textures.addSpriteSheetFromAtlas(imageName, {
+        atlas: atlasName,
+        frame: frameName,
+        frameWidth: frame.width,
+        frameHeight: frame.height
+    });
+}
+
+
+function preparePlayerAnimation(scene) {
     scene.anims.create({
-        key: 'stay',
+        key: 'player_stay',
         frames: scene.anims.generateFrameNames('character', { start: 0, end: 1 }),
         frameRate: 4,
         repeat: -1
     });
     scene.anims.create({
-        key: 'walk',
+        key: 'player_walk',
         frames: scene.anims.generateFrameNames('character', { start: 4, end: 7 }),
         frameRate: 7,
         repeat: -1
     });
+}
 
-    const player = scene.physics.add.sprite(100, 100, 'character', '0')
-        .setBodySize(50, 60)
+function createPlayer(scene, x, y, width, height, speed) {
+    const player = scene.physics.add.sprite(x, y, 'character', '0')
+        .setBodySize(width, height)
         .setOrigin(0.5, 1)
-        .play('stay')
+        .play('player_stay')
         .refreshBody();
     scene.physics.add.collider(player, physicsGroups[objectTypes.waterTile]);
-    player.speed = 200;
+    player.speed = speed;
     player.movement = new Phaser.Math.Vector2(0, 0);
     player.depth = player.y + 100;
     player.type = objectTypes.player;
@@ -38,11 +52,97 @@ function createPlayer(scene) {
     return player;
 }
 
-function generateTile(tileNumberX, tileNumberY) {
-    const tileType = mapGenerator.getLandscape();
+function movePlayer() {
+    player.movement.x = userInput.right.isDown - userInput.left.isDown;
+    player.movement.y = userInput.down.isDown - userInput.up.isDown;
+    player.movement.normalize().scale(player.speed);
 
-    const topPerPixel = sizeUnitsConverter.getYPerPixelFromTile(tileNumberY);
-    const leftPerPixel = sizeUnitsConverter.getXPerPixelFromTile(tileNumberX);
+    player.setVelocityX(player.movement.x).setVelocityY(player.movement.y);
+
+    if(player.movement.equals(Phaser.Math.Vector2.ZERO)) {
+        player.anims.play('player_stay', true);
+    } else {
+        player.setFlipX(userInput.left.isDown);
+        player.anims.play('player_walk', true);
+        player.depth = player.y + 100;
+    }
+}
+
+
+function prepareSlimeAnimation(scene) {
+    scene.anims.create({
+        key: 'slime_stay',
+        frames: scene.anims.generateFrameNames('slime', { start: 11, end: 12 }),
+        frameRate: 3,
+        repeat: -1
+    });
+    scene.anims.create({
+        key: 'slime_walk',
+        frames: scene.anims.generateFrameNames('slime', { start: 0, end: 10 }),
+        frameRate: 8,
+        repeat: -1
+    });
+}
+
+function createSlime(scene, width, height, speed, roamingRadius, chunk) {
+    const x = Phaser.Math.Between(chunk.left + width/2, chunk.right - width/2);
+    const y = Phaser.Math.Between(chunk.top + height, chunk.bottom);
+    const slime = scene.physics.add.sprite(x, y, 'slime', '0')
+        .setDisplaySize(width, height)
+        .setOrigin(0.5, 1)
+        .play('slime_stay')
+        .refreshBody();
+    scene.physics.add.collider(slime, physicsGroups[objectTypes.player]);
+    scene.physics.add.collider(slime, physicsGroups[objectTypes.slime]);
+    scene.physics.add.collider(slime, physicsGroups[objectTypes.waterTile]);
+    slime.depth = slime.y + 100;
+    slime.type = objectTypes.slime;
+    slime.speed = speed;
+    slime.spawnPointX = x;
+    slime.spawnPointY = y;
+    slime.aimX = x;
+    slime.aimY = y;
+    slime.movement = new Phaser.Math.Vector2(0, 0);
+    slime.roamingRadius = roamingRadius;
+    slime.on('animationupdate', (anim, frame, sprite) => {
+        if(anim.key === 'slime_walk')
+            if(frame.index >= 0 && frame.index <= 4 || frame.index >= 10 && frame.index <= 11)
+                slime.setVelocity(0, 0);
+            else
+                slime.setVelocityX(slime.movement.x).setVelocityY(slime.movement.y);
+    });
+    chunk.objectsByType[objectTypes.slime].push(slime);
+}
+
+function spawnSlimes(scene, slimeSpawnCondition, width, height, speed, roamingRadius) {
+    for(let chunk of map.chunks)
+        if(chunk.hasSlimeSpawner && chunk.objectsByType[objectTypes.slime].length < slimeSpawnCondition.maxSlimes)
+            createSlime(scene, width, height, speed, roamingRadius, chunk);
+}
+
+function moveSlimes() {
+    const slimes = map.fillArrayWithType(objectTypes.slime, []);
+    for(let slime of slimes) {
+        if(Phaser.Geom.Rectangle.Contains(slime.getBounds(), slime.aimX, slime.aimY)) {
+            slime.aimX = Phaser.Math.Between(slime.spawnPointX - slime.roamingRadius, slime.spawnPointX + slime.roamingRadius);
+            slime.aimY = Phaser.Math.Between(slime.spawnPointY - slime.roamingRadius, slime.spawnPointY + slime.roamingRadius);
+            slime.aimX = Phaser.Math.Clamp(slime.aimX, map.left, map.right);
+            slime.aimY = Phaser.Math.Clamp(slime.aimY, map.top, map.bottom);
+
+            slime.movement.x = slime.aimX - slime.x;
+            slime.movement.y = slime.aimY - slime.y;
+            slime.movement.normalize().scale(slime.speed);
+
+            slime.anims.play('slime_walk', true);
+        }
+        slime.depth = slime.y + 100;
+    }
+}
+
+
+function createTile(tileNumberX, tileNumberY, tileType) {
+    const topPerPixel = sizeUnitsConverter.pixelYFromTileY(tileNumberY);
+    const leftPerPixel = sizeUnitsConverter.pixelXFromTileX(tileNumberX);
     const physicsGroup = physicsGroups[tileType];
     const tile = physicsGroup.create(leftPerPixel, topPerPixel, tileType)
         .setDisplaySize(sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight)
@@ -55,87 +155,98 @@ function generateTile(tileNumberX, tileNumberY) {
     return tile;
 }
 
-function generateTree() {
-    const tree = mapGenerator.getTree();
-    if(tree) {
-        const physicsGroup = physicsGroups[objectTypes.littleOak];
-        const treeObject = physicsGroup.create(tree.xPerPixel, tree.yPerPixel, tree.treeType)
-            .setOrigin(0.5, 1)
-            .refreshBody();
-        treeObject.depth = tree.yPerPixel + 100;
-        treeObject.type = tree.treeType;
-        return treeObject;
-    }
-    return null;
+function createTree(treeMeta) {
+    const physicsGroup = physicsGroups[objectTypes.littleOak];
+    const treeObject = physicsGroup.create(treeMeta.xPerPixel, treeMeta.yPerPixel, treeMeta.treeType)
+        .setOrigin(0.5, 1)
+        .refreshBody();
+    treeObject.depth = treeMeta.yPerPixel + 100;
+    treeObject.type = treeMeta.treeType;
+    return treeObject;
 }
 
-function Chunk(chunkNumberX, chunkNumberY) {
+function Chunk(chunkNumberX, chunkNumberY, slimeSpawnCondition) {
     this.chunkNumberX = chunkNumberX;
     this.chunkNumberY = chunkNumberY;
-    this.top = sizeUnitsConverter.getYPerPixelFromChunk(chunkNumberY);
-    this.left = sizeUnitsConverter.getXPerPixelFromChunk(chunkNumberX);
+    this.top = sizeUnitsConverter.pixelYFromChunkY(chunkNumberY);
+    this.left = sizeUnitsConverter.pixelXFromChunkX(chunkNumberX);
+    this.bottom = sizeUnitsConverter.pixelYFromChunkY(chunkNumberY) + sizeUnitsConverter.chunkHeightInPixels();
+    this.right = sizeUnitsConverter.pixelXFromChunkX(chunkNumberX) + sizeUnitsConverter.chunkWidthInPixels();
     this.objectsByType = {};
     Object.values(objectTypes).forEach(type => this.objectsByType[type] = []);
+
+    //terrain generation
+    const tileNumberX = sizeUnitsConverter.tileXFromChunkX(this.chunkNumberX);
+    const tileNumberY = sizeUnitsConverter.tileYFromChunkY(this.chunkNumberY);
+    for(let y = 0; y < sizeUnitsConverter.chunkSizeInTile; y++) {
+        for (let x = 0; x < sizeUnitsConverter.chunkSizeInTile; x++) {
+            mapGenerator.generate(tileNumberX + x, tileNumberY + y);
+            const tileType = mapGenerator.getLandscape();
+            const tile = createTile(tileNumberX + x, tileNumberY + y, tileType);
+            this.objectsByType[tile.type].push(tile);
+
+            const treeMeta = mapGenerator.getTree();
+            if(treeMeta) {
+                const tree = createTree(treeMeta);
+                this.objectsByType[tree.type].push(tree);
+            }
+        }
+    }
+
+    //Calculate bioms percent
+    this.biomsPercent = {};
+    const tilesNumberInOneChunk = sizeUnitsConverter.chunkAreaInTiles();
+    this.biomsPercent[objectTypes.sandTile] = this.objectsByType[objectTypes.sandTile].length / tilesNumberInOneChunk;
+    this.biomsPercent[objectTypes.waterTile] = this.objectsByType[objectTypes.waterTile].length / tilesNumberInOneChunk;
+    this.biomsPercent[objectTypes.grassTile] = this.objectsByType[objectTypes.grassTile].length / tilesNumberInOneChunk;
+
+    this.hasSlimeSpawner = this.biomsPercent[objectTypes.grassTile] >= slimeSpawnCondition.grassTilesPercent
+        && mapGenerator.noise(this.chunkNumberX, this.chunkNumberY) <= slimeSpawnCondition.probability;
 
     Chunk.prototype.destroy ??= function() {
         for(let objectWithParticularType of Object.values(this.objectsByType))
             for(let obj of objectWithParticularType)
                 obj.destroy();
     };
-    Chunk.prototype.generate ??= function() {
-        const tileNumberX = sizeUnitsConverter.getXPerTileFromChunk(this.chunkNumberX);
-        const tileNumberY = sizeUnitsConverter.getYPerTileFromChunk(this.chunkNumberY);
-        for(let y = 0; y < sizeUnitsConverter.chunkSizePerTile; y++)
-            for(let x = 0; x < sizeUnitsConverter.chunkSizePerTile; x++) {
-                mapGenerator.generate(tileNumberX + x, tileNumberY + y);
-                const tile = generateTile(tileNumberX + x, tileNumberY + y);
-                this.objectsByType[tile.type].push(tile);
-
-                const tree = generateTree();
-                if(tree)
-                    this.objectsByType[tree.type].push(tree);
-            }
-    };
-
-    this.generate();
 }
 
-function Map(distanceToBorderPerChunk) {
+function Map(distanceToBorderPerChunk, slimeSpawnCondition) {
     this.distanceToBorderForLoading = distanceToBorderPerChunk;
     this.topPerChunk = 0;
     this.leftPerChunk = 0;
+    this.top = 0;
+    this.bottom = 0;
+    this.left = 0;
+    this.right = 0;
     this.chunks = [];
+
     Map.prototype.getChunk ??= function(xPerChunk, yPerChunk) {
         const localXPerChunk = xPerChunk - this.leftPerChunk;
         const localYPerChunk = yPerChunk - this.topPerChunk;
-        const index = localXPerChunk + localYPerChunk * sizeUnitsConverter.worldWidthPerChunk;
+        const index = localXPerChunk + localYPerChunk * sizeUnitsConverter.worldWidthInChunk;
         return !this.checkChunkIsOutOfBorder(xPerChunk, yPerChunk, this.leftPerChunk, this.topPerChunk) ? this.chunks[index] : null;
     };
     Map.prototype.checkChunkIsOutOfBorder ??= function(xPerChunk, yPerChunk, leftPerChunk, topPerChunk) {
         return xPerChunk < leftPerChunk
-            || xPerChunk >= leftPerChunk + sizeUnitsConverter.worldWidthPerChunk
+            || xPerChunk >= leftPerChunk + sizeUnitsConverter.worldWidthInChunk
             || yPerChunk < topPerChunk
-            || yPerChunk >= topPerChunk + sizeUnitsConverter.worldHeightPerChunk;
+            || yPerChunk >= topPerChunk + sizeUnitsConverter.worldHeightInChunk;
     };
     Map.prototype.checkDistanceToBorder ??= function(xPerPixel, yPerPixel) {
-        const allowedDistance = sizeUnitsConverter.getChunkWidthPerPixel() * this.distanceToBorderForLoading;
-        const topPerPixel = sizeUnitsConverter.getYPerPixelFromChunk(this.topPerChunk);
-        const leftPerPixel = sizeUnitsConverter.getXPerPixelFromChunk(this.leftPerChunk);
-        const bottomPerPixel = topPerPixel + sizeUnitsConverter.getWorldHeightPerPixel();
-        const rightPerPixel = leftPerPixel + sizeUnitsConverter.getWorldWidthPerPixel();
-        return xPerPixel - leftPerPixel <= allowedDistance
-                || rightPerPixel - xPerPixel <= allowedDistance
-                || yPerPixel - topPerPixel <= allowedDistance
-                || bottomPerPixel - yPerPixel <= allowedDistance;
+        const allowedDistance = sizeUnitsConverter.chunkWidthInPixels() * this.distanceToBorderForLoading;
+        return xPerPixel - this.left <= allowedDistance
+                || this.right - xPerPixel <= allowedDistance
+                || yPerPixel - this.top <= allowedDistance
+                || this.bottom - yPerPixel <= allowedDistance;
     };
     Map.prototype.generateChunksFor ??= function(xPerPixel, yPerPixel) {
-        const newTopPerChunk = sizeUnitsConverter.getYPerChunkFromPixel(yPerPixel) - Math.floor(sizeUnitsConverter.worldHeightPerChunk / 2);
-        const newLeftPerChunk = sizeUnitsConverter.getXPerChunkFromPixel(xPerPixel) - Math.floor(sizeUnitsConverter.worldWidthPerChunk / 2);
+        const newTopPerChunk = sizeUnitsConverter.chunkYFromPixelY(yPerPixel) - Math.floor(sizeUnitsConverter.worldHeightInChunk / 2);
+        const newLeftPerChunk = sizeUnitsConverter.chunkXFromPixelX(xPerPixel) - Math.floor(sizeUnitsConverter.worldWidthInChunk / 2);
         const newChunks = [];
-        for(let y = 0; y < sizeUnitsConverter.worldHeightPerChunk; y++)
-            for(let x = 0; x < sizeUnitsConverter.worldWidthPerChunk; x++)
-                newChunks[x + y * sizeUnitsConverter.worldWidthPerChunk] = this.getChunk(x + newLeftPerChunk, y + newTopPerChunk)
-                    ?? new Chunk(x + newLeftPerChunk, y + newTopPerChunk);
+        for(let y = 0; y < sizeUnitsConverter.worldHeightInChunk; y++)
+            for(let x = 0; x < sizeUnitsConverter.worldWidthInChunk; x++)
+                newChunks[x + y * sizeUnitsConverter.worldWidthInChunk] = this.getChunk(x + newLeftPerChunk, y + newTopPerChunk)
+                    ?? new Chunk(x + newLeftPerChunk, y + newTopPerChunk, slimeSpawnCondition);
 
         for(let chunk of this.chunks)
             if(this.checkChunkIsOutOfBorder(chunk.chunkNumberX, chunk.chunkNumberY, newLeftPerChunk, newTopPerChunk))
@@ -143,42 +254,28 @@ function Map(distanceToBorderPerChunk) {
 
         this.leftPerChunk = newLeftPerChunk;
         this.topPerChunk = newTopPerChunk;
+        this.top = sizeUnitsConverter.pixelYFromChunkY(newTopPerChunk);
+        this.bottom = sizeUnitsConverter.pixelYFromChunkY(newTopPerChunk + sizeUnitsConverter.worldHeightInChunk);
+        this.left = sizeUnitsConverter.pixelXFromChunkX(newLeftPerChunk);
+        this.right = sizeUnitsConverter.pixelXFromChunkX(newLeftPerChunk + sizeUnitsConverter.worldWidthInChunk);
         this.chunks = newChunks;
     };
     Map.prototype.getAllObjectsByType ??= function() {
         const result = {};
+        Object.values(objectTypes).forEach(type => result[type] = []);
         for(let chunk of this.chunks)
             for(let objectType of Object.keys(chunk.objectsByType))
-                (result[objectType] ??= []).push(...chunk.objectsByType[objectType]);
+                result[objectType].push(...chunk.objectsByType[objectType]);
         return result;
+    };
+    Map.prototype.fillArrayWithType ??= function(objectType, array) {
+        for(let chunk of this.chunks)
+            for(let obj of chunk.objectsByType[objectType])
+                array.push(obj);
+        return array;
     };
 }
 
-function movePlayer() {
-    player.movement.x = userInput.right.isDown - userInput.left.isDown;
-    player.movement.y = userInput.down.isDown - userInput.up.isDown;
-    player.movement.normalize().scale(player.speed);
-
-    player.setVelocityX(player.movement.x).setVelocityY(player.movement.y);
-
-    if(player.movement.equals(Phaser.Math.Vector2.ZERO)) {
-        player.anims.play('stay', true);
-    } else {
-        player.setFlipX(userInput.left.isDown);
-        player.anims.play('walk', true);
-        player.depth = player.y + 100;
-    }
-}
-
-function addImageFromAtlas(scene, atlasName, frameName, imageName) {
-    const frame = scene.textures.getFrame(atlasName, frameName);
-    scene.textures.addSpriteSheetFromAtlas(imageName, {
-        atlas: atlasName,
-        frame: frameName,
-        frameWidth: frame.width,
-        frameHeight: frame.height
-    });
-}
 
 function switchMinimap() {
     if(Phaser.Input.Keyboard.JustDown(userInput.switchMinimap)) {
@@ -192,45 +289,43 @@ function updateMinimap() {
 
     minimap.graphic.clear();
 
-    const ignoringObjects = [player];
     const allMapObjectsByType = map.getAllObjectsByType();
 
     minimap.graphic.fillStyle(0x4287f5);
     for(let obj of allMapObjectsByType[objectTypes.waterTile])
         minimap.graphic.fillRect(obj.x, obj.y, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
-    ignoringObjects.push(...allMapObjectsByType[objectTypes.waterTile]);
 
     minimap.graphic.fillStyle(0xffc800);
     for(let obj of allMapObjectsByType[objectTypes.sandTile])
         minimap.graphic.fillRect(obj.x, obj.y, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
-    ignoringObjects.push(...allMapObjectsByType[objectTypes.sandTile]);
 
     minimap.graphic.fillStyle(0x83c400);
     for(let obj of allMapObjectsByType[objectTypes.grassTile])
         minimap.graphic.fillRect(obj.x, obj.y, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
-    ignoringObjects.push(...allMapObjectsByType[objectTypes.grassTile]);
 
-    minimap.graphic.depth = sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk);
+    minimap.graphic.depth = map.top;
 
-    minimap.camera.setScroll(
-        sizeUnitsConverter.getXPerPixelFromChunk(map.leftPerChunk),
-        sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk)
-    );
-    minimap.camera.setBounds(
-        sizeUnitsConverter.getXPerPixelFromChunk(map.leftPerChunk),
-        sizeUnitsConverter.getYPerPixelFromChunk(map.topPerChunk),
-        sizeUnitsConverter.getWorldWidthPerPixel(),
-        sizeUnitsConverter.getWorldHeightPerPixel()
-    )
-    minimap.camera.ignore(ignoringObjects);
+    minimap.camera.setScroll(map.left, map.top);
+    minimap.camera.setBounds(map.left, map.top, sizeUnitsConverter.worldWidthInPixels(), sizeUnitsConverter.worldHeightInPixels());
+}
+
+function updateIgnorableObjectsByMinimap() {
+    if(minimap.camera.visible) {
+        const ignoringObjects = [player];
+        //map.fillArrayWithType(objectTypes.slime, ignoringObjects);
+        map.fillArrayWithType(objectTypes.waterTile, ignoringObjects);
+        map.fillArrayWithType(objectTypes.sandTile, ignoringObjects);
+        map.fillArrayWithType(objectTypes.grassTile, ignoringObjects);
+        minimap.camera.ignore(ignoringObjects);
+    }
 }
 
 function createMinimap(scene, scale) {
     minimap.maxScale = 1;
     minimap.minScale = scale;
     minimap.scale = Math.min(scale, minimap.maxScale);
-    minimap.minimapWidthPerPixel = sizeUnitsConverter.getWorldWidthPerPixel() * minimap.scale;
-    minimap.minimapHeightPerPixel = sizeUnitsConverter.getWorldHeightPerPixel() * minimap.scale;
+    minimap.minimapWidthPerPixel = sizeUnitsConverter.worldWidthInPixels() * minimap.scale;
+    minimap.minimapHeightPerPixel = sizeUnitsConverter.worldHeightInPixels() * minimap.scale;
     minimap.screenXPerPixel = (config.width - minimap.minimapWidthPerPixel) / 2;
     minimap.screenYPerPixel = (config.height - minimap.minimapHeightPerPixel) / 2;
 
@@ -274,10 +369,8 @@ function createMinimap(scene, scale) {
     scene.input.on('pointermove', pointer => {
         if(!isDragging) return;
 
-        minimap.camera.setScroll(
-            minimap.camera.scrollX - (pointer.x - dragStart.x) / minimap.camera.zoom,
-            minimap.camera.scrollY - (pointer.y - dragStart.y) / minimap.camera.zoom
-        );
+        minimap.camera.scrollX -= (pointer.x - dragStart.x) / minimap.camera.zoom;
+        minimap.camera.scrollY -= (pointer.y - dragStart.y) / minimap.camera.zoom;
 
         dragStart.set(pointer.x, pointer.y);
     });
@@ -291,6 +384,7 @@ function preload() {
     this.load.image(objectTypes.grassTile, 'grass_tile.jpg');
     this.load.atlas('character', 'character.png', 'character.json');
     this.load.atlas('trees', 'trees.png', 'trees.json');
+    this.load.atlas('slime', 'slime.png', 'slime.json');
     this.load.on('complete', () => {
         addImageFromAtlas(this, 'trees', '0', objectTypes.littleOak);
         addImageFromAtlas(this, 'trees', '1', objectTypes.bigOak);
@@ -308,11 +402,23 @@ function create() {
     sizeUnitsConverter = new SizeUnitsConverter(60, 60, 5, 11, 11);
     mapGenerator = new MapGenerator(sizeUnitsConverter);
 
-    player = createPlayer(this);
+    prepareSlimeAnimation(this);
+    preparePlayerAnimation(this);
+
+    player = createPlayer(this, 0, 0, 50, 60, 200);
     this.cameras.main.startFollow(player);
 
-    map = new Map(4);
+    const slimeSpawnCondition = { grassTilesPercent: 0.75, probability: 0.02, maxSlimes: 3 };
+    map = new Map(4, slimeSpawnCondition);
     map.generateChunksFor(player.x, player.y);
+
+    slimeSpawnTimer = this.time.addEvent({
+        delay: 3000,
+        callback: spawnSlimes,
+        args: [this, slimeSpawnCondition, 54, 45, 50, sizeUnitsConverter.chunkWidthInPixels() * 1.5],
+        callbackScope: this,
+        loop: true
+    });
 
     createMinimap(this, 0.2);
 
@@ -327,7 +433,9 @@ function create() {
 
 function update() {
     movePlayer();
+    moveSlimes();
     switchMinimap();
+    updateIgnorableObjectsByMinimap();
 
     if(map.checkDistanceToBorder(player.x, player.y)) {
         map.generateChunksFor(player.x, player.y);

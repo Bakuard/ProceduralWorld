@@ -1,67 +1,71 @@
-export function SizeUnitsConverter(tileWidth, tileHeight, chunkSizePerTile, worldWidthPerChunk, worldHeightPerChunk) {
+export function SizeUnitsConverter(tileWidth, tileHeight, chunkSizeInTile, worldWidthInChunk, worldHeightInChunk) {
     this.tileWidth = tileWidth;
     this.tileHeight = tileHeight;
-    this.chunkSizePerTile = chunkSizePerTile;
-    this.worldWidthPerChunk = worldWidthPerChunk;
-    this.worldHeightPerChunk = worldHeightPerChunk;
+    this.chunkSizeInTile = chunkSizeInTile;
+    this.worldWidthInChunk = worldWidthInChunk;
+    this.worldHeightInChunk = worldHeightInChunk;
 };
 
-SizeUnitsConverter.prototype.getWorldWidthPerPixel = function() {
-    return this.getChunkWidthPerPixel() * this.worldWidthPerChunk;
+SizeUnitsConverter.prototype.worldWidthInPixels = function() {
+    return this.chunkWidthInPixels() * this.worldWidthInChunk;
 };
 
-SizeUnitsConverter.prototype.getWorldHeightPerPixel = function() {
-    return this.getChunkHeightPerPixel() * this.worldHeightPerChunk;
+SizeUnitsConverter.prototype.worldHeightInPixels = function() {
+    return this.chunkHeightInPixels() * this.worldHeightInChunk;
 };
 
-SizeUnitsConverter.prototype.getChunkWidthPerPixel = function() {
-    return this.chunkSizePerTile * this.tileWidth;
+SizeUnitsConverter.prototype.chunkWidthInPixels = function() {
+    return this.chunkSizeInTile * this.tileWidth;
 };
 
-SizeUnitsConverter.prototype.getChunkHeightPerPixel = function() {
-    return this.chunkSizePerTile * this.tileHeight;
+SizeUnitsConverter.prototype.chunkHeightInPixels = function() {
+    return this.chunkSizeInTile * this.tileHeight;
 };
 
-SizeUnitsConverter.prototype.getXPerChunkFromPixel = function(xPerPixel) {
-    return Math.floor(xPerPixel / this.getChunkWidthPerPixel());
+SizeUnitsConverter.prototype.chunkXFromPixelX = function(xPerPixel) {
+    return Math.floor(xPerPixel / this.chunkWidthInPixels());
 };
 
-SizeUnitsConverter.prototype.getYPerChunkFromPixel = function(yPerPixel) {
-    return Math.floor(yPerPixel / this.getChunkHeightPerPixel());
+SizeUnitsConverter.prototype.chunkYFromPixelY = function(yPerPixel) {
+    return Math.floor(yPerPixel / this.chunkHeightInPixels());
 };
 
-SizeUnitsConverter.prototype.getXPerTileFromPixel = function(xPerPixel) {
+SizeUnitsConverter.prototype.chunkAreaInTiles = function() {
+    return this.chunkSizeInTile * this.chunkSizeInTile;
+};
+
+SizeUnitsConverter.prototype.tileXFromPixelX = function(xPerPixel) {
     return Math.floor(xPerPixel / this.tileWidth);
 };
 
-SizeUnitsConverter.prototype.getYPerTileFromPixel = function(yPerPixel) {
+SizeUnitsConverter.prototype.tileYFromPixelY = function(yPerPixel) {
     return Math.floor(yPerPixel / this.tileHeight);
 };
 
-SizeUnitsConverter.prototype.getXPerTileFromChunk = function(xPerChunk) {
-    return xPerChunk * this.chunkSizePerTile;
+SizeUnitsConverter.prototype.tileXFromChunkX = function(xPerChunk) {
+    return xPerChunk * this.chunkSizeInTile;
 };
 
-SizeUnitsConverter.prototype.getYPerTileFromChunk = function(yPerChunk) {
-    return yPerChunk * this.chunkSizePerTile;
+SizeUnitsConverter.prototype.tileYFromChunkY = function(yPerChunk) {
+    return yPerChunk * this.chunkSizeInTile;
 };
 
-SizeUnitsConverter.prototype.getXPerPixelFromChunk = function(xPerChunk) {
-    return xPerChunk * this.getChunkWidthPerPixel();
+SizeUnitsConverter.prototype.pixelXFromChunkX = function(xPerChunk) {
+    return xPerChunk * this.chunkWidthInPixels();
 };
 
-SizeUnitsConverter.prototype.getYPerPixelFromChunk = function(yPerChunk) {
-    return yPerChunk * this.getChunkHeightPerPixel();
+SizeUnitsConverter.prototype.pixelYFromChunkY = function(yPerChunk) {
+    return yPerChunk * this.chunkHeightInPixels();
 };
 
-SizeUnitsConverter.prototype.getXPerPixelFromTile = function(xPerTile) {
+SizeUnitsConverter.prototype.pixelXFromTileX = function(xPerTile) {
     return xPerTile * this.tileWidth;
 };
 
-SizeUnitsConverter.prototype.getYPerPixelFromTile = function(yPerTile) {
+SizeUnitsConverter.prototype.pixelYFromTileY = function(yPerTile) {
     return yPerTile * this.tileHeight;
 };
 
 SizeUnitsConverter.prototype.doesTileContainPixel = function(xPerTile, yPerTile, xPerPixel, yPerPixel) {
-    return this.getXPerTileFromPixel(xPerPixel) === xPerTile && this.getYPerTileFromPixel(yPerPixel) === yPerTile;
+    return this.tileXFromPixelX(xPerPixel) === xPerTile && this.tileYFromPixelY(yPerPixel) === yPerTile;
 };

@@ -8,5 +8,6 @@ export const objectTypes = Object.freeze({
     deadLittleOak: 'deadLittleOak',
     deadBigOak: 'deadBigOak',
     deadHeightOak: 'deadHeightOak',
-    player: 'player'
+    player: 'player',
+    slime: 'slime'
 });
