@@ -2,7 +2,6 @@ import {SizeUnitsConverter} from './sizeMeasurementUnits.js';
 import {objectTypes} from "./objectTypes.js";
 import {MapGenerator} from "./mapGenerator.js";
 
-const physicsGroups = {};
 const minimap = {};
 let sizeUnitsConverter;
 let mapGenerator;
@@ -37,29 +36,38 @@ function preparePlayerAnimation(scene) {
     });
 }
 
-function createPlayer(scene, x, y, width, height, speed) {
+function createPlayer(scene, x, y, width, height, speed, fireRatePerSecond, bulletTimeInMillis, damage, bulletSpeed) {
     const player = scene.physics.add.sprite(x, y, 'character', '0')
         .setBodySize(width, height)
         .setOrigin(0.5, 1)
         .play('player_stay')
         .refreshBody();
-    scene.physics.add.collider(player, physicsGroups[objectTypes.waterTile]);
+    scene.physics.add.collider(player, map.physicsGroups[objectTypes.waterTile]);
     player.speed = speed;
-    player.movement = new Phaser.Math.Vector2(0, 0);
     player.depth = player.y + 100;
     player.type = objectTypes.player;
+    player.fireRatePerSecond = fireRatePerSecond;
+    player.bulletTimeInMillis = bulletTimeInMillis;
+    player.damage = damage;
+    player.bulletSpeed = bulletSpeed;
+
+    scene.input.on('pointerdown', pointer => {
+        if(pointer.leftButtonDown()) {
+            const bulletX = player.x + Math.sign(pointer.worldX - player.x) * player.width / 3;
+            const bulletY = pointer.worldY > player.y ? player.y : player.y - player.height / 3;
+            createFireball(scene, bulletX, bulletY, pointer.worldX, pointer.worldY, bulletSpeed, bulletTimeInMillis, damage);
+        }
+    });
 
     return player;
 }
 
 function movePlayer() {
-    player.movement.x = userInput.right.isDown - userInput.left.isDown;
-    player.movement.y = userInput.down.isDown - userInput.up.isDown;
-    player.movement.normalize().scale(player.speed);
+    player.body.velocity.x = userInput.right.isDown - userInput.left.isDown;
+    player.body.velocity.y = userInput.down.isDown - userInput.up.isDown;
+    player.body.velocity.normalize().scale(player.speed);
 
-    player.setVelocityX(player.movement.x).setVelocityY(player.movement.y);
-
-    if(player.movement.equals(Phaser.Math.Vector2.ZERO)) {
+    if(player.body.velocity.equals(Phaser.Math.Vector2.ZERO)) {
         player.anims.play('player_stay', true);
     } else {
         player.setFlipX(userInput.left.isDown);
@@ -87,14 +95,14 @@ function prepareSlimeAnimation(scene) {
 function createSlime(scene, width, height, speed, roamingRadius, chunk) {
     const x = Phaser.Math.Between(chunk.left + width/2, chunk.right - width/2);
     const y = Phaser.Math.Between(chunk.top + height, chunk.bottom);
-    const slime = scene.physics.add.sprite(x, y, 'slime', '0')
+    const slime = map.physicsGroups[objectTypes.slime].get(x, y, 'slime', '11')
         .setDisplaySize(width, height)
         .setOrigin(0.5, 1)
         .play('slime_stay')
         .refreshBody();
-    scene.physics.add.collider(slime, physicsGroups[objectTypes.player]);
-    scene.physics.add.collider(slime, physicsGroups[objectTypes.slime]);
-    scene.physics.add.collider(slime, physicsGroups[objectTypes.waterTile]);
+    scene.physics.add.collider(slime, map.physicsGroups[objectTypes.player]);
+    scene.physics.add.collider(slime, map.physicsGroups[objectTypes.slime]);
+    scene.physics.add.collider(slime, map.physicsGroups[objectTypes.waterTile]);
     slime.depth = slime.y + 100;
     slime.type = objectTypes.slime;
     slime.speed = speed;
@@ -140,11 +148,53 @@ function moveSlimes() {
 }
 
 
+function prepareFireballAnimation(scene) {
+    scene.anims.create({
+        key: 'fireball_fly',
+        frames: scene.anims.generateFrameNames('fireball', { start: 0, end: 4 }),
+        frameRate: 12,
+        repeat: -1
+    });
+}
+
+function createFireball(scene, x, y, aimX, aimY, speed, lifeTimeInMillis, damage) {
+    const fireball = map.physicsGroups[objectTypes.fireball].get(x, y);
+    fireball.setActive(true);
+    fireball.setVisible(true);
+    fireball.body.velocity.set(aimX - x, aimY - y).normalize().scale(speed);
+    fireball.rotation = Phaser.Math.Angle.Between(0, 0, fireball.body.velocity.x, fireball.body.velocity.y);
+    fireball.lifeTimeInMillis = lifeTimeInMillis;
+    fireball.damage = damage;
+    fireball.collider ??= scene.physics.add.overlap(fireball, map.physicsGroups[objectTypes.slime], null, onFireballCollision);
+    fireball.anims.play('fireball_fly', true);
+    return fireball;
+}
+
+function moveFireballs(deltaTime) {
+    map.physicsGroups[objectTypes.fireball].children.iterate(fireball => {
+        if(!fireball.active) return;
+
+        fireball.lifeTimeInMillis -= deltaTime;
+        fireball.depth = fireball.y + 110;
+        if(fireball.lifeTimeInMillis <= 0) {
+            fireball.setActive(false);
+            fireball.setVisible(false)
+            fireball.body.stop();
+        }
+    });
+}
+
+function onFireballCollision(fireball, obstacle) {
+    fireball.setActive(false);
+    fireball.setVisible(false)
+    fireball.body.stop();
+}
+
+
 function createTile(tileNumberX, tileNumberY, tileType) {
     const topPerPixel = sizeUnitsConverter.pixelYFromTileY(tileNumberY);
     const leftPerPixel = sizeUnitsConverter.pixelXFromTileX(tileNumberX);
-    const physicsGroup = physicsGroups[tileType];
-    const tile = physicsGroup.create(leftPerPixel, topPerPixel, tileType)
+    const tile = map.physicsGroups[tileType].create(leftPerPixel, topPerPixel, tileType)
         .setDisplaySize(sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight)
         .setSize(sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight)
         .setOrigin(0, 0)
@@ -156,8 +206,7 @@ function createTile(tileNumberX, tileNumberY, tileType) {
 }
 
 function createTree(treeMeta) {
-    const physicsGroup = physicsGroups[objectTypes.littleOak];
-    const treeObject = physicsGroup.create(treeMeta.xPerPixel, treeMeta.yPerPixel, treeMeta.treeType)
+    const treeObject = map.physicsGroups[objectTypes.littleOak].create(treeMeta.xPerPixel, treeMeta.yPerPixel, treeMeta.treeType)
         .setOrigin(0.5, 1)
         .refreshBody();
     treeObject.depth = treeMeta.yPerPixel + 100;
@@ -210,7 +259,7 @@ function Chunk(chunkNumberX, chunkNumberY, slimeSpawnCondition) {
     };
 }
 
-function Map(distanceToBorderPerChunk, slimeSpawnCondition) {
+function Map(scene, objectTypes, distanceToBorderPerChunk, slimeSpawnCondition) {
     this.distanceToBorderForLoading = distanceToBorderPerChunk;
     this.topPerChunk = 0;
     this.leftPerChunk = 0;
@@ -219,6 +268,7 @@ function Map(distanceToBorderPerChunk, slimeSpawnCondition) {
     this.left = 0;
     this.right = 0;
     this.chunks = [];
+    this.physicsGroups = {};
 
     Map.prototype.getChunk ??= function(xPerChunk, yPerChunk) {
         const localXPerChunk = xPerChunk - this.leftPerChunk;
@@ -262,18 +312,29 @@ function Map(distanceToBorderPerChunk, slimeSpawnCondition) {
     };
     Map.prototype.getAllObjectsByType ??= function() {
         const result = {};
-        Object.values(objectTypes).forEach(type => result[type] = []);
-        for(let chunk of this.chunks)
-            for(let objectType of Object.keys(chunk.objectsByType))
-                result[objectType].push(...chunk.objectsByType[objectType]);
+        Object.values(objectTypes).forEach(type => result[type] = Array.from(this.physicsGroups[type].getChildren()));
         return result;
     };
     Map.prototype.fillArrayWithType ??= function(objectType, array) {
-        for(let chunk of this.chunks)
-            for(let obj of chunk.objectsByType[objectType])
-                array.push(obj);
+        this.physicsGroups[objectType].children.iterate(child => array.push(child));
         return array;
     };
+    Map.prototype.createPhysicsGroups ??= function(scene, objectTypes) {
+        this.physicsGroups[objectTypes.waterTile] = scene.physics.add.staticGroup();
+        this.physicsGroups[objectTypes.sandTile] = scene.physics.add.staticGroup();
+        this.physicsGroups[objectTypes.grassTile] = scene.physics.add.staticGroup();
+        this.physicsGroups[objectTypes.littleOak] = scene.physics.add.staticGroup();
+        this.physicsGroups[objectTypes.bigOak] = scene.physics.add.staticGroup();
+        this.physicsGroups[objectTypes.heightOak] = scene.physics.add.staticGroup();
+        this.physicsGroups[objectTypes.deadLittleOak] = scene.physics.add.staticGroup();
+        this.physicsGroups[objectTypes.deadBigOak] = scene.physics.add.staticGroup();
+        this.physicsGroups[objectTypes.deadHeightOak] = scene.physics.add.staticGroup();
+        this.physicsGroups[objectTypes.player] = scene.physics.add.group();
+        this.physicsGroups[objectTypes.slime] = scene.physics.add.group();
+        this.physicsGroups[objectTypes.fireball] = scene.physics.add.group();
+    }
+
+    this.createPhysicsGroups(scene, objectTypes);
 }
 
 
@@ -316,6 +377,7 @@ function updateIgnorableObjectsByMinimap() {
         map.fillArrayWithType(objectTypes.waterTile, ignoringObjects);
         map.fillArrayWithType(objectTypes.sandTile, ignoringObjects);
         map.fillArrayWithType(objectTypes.grassTile, ignoringObjects);
+        map.fillArrayWithType(objectTypes.fireball, ignoringObjects);
         minimap.camera.ignore(ignoringObjects);
     }
 }
@@ -385,6 +447,7 @@ function preload() {
     this.load.atlas('character', 'character.png', 'character.json');
     this.load.atlas('trees', 'trees.png', 'trees.json');
     this.load.atlas('slime', 'slime.png', 'slime.json');
+    this.load.atlas('fireball', 'fireball.png', 'fireball.json');
     this.load.on('complete', () => {
         addImageFromAtlas(this, 'trees', '0', objectTypes.littleOak);
         addImageFromAtlas(this, 'trees', '1', objectTypes.bigOak);
@@ -396,29 +459,20 @@ function preload() {
 }
 
 function create() {
-    for(let physicsGroupName of Object.values(objectTypes))
-        physicsGroups[physicsGroupName] = this.physics.add.staticGroup();
-
     sizeUnitsConverter = new SizeUnitsConverter(60, 60, 5, 11, 11);
     mapGenerator = new MapGenerator(sizeUnitsConverter);
 
     prepareSlimeAnimation(this);
     preparePlayerAnimation(this);
-
-    player = createPlayer(this, 0, 0, 50, 60, 200);
-    this.cameras.main.startFollow(player);
+    prepareFireballAnimation(this);
 
     const slimeSpawnCondition = { grassTilesPercent: 0.75, probability: 0.02, maxSlimes: 3 };
-    map = new Map(4, slimeSpawnCondition);
-    map.generateChunksFor(player.x, player.y);
+    map = new Map(this, objectTypes, 4, slimeSpawnCondition);
 
-    slimeSpawnTimer = this.time.addEvent({
-        delay: 3000,
-        callback: spawnSlimes,
-        args: [this, slimeSpawnCondition, 54, 45, 50, sizeUnitsConverter.chunkWidthInPixels() * 1.5],
-        callbackScope: this,
-        loop: true
-    });
+    player = createPlayer(this, 0, 0, 50, 60, 200, 2, 2000, 10, 350);
+    this.cameras.main.startFollow(player);
+
+    map.generateChunksFor(player.x, player.y);
 
     createMinimap(this, 0.2);
 
@@ -429,11 +483,20 @@ function create() {
         down: Phaser.Input.Keyboard.KeyCodes.S,
         switchMinimap: Phaser.Input.Keyboard.KeyCodes.M
     });
+
+    slimeSpawnTimer = this.time.addEvent({
+        delay: 3000,
+        callback: spawnSlimes,
+        args: [this, slimeSpawnCondition, 54, 45, 50, sizeUnitsConverter.chunkWidthInPixels() * 1.5],
+        callbackScope: this,
+        loop: true
+    });
 }
 
-function update() {
+function update(time, delta) {
     movePlayer();
     moveSlimes();
+    moveFireballs(delta);
     switchMinimap();
     updateIgnorableObjectsByMinimap();
 
