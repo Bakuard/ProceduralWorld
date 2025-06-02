@@ -83,32 +83,7 @@ function createOffsetVectors(count, vectorLength) {
     return vectors;
 }
 
-MapGenerator.prototype.generate = function(xPerTile, yPerTile) {
-    this.xPerTile = xPerTile;
-    this.yPerTile = yPerTile;
-    this.height = multipleOctavesNoise(xPerTile, yPerTile, this.seed, this.octaves, this.persistence, this.frequency, this.frequencyMod);
-
-    //Генерируем координаты дерева
-    this.tree = null;
-
-    let treeCellX = Math.floor(this.xPerTile / this.treeCellSizePerTile);
-    let treeCellY = Math.floor(this.yPerTile / this.treeCellSizePerTile);
-    this.generateTree(treeCellX, treeCellY);
-
-    treeCellX = Math.ceil(this.xPerTile / this.treeCellSizePerTile);
-    treeCellY = Math.floor(this.yPerTile / this.treeCellSizePerTile);
-    this.generateTree(treeCellX, treeCellY);
-
-    treeCellX = Math.floor(this.xPerTile / this.treeCellSizePerTile);
-    treeCellY = Math.ceil(this.yPerTile / this.treeCellSizePerTile);
-    this.generateTree(treeCellX, treeCellY);
-
-    treeCellX = Math.ceil(this.xPerTile / this.treeCellSizePerTile);
-    treeCellY = Math.ceil(this.yPerTile / this.treeCellSizePerTile);
-    this.generateTree(treeCellX, treeCellY);
-};
-
-MapGenerator.prototype.generateTree = function(treeCellX, treeCellY) {
+function generateTree(treeCellX, treeCellY) {
     if(this.tree) return;
 
     const noiseForTree = noise(treeCellX, treeCellY, this.seed);
@@ -122,6 +97,31 @@ MapGenerator.prototype.generateTree = function(treeCellX, treeCellY) {
             treeType: chooseTreeType(noiseForTree)
         };
     }
+}
+
+MapGenerator.prototype.generate = function(xPerTile, yPerTile) {
+    this.xPerTile = xPerTile;
+    this.yPerTile = yPerTile;
+    this.height = multipleOctavesNoise(xPerTile, yPerTile, this.seed, this.octaves, this.persistence, this.frequency, this.frequencyMod);
+
+    //Генерируем координаты дерева
+    this.tree = null;
+
+    let treeCellX = Math.floor(this.xPerTile / this.treeCellSizePerTile);
+    let treeCellY = Math.floor(this.yPerTile / this.treeCellSizePerTile);
+    generateTree.call(this, treeCellX, treeCellY);
+
+    treeCellX = Math.ceil(this.xPerTile / this.treeCellSizePerTile);
+    treeCellY = Math.floor(this.yPerTile / this.treeCellSizePerTile);
+    generateTree.call(this, treeCellX, treeCellY);
+
+    treeCellX = Math.floor(this.xPerTile / this.treeCellSizePerTile);
+    treeCellY = Math.ceil(this.yPerTile / this.treeCellSizePerTile);
+    generateTree.call(this, treeCellX, treeCellY);
+
+    treeCellX = Math.ceil(this.xPerTile / this.treeCellSizePerTile);
+    treeCellY = Math.ceil(this.yPerTile / this.treeCellSizePerTile);
+    generateTree.call(this, treeCellX, treeCellY);
 };
 
 MapGenerator.prototype.getLandscape = function() {

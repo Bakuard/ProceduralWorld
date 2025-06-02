@@ -93,8 +93,6 @@
         }
     },
     "meta": {
-        "app": "https://github.com/piskelapp/piskel/",
-        "version": "1.0",
         "image": "New Piskel.png",
         "format": "RGBA8888",
         "size": {"w": 396, "h": 60}
