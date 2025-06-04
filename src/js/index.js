@@ -1,4 +1,4 @@
-import {SizeUnitsConverter} from './sizeMeasurementUnits.js';
+import {SizeUnitsConverter} from './sizeUnitsConverter.js';
 import {objectTypes} from "./objectTypes.js";
 import {MapGenerator} from "./mapGenerator.js";
 import './util.js';
@@ -10,6 +10,11 @@ let player;
 let userInput;
 let world;
 let slimeSpawnTimer;
+const slimeStates = Object.freeze({
+    roam: 'roam',
+    chase: 'chase',
+    attack: 'attack'
+});
 
 function addImageFromAtlas(scene, atlasName, frameName, imageName) {
     const frame = scene.textures.getFrame(atlasName, frameName);
@@ -37,7 +42,7 @@ function preparePlayerAnimation(scene) {
     });
 }
 
-function createPlayer(scene, x, y, width, height, speed, fireRateInMillis, bulletTimeInMillis, damage, bulletSpeed) {
+function createPlayer(scene, x, y, width, height, speed, fireRateInMillis, bulletTimeInMillis, damage, bulletSpeed, maxHealth) {
     const player = scene.physics.add.sprite(x, y, 'character', '0')
         .setBodySize(width, height)
         .setOrigin(0.5, 1)
@@ -52,6 +57,8 @@ function createPlayer(scene, x, y, width, height, speed, fireRateInMillis, bulle
     player.damage = damage;
     player.bulletSpeed = bulletSpeed;
     player.lastFireTime = 0;
+    player.maxHealth = maxHealth;
+    player.currentHealth = maxHealth;
     return player;
 }
 
@@ -80,6 +87,10 @@ function playerFire(scene, time) {
     }
 }
 
+function playerDeath(scene) {
+    scene.scene.restart();
+}
+
 
 function prepareSlimeAnimation(scene) {
     scene.anims.create({
@@ -96,7 +107,7 @@ function prepareSlimeAnimation(scene) {
     });
 }
 
-function createSlime(scene, width, height, speed, roamingRadius, maxHealth, chunk) {
+function createSlime(scene, width, height, speed, roamingRadius, maxHealth, alertRadiusInChunkPixel, damage, chunk) {
     const x = Phaser.Math.Between(chunk.left + width/2, chunk.right - width/2);
     const y = Phaser.Math.Between(chunk.top + height, chunk.bottom);
     const slime = world.getFromPool(objectTypes.slime, x, y, 'slime', '11')
@@ -104,11 +115,7 @@ function createSlime(scene, width, height, speed, roamingRadius, maxHealth, chun
         .setOrigin(0.5, 1)
         .play('slime_stay')
         .refreshBody();
-    slime.colliders ??= [
-        scene.physics.add.collider(slime, world.physicsGroups[objectTypes.player]),
-        scene.physics.add.collider(slime, world.physicsGroups[objectTypes.slime]),
-        scene.physics.add.collider(slime, world.physicsGroups[objectTypes.waterTile])
-    ];
+    slime.colliders ??= [scene.physics.add.collider(slime, world.physicsGroups[objectTypes.waterTile])];
     slime.depth = slime.y + 100;
     slime.type = objectTypes.slime;
     slime.speed = speed;
@@ -120,42 +127,77 @@ function createSlime(scene, width, height, speed, roamingRadius, maxHealth, chun
     slime.roamingRadius = roamingRadius;
     slime.maxHealth = maxHealth;
     slime.currentHealth = maxHealth;
-    slime.on('animationupdate', (anim, frame, sprite) => {
-        if(anim.key === 'slime_walk')
-            if(frame.index >= 0 && frame.index <= 4 || frame.index >= 10 && frame.index <= 11)
+    slime.alertRadiusInChunkPixel = alertRadiusInChunkPixel;
+    slime.damage = damage;
+    slime.chunk = chunk;
+    slime.state = slimeStates.roam;
+    slime.on('animationupdate', () => {
+        if(slime.state === slimeStates.roam || slime.state === slimeStates.chase) {
+            const frameIndex = slime.anims.currentFrame.index;
+            if(Math.inRange(frameIndex, 0, 4) || Math.inRange(frameIndex, 10, 11))
                 slime.setVelocity(0, 0);
             else
                 slime.setVelocityX(slime.movement.x).setVelocityY(slime.movement.y);
+        } else if(slime.state === slimeStates.attack) {
+            const animationKey = slime.anims.currentFrame.textureFrame;
+            if(animationKey === '11') {
+                player.currentHealth -= slime.damage;
+                if(player.currentHealth <= 0)
+                    playerDeath(scene);
+            }
+        }
     });
-    slime.chunk = chunk;
     return slime;
 }
 
-function spawnSlimes(scene, slimeSpawnCondition, width, height, speed, roamingRadius, maxHealth) {
+function spawnSlimes(scene, slimeSpawnCondition, width, height, speed, roamingRadius, maxHealth, alertRadiusInChunkPixel, damage) {
     for(let chunk of world.chunks)
         if(chunk.hasSlimeSpawner && chunk.objectsByType[objectTypes.slime].length < slimeSpawnCondition.maxSlimes) {
-            const slime = createSlime(scene, width, height, speed, roamingRadius, maxHealth, chunk);
+            const slime = createSlime(scene, width, height, speed, roamingRadius, maxHealth, alertRadiusInChunkPixel, damage, chunk);
             chunk.objectsByType[objectTypes.slime].push(slime);
         }
 }
 
-function moveSlimes() {
-    const slimes = world.fillArrayWithType(objectTypes.slime, []);
-    for(let slime of slimes) {
-        if(Phaser.Geom.Rectangle.Contains(slime.getBounds(), slime.aimX, slime.aimY)) {
-            slime.aimX = Phaser.Math.Between(slime.spawnPointX - slime.roamingRadius, slime.spawnPointX + slime.roamingRadius);
-            slime.aimY = Phaser.Math.Between(slime.spawnPointY - slime.roamingRadius, slime.spawnPointY + slime.roamingRadius);
-            slime.aimX = Phaser.Math.Clamp(slime.aimX, world.left, world.right);
-            slime.aimY = Phaser.Math.Clamp(slime.aimY, world.top, world.bottom);
+function moveSlimes(time) {
+    world.forEachObjectWithType(objectTypes.slime, slime => {
+        if(slime.state === slimeStates.roam) {
+            if(Phaser.Geom.Rectangle.Contains(slime.getBounds(), slime.aimX, slime.aimY)) {
+                slime.anims.play('slime_walk', true);
 
-            slime.movement.x = slime.aimX - slime.x;
-            slime.movement.y = slime.aimY - slime.y;
-            slime.movement.normalize().scale(slime.speed);
+                slime.aimX = Phaser.Math.Between(slime.spawnPointX - slime.roamingRadius, slime.spawnPointX + slime.roamingRadius);
+                slime.aimY = Phaser.Math.Between(slime.spawnPointY - slime.roamingRadius, slime.spawnPointY + slime.roamingRadius);
+                slime.aimX = Phaser.Math.Clamp(slime.aimX, world.left, world.right);
+                slime.aimY = Phaser.Math.Clamp(slime.aimY, world.top, world.bottom);
 
+                slime.movement.x = slime.aimX - slime.x;
+                slime.movement.y = slime.aimY - slime.y;
+                slime.movement.normalize().scale(slime.speed);
+            }
+        } else if(slime.state === slimeStates.chase) {
             slime.anims.play('slime_walk', true);
+
+            slime.aimX = player.x;
+            slime.aimY = player.y;
+            if(Phaser.Geom.Rectangle.Contains(slime.getBounds(), slime.aimX, slime.aimY)) {
+                slime.movement.set(0, 0);
+                slime.setVelocity(0, 0);
+                slime.state = slimeStates.attack;
+            } else {
+                slime.movement.x = slime.aimX - slime.x;
+                slime.movement.y = slime.aimY - slime.y;
+                slime.movement.normalize().scale(slime.speed);
+                slime.lastChasingCoordsUpdateTime = time;
+            }
+        } else if(slime.state === slimeStates.attack) {
+            slime.anims.play('slime_stay', true);
+
+            slime.aimX = player.x;
+            slime.aimY = player.y;
+            if(!Phaser.Geom.Rectangle.Contains(slime.getBounds(), slime.aimX, slime.aimY))
+                slime.state = slimeStates.chase;
         }
         slime.depth = slime.y + 100;
-    }
+    });
 }
 
 
@@ -176,7 +218,7 @@ function createFireball(scene, x, y, aimX, aimY, speed, lifeTimeInMillis, damage
     fireball.rotation = Phaser.Math.Angle.Between(0, 0, fireball.body.velocity.x, fireball.body.velocity.y);
     fireball.lifeTimeInMillis = lifeTimeInMillis;
     fireball.damage = damage;
-    fireball.colliders ??= [scene.physics.add.overlap(fireball, world.physicsGroups[objectTypes.slime], null, onFireballCollision, scene)];
+    fireball.colliders ??= [scene.physics.add.overlap(fireball, world.physicsGroups[objectTypes.slime], onFireballCollision, null, scene)];
     fireball.anims.play('fireball_fly', true);
     fireball.type = objectTypes.fireball;
 }
@@ -196,10 +238,19 @@ function onFireballCollision(fireball, obstacle) {
     world.disposeToPool(fireball);
     createExplosion(this, obstacle.x, obstacle.y);
 
-    if(obstacle.currentHealth) {
+    if(obstacle.type === objectTypes.slime) {
         obstacle.currentHealth -= fireball.damage;
-        if(obstacle.currentHealth <= 0)
+        if(obstacle.currentHealth <= 0) {
             world.disposeToPool(obstacle);
+            world.removeFromChunk(obstacle);
+        } else {
+            world.forEachObjectInArea(objectTypes.slime,
+                obstacle.x - obstacle.alertRadiusInChunkPixel,
+                obstacle.y - obstacle.alertRadiusInChunkPixel,
+                obstacle.x + obstacle.alertRadiusInChunkPixel,
+                obstacle.y + obstacle.alertRadiusInChunkPixel,
+                slime => slime.state = slimeStates.chase);
+        }
     }
 }
 
@@ -290,6 +341,10 @@ function Chunk(chunkNumberX, chunkNumberY, slimeSpawnCondition) {
             for(let obj of objectWithParticularType)
                 callback(obj);
     };
+
+    Chunk.prototype.forEachObjWithType ??= function(objectType, callback) {
+        this.objectsByType[objectType].forEach(callback);
+    };
 }
 
 function World(scene, objectTypes, distanceToBorderPerChunk, slimeSpawnCondition) {
@@ -349,11 +404,23 @@ function World(scene, objectTypes, distanceToBorderPerChunk, slimeSpawnCondition
         return result;
     };
     World.prototype.fillArrayWithType ??= function(objectType, array) {
-        this.physicsGroups[objectType].children.iterate(child => array.push(child));
+        this.forEachObjectWithType(objectType, obj => array.push(obj));
         return array;
     };
     World.prototype.forEachObjectWithType ??= function(objectType, callback) {
         this.physicsGroups[objectType].children.iterate(callback);
+    };
+    World.prototype.forEachObjectInArea ??= function(objectType, pixelLeft, pixelTop, pixelRight, pixelBottom, callback) {
+        const chunkLeft = Math.max(sizeUnitsConverter.chunkXFromPixelX(pixelLeft), this.leftPerChunk);
+        const chunkRight = Math.min(sizeUnitsConverter.chunkXFromPixelX(pixelRight), this.leftPerChunk + sizeUnitsConverter.worldWidthInChunk);
+        const chunkTop = Math.max(sizeUnitsConverter.chunkYFromPixelY(pixelTop), this.topPerChunk);
+        const chunkBottom = Math.min(sizeUnitsConverter.chunkYFromPixelY(pixelBottom), this.topPerChunk + sizeUnitsConverter.worldHeightInChunk);
+        for(let y = chunkTop; y < chunkBottom; y++)
+            for(let x = chunkLeft; x < chunkRight; x++)
+                this.getChunk(x, y).forEachObjWithType(
+                    objectType,
+                    obj => obj.x >= pixelLeft && obj.x <= pixelRight && obj.y >= pixelTop && obj.y <= pixelBottom && callback(obj)
+                );
     };
     World.prototype.createPhysicsGroups ??= function(scene, objectTypes) {
         this.physicsGroups[objectTypes.waterTile] = scene.physics.add.staticGroup();
@@ -382,6 +449,8 @@ function World(scene, objectTypes, distanceToBorderPerChunk, slimeSpawnCondition
         obj.setActive(false).setVisible(false);
         obj.body.enable = false;
         obj.colliders?.forEach(collider => collider.active = false);
+    };
+    World.prototype.removeFromChunk ??= function(obj) {
         obj.chunk?.objectsByType[obj.type].remove(obj);
     };
 
@@ -511,7 +580,7 @@ function preload() {
 }
 
 function create() {
-    sizeUnitsConverter = new SizeUnitsConverter(60, 60, 5, 11, 11);
+    sizeUnitsConverter = new SizeUnitsConverter(60, 60, 10, 6, 6);
     mapGenerator = new MapGenerator(sizeUnitsConverter);
 
     prepareSlimeAnimation(this);
@@ -519,10 +588,12 @@ function create() {
     prepareFireballAnimation(this);
     prepareExplosionAnimation(this);
 
-    const slimeSpawnCondition = { grassTilesPercent: 0.75, probability: 0.02, maxSlimes: 3 };
-    world = new World(this, objectTypes, 4, slimeSpawnCondition);
+    const slimeSpawnCondition = { grassTilesPercent: 0.75, probability: 0.05, maxSlimes: 3 };
+    world = new World(this, objectTypes, 2, slimeSpawnCondition);
 
-    player = createPlayer(this, 0, 0, 50, 60, 200, 500, 2000, 10, 350);
+    player = createPlayer(this, 0, 0, 50, 60, 200,
+        500, 2000, 10, 350,
+        20);
     this.cameras.main.startFollow(player);
 
     world.generateChunksFor(player.x, player.y);
@@ -541,8 +612,7 @@ function create() {
 
     slimeSpawnTimer = this.time.addEvent({
         delay: 3000,
-        callback: spawnSlimes,
-        args: [this, slimeSpawnCondition, 54, 45, 50, sizeUnitsConverter.chunkWidthInPixels() * 1.5, 20],
+        callback: () => spawnSlimes(this, slimeSpawnCondition, 54, 45, 50, 450, 20, 1200, 5),
         callbackScope: this,
         loop: true
     });
@@ -550,7 +620,7 @@ function create() {
 
 function update(time, delta) {
     movePlayer();
-    moveSlimes();
+    moveSlimes(time);
     moveFireballs(delta);
     switchMinimap();
     updateIgnorableObjectsByMinimap();
