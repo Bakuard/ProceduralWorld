@@ -2,6 +2,7 @@ import {SizeUnitsConverter} from './sizeUnitsConverter.js';
 import {objectTypes} from "./objectTypes.js";
 import {MapGenerator} from "./mapGenerator.js";
 import './util.js';
+import Phaser from 'phaser';
 
 const minimap = {};
 let sizeUnitsConverter;
@@ -560,7 +561,7 @@ function createMinimap(scene, scale) {
 
 
 function preload() {
-    this.load.setBaseURL('../resources');
+    this.load.setBaseURL('./');
     this.load.image(objectTypes.waterTile, 'water_tile.jpg');
     this.load.image(objectTypes.sandTile, 'sand_tile.jpg');
     this.load.image(objectTypes.grassTile, 'grass_tile.jpg');
