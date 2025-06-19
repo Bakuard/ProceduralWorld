@@ -66,15 +66,21 @@ function createPlayer(scene, x, y, width, height, speed, fireRateInMillis, bulle
 function movePlayer() {
     player.body.velocity.x = userInput.right.isDown - userInput.left.isDown;
     player.body.velocity.y = userInput.down.isDown - userInput.up.isDown;
-    player.body.velocity.normalize().scale(player.speed);
+    if(player.body.velocity.y !== 0 && player.body.velocity.x !== 0) {
+        player.body.velocity.x *= 0.707106; //sin 45 degree
+        player.body.velocity.y *= 0.707106; //cos 45 degree
+    }
+    player.body.velocity.scale(player.speed);
 
-    if(player.body.velocity.equals(Phaser.Math.Vector2.ZERO)) {
+    if(player.body.velocity.equals(Phaser.Math.Vector2.ZERO))
         player.anims.play('player_stay', true);
-    } else {
-        player.setFlipX(userInput.left.isDown);
+    else {
         player.anims.play('player_walk', true);
         player.depth = player.y + 100;
     }
+
+    if(player.body.velocity.x !== 0)
+        player.setFlipX(userInput.left.isDown);
 }
 
 function playerFire(scene, time) {
@@ -285,7 +291,7 @@ function createTile(tileNumberX, tileNumberY, tileType) {
         .setSize(sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight)
         .setOrigin(0, 0)
         .refreshBody();
-    tile.depth = topPerPixel;
+    tile.depth = Number.NEGATIVE_INFINITY;
     tile.type = tileType;
     return tile;
 }
