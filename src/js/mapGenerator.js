@@ -39,14 +39,14 @@ function multipleOctavesNoise(x, y, seed, octaves, persistence, frequency, frequ
 }
 
 
-export function MapGenerator(sizeUnitsConverter, seed, octaves, persistence, frequency, frequencyMod, treeCellSizePerTile) {
+export function MapGenerator(sizeUnitsConverter, seed, octaves, persistence, frequency, frequencyMod, distanceBetweenTreesInTile, treeOffsetInPixel) {
     this.seed = seed ?? randomIntegerInRange(Math.random(), 0, 1_000_000);
     this.octaves = octaves ?? 16;
     this.persistence = persistence ?? 0.5;
     this.frequency = frequency ?? 0.01;
     this.frequencyMod = frequencyMod ?? 2;
-    this.treeCellSizePerTile = treeCellSizePerTile ?? 2;
-    this.offsetVectors = createOffsetVectors(8, this.treeCellSizePerTile / 6);
+    this.treeCellSizePerTile = distanceBetweenTreesInTile ?? 2;
+    this.offsetVectors = createOffsetVectors(8, treeOffsetInPixel ?? sizeUnitsConverter.tileWidth * 0.5);
     this.sizeUnitsConverter = sizeUnitsConverter;
 };
 
@@ -83,54 +83,37 @@ function createOffsetVectors(count, vectorLength) {
     return vectors;
 }
 
-function generateTree(treeCellX, treeCellY) {
-    if(this.tree) return;
+function generateTree(mapGenerator, tileX, tileY) {
+    if(tileX % mapGenerator.treeCellSizePerTile !== 0
+        || tileY % mapGenerator.treeCellSizePerTile !== 0
+        || mapGenerator.height < 0.6
+        || mapGenerator.height > 0.75) return null;
 
-    const noiseForTree = noise(treeCellX, treeCellY, this.seed);
-    const offsetVector = this.offsetVectors[randomIntegerInRange(noiseForTree, 0, this.offsetVectors.length - 1)];
-    const treeXPerPixel = this.sizeUnitsConverter.pixelXFromTileX((treeCellX + offsetVector.x) * this.treeCellSizePerTile);
-    const treeYPerPixel = this.sizeUnitsConverter.pixelYFromTileY((treeCellY + offsetVector.y) * this.treeCellSizePerTile);
-    if(this.sizeUnitsConverter.doesTileContainPixel(this.xPerTile, this.yPerTile, treeXPerPixel, treeYPerPixel) && this.height >= 0.6 && this.height <= 0.75) {
-        this.tree = {
-            xPerPixel: treeXPerPixel,
-            yPerPixel: treeYPerPixel,
-            treeType: chooseTreeType(noiseForTree)
-        };
-    }
+    const noiseForTree = mapGenerator.noise(tileX, tileY);
+    const offsetVector = mapGenerator.offsetVectors[randomIntegerInRange(noiseForTree, 0, mapGenerator.offsetVectors.length - 1)];
+    const pixelX = mapGenerator.sizeUnitsConverter.centerPixelXOfTile(tileX) + offsetVector.x;
+    const pixelY = mapGenerator.sizeUnitsConverter.centerPixelYOfTile(tileY) + offsetVector.y;
+
+    return { pixelX: pixelX, pixelY: pixelY, treeType: chooseTreeType(noiseForTree) };
 }
 
-MapGenerator.prototype.generate = function(xPerTile, yPerTile) {
-    this.xPerTile = xPerTile;
-    this.yPerTile = yPerTile;
-    this.height = multipleOctavesNoise(xPerTile, yPerTile, this.seed, this.octaves, this.persistence, this.frequency, this.frequencyMod);
-
-    //Генерируем координаты дерева
-    this.tree = null;
-
-    let treeCellX = Math.floor(this.xPerTile / this.treeCellSizePerTile);
-    let treeCellY = Math.floor(this.yPerTile / this.treeCellSizePerTile);
-    generateTree.call(this, treeCellX, treeCellY);
-
-    treeCellX = Math.ceil(this.xPerTile / this.treeCellSizePerTile);
-    treeCellY = Math.floor(this.yPerTile / this.treeCellSizePerTile);
-    generateTree.call(this, treeCellX, treeCellY);
-
-    treeCellX = Math.floor(this.xPerTile / this.treeCellSizePerTile);
-    treeCellY = Math.ceil(this.yPerTile / this.treeCellSizePerTile);
-    generateTree.call(this, treeCellX, treeCellY);
-
-    treeCellX = Math.ceil(this.xPerTile / this.treeCellSizePerTile);
-    treeCellY = Math.ceil(this.yPerTile / this.treeCellSizePerTile);
-    generateTree.call(this, treeCellX, treeCellY);
-};
-
-MapGenerator.prototype.getLandscape = function() {
-    if(this.height < 0.45)
+function generateTileType(height) {
+    if(height < 0.45)
         return objectTypes.waterTile;
-    else if(this.height < 0.48)
+    else if(height < 0.48)
         return objectTypes.sandTile;
     else
         return objectTypes.grassTile;
+}
+
+MapGenerator.prototype.generate = function(tileX, tileY) {
+    this.height = multipleOctavesNoise(tileX, tileY, this.seed, this.octaves, this.persistence, this.frequency, this.frequencyMod);
+    this.tileType = generateTileType(this.height);
+    this.tree = generateTree(this, tileX, tileY);
+};
+
+MapGenerator.prototype.getTileType = function() {
+    return this.tileType;
 };
 
 MapGenerator.prototype.getTree = function() {

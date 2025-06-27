@@ -34,6 +34,10 @@ SizeUnitsConverter.prototype.chunkAreaInTiles = function() {
     return this.chunkSizeInTile * this.chunkSizeInTile;
 };
 
+SizeUnitsConverter.prototype.worldAreaInChunks = function() {
+    return this.worldWidthInChunk * this.worldHeightInChunk;
+};
+
 SizeUnitsConverter.prototype.tileXFromPixelX = function(pixelX) {
     return Math.floor(pixelX / this.tileWidth);
 };
@@ -42,30 +46,34 @@ SizeUnitsConverter.prototype.tileYFromPixelY = function(pixelY) {
     return Math.floor(pixelY / this.tileHeight);
 };
 
-SizeUnitsConverter.prototype.tileXFromChunkX = function(chunkX) {
+SizeUnitsConverter.prototype.leftTileOfChunk = function(chunkX) {
     return chunkX * this.chunkSizeInTile;
 };
 
-SizeUnitsConverter.prototype.tileYFromChunkY = function(chunkY) {
+SizeUnitsConverter.prototype.topTileOfChunk = function(chunkY) {
     return chunkY * this.chunkSizeInTile;
 };
 
-SizeUnitsConverter.prototype.pixelXFromChunkX = function(chunkX) {
+SizeUnitsConverter.prototype.leftPixelOfChunk = function(chunkX) {
     return chunkX * this.chunkWidthInPixels();
 };
 
-SizeUnitsConverter.prototype.pixelYFromChunkY = function(chunkY) {
+SizeUnitsConverter.prototype.topPixelOfChunk = function(chunkY) {
     return chunkY * this.chunkHeightInPixels();
 };
 
-SizeUnitsConverter.prototype.pixelXFromTileX = function(tileX) {
+SizeUnitsConverter.prototype.leftPixelOfTile = function(tileX) {
     return tileX * this.tileWidth;
 };
 
-SizeUnitsConverter.prototype.pixelYFromTileY = function(tileY) {
+SizeUnitsConverter.prototype.topPixelOfTile = function(tileY) {
     return tileY * this.tileHeight;
 };
 
-SizeUnitsConverter.prototype.doesTileContainPixel = function(tileX, tileY, pixelX, pixelY) {
-    return this.tileXFromPixelX(pixelX) === tileX && this.tileYFromPixelY(pixelY) === tileY;
+SizeUnitsConverter.prototype.centerPixelXOfTile = function(tileX) {
+    return tileX * this.tileWidth + this.tileWidth / 2;
+};
+
+SizeUnitsConverter.prototype.centerPixelYOfTile = function(tileY) {
+    return tileY * this.tileHeight + this.tileHeight / 2;
 };

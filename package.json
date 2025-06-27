@@ -10,7 +10,7 @@
     },
     "private": true,
     "dependencies": {
-        "phaser": "^3.88.2"
+        "phaser": "^3.90.0"
     },
     "devDependencies": {
         "vite": "^6.3.5"
