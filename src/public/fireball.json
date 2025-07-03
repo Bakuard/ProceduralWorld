@@ -1,0 +1,44 @@
+{
+    "frames": {
+        "0": {
+            "frame": {"x": 0, "y": 0, "w": 56, "h": 38},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 56, "h": 38},
+            "sourceSize": {"w": 56, "h": 38}
+        },
+        "1": {
+            "frame": {"x": 56, "y": 0, "w": 56, "h": 38},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 56, "h": 38},
+            "sourceSize": {"w": 56, "h": 38}
+        },
+        "2": {
+            "frame": {"x": 112, "y": 0, "w": 56, "h": 38},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 56, "h": 38},
+            "sourceSize": {"w": 56, "h": 38}
+        },
+        "3": {
+            "frame": {"x": 168, "y": 0, "w": 56, "h": 38},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 56, "h": 38},
+            "sourceSize": {"w": 56, "h": 38}
+        },
+        "4": {
+            "frame": {"x": 224, "y": 0, "w": 56, "h": 38},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 56, "h": 38},
+            "sourceSize": {"w": 56, "h": 38}
+        }
+    },
+    "meta": {
+        "image": "fireball.png",
+        "format": "RGBA8888",
+        "size": {"w": 280, "h": 38}
+    }
+}

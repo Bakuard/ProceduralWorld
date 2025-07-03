@@ -1,0 +1,114 @@
+{
+    "frames": {
+        "0": {
+            "frame": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "1": {
+            "frame": {"x": 45, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "2": {
+            "frame": {"x": 90, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "3": {
+            "frame": {"x": 135, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "4": {
+            "frame": {"x": 180, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "5": {
+            "frame": {"x": 225, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "6": {
+            "frame": {"x": 270, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "7": {
+            "frame": {"x": 315, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "8": {
+            "frame": {"x": 360, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "9": {
+            "frame": {"x": 405, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "10": {
+            "frame": {"x": 450, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "11": {
+            "frame": {"x": 495, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "12": {
+            "frame": {"x": 540, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "13": {
+            "frame": {"x": 585, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        },
+        "14": {
+            "frame": {"x": 630, "y": 0, "w": 45, "h": 54},
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
+            "sourceSize": {"w": 45, "h": 54}
+        }
+    },
+    "meta": {
+        "image": "explosion.png",
+        "format": "RGBA8888",
+        "size": {"w": 675, "h": 54}
+    }
+}
