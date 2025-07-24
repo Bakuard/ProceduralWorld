@@ -361,7 +361,7 @@ function World(scene, distanceToBorderPerChunk, slimeSpawnCondition) {
         return obj;
     };
     World.prototype.disposeToPool ??= function(obj) {
-        obj.setActive(false).setVisible(false);
+        obj.setActive(false).setVisible(false).resetPipeline();
         obj.body.enable = false;
         obj.setDepth(0);
         obj.colliders?.forEach(collider => collider.active = false);
@@ -410,7 +410,7 @@ function updateMinimap() {
 function updateIgnorableObjectsByMinimap() {
     if(minimap.camera.visible) {
         const ignoringObjects = [player];
-        //world.grid.fillArrayWithType(objectTypes.slime, ignoringObjects);
+        world.grid.fillArrayWithType(objectTypes.slime, ignoringObjects);
         world.grid.fillArrayWithType(objectTypes.waterTile, ignoringObjects);
         world.grid.fillArrayWithType(objectTypes.sandTile, ignoringObjects);
         world.grid.fillArrayWithType(objectTypes.grassTile, ignoringObjects);
@@ -476,6 +476,22 @@ function createMinimap(scene, scale) {
 }
 
 
+function prepareShaderPipelines(scene) {
+    const night = new Phaser.Renderer.WebGL.Pipelines.PostFXPipeline({
+        game: scene.game,
+        renderTarget: true,
+        fragShader: scene.cache.shader.get('night').fragmentSrc
+    });
+    night.onPreRender = function() {
+        night.set1f('uIntensity', 0.3);
+    };
+
+    function GrayPipeline() { return night; }
+    scene.renderer.pipelines.addPostPipeline('night', GrayPipeline);
+    scene.cameras.main.setPostPipeline('night');
+}
+
+
 //Sorting objects by depth in Phaser sometimes ignores certain objects. A manual call to depthSort() is required.
 function fixRenderingOrder(scene) {
     scene.children.sortChildrenFlag = true;
@@ -500,6 +516,8 @@ function preload() {
         addImageFromAtlas(this, 'trees', '4', objectTypes.deadBigOak);
         addImageFromAtlas(this, 'trees', '5', objectTypes.deadHeightOak);
     });
+
+    this.load.glsl('night', 'shaders/night.glsl');
 }
 
 function create() {
@@ -510,6 +528,7 @@ function create() {
     preparePlayerAnimation(this);
     prepareFireballAnimation(this);
     prepareExplosionAnimation(this);
+    prepareShaderPipelines(this);
 
     const slimeSpawnCondition = { grassTilesPercent: 0.75, probability: 0.05, maxSlimes: 3 };
     world = new World(this, 2, slimeSpawnCondition);
@@ -555,7 +574,7 @@ function update(time, delta) {
 }
 
 const config = {
-    type: Phaser.AUTO,
+    type: Phaser.WEBGL,
     width: document.documentElement.clientWidth,
     height: document.documentElement.clientHeight,
     scale: {
