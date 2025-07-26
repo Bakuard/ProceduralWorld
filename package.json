@@ -1,18 +1,31 @@
 {
-    "name": "generated-world",
-    "version": "1.0.0",
-    "description": "",
-    "main": "src/js/index.js",
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "build": "vite build",
-        "preview": "vite preview"
-    },
-    "private": true,
-    "dependencies": {
-        "phaser": "^3.90.0"
-    },
-    "devDependencies": {
-        "vite": "^6.3.5"
-    }
+  "name": "generated-world",
+  "version": "1.0.0",
+  "description": "",
+  "main": "electron.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "vite:build": "vite build",
+    "vite:preview": "vite preview",
+    "electron:start": "electron-forge start",
+    "electron:package": "electron-forge package",
+    "electron:make": "electron-forge make"
+  },
+  "private": true,
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.8.1",
+    "@electron-forge/maker-deb": "^7.8.1",
+    "@electron-forge/maker-rpm": "^7.8.1",
+    "@electron-forge/maker-squirrel": "^7.8.1",
+    "@electron-forge/maker-zip": "^7.8.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
+    "@electron-forge/plugin-fuses": "^7.8.1",
+    "@electron/fuses": "^1.8.0",
+    "electron": "37.2.4",
+    "vite": "^6.3.5"
+  }
 }
