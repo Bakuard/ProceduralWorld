@@ -1,7 +1,8 @@
 import {SizeUnitsConverter} from './sizeUnitsConverter.js';
-import {objectTypes} from "./objectTypes.js";
-import {MapGenerator} from "./mapGenerator.js";
-import {GridContainer} from "./gridContainer.js";
+import {objectTypes} from './objectTypes.js';
+import {MapGenerator} from './mapGenerator.js';
+import {GridContainer} from './gridContainer.js';
+import {dayPhases, Calendar} from './calendar.js';
 import Phaser from 'phaser';
 
 const minimap = {};
@@ -11,6 +12,8 @@ let player;
 let userInput;
 let world;
 let slimeSpawnTimer;
+let nightPipeline;
+let calendar;
 const slimeStates = Object.freeze({
     roam: 'roam',
     chase: 'chase',
@@ -303,75 +306,74 @@ function World(scene, distanceToBorderPerChunk, slimeSpawnCondition) {
     this.distanceToBorderForLoading = distanceToBorderPerChunk * sizeUnitsConverter.chunkWidthInPixels();
     this.grid = new GridContainer(sizeUnitsConverter, 0, 0);
     this.physicsGroups = {};
-
-    World.prototype.checkDistanceToBorder ??= function(pixelX, pixelY) {
-        return this.grid.checkDistanceToBorder(pixelX, pixelY, this.distanceToBorderForLoading);
-    };
-    World.prototype.generateChunksFor ??= function(pixelX, pixelY) {
-        const result = this.grid.shiftCenterToPixel(pixelX, pixelY);
-
-        for(const chunk of result.destroyedChunks)
-            chunk.forEachObj(obj => this.disposeToPool(obj));
-
-        for(const chunk of result.createdChunks) {
-            //terrain generation
-            chunk.forEachTile((tileX, tileY) => {
-                mapGenerator.generate(tileX, tileY);
-                const tileType = mapGenerator.getTileType();
-                createTile(tileX, tileY, tileType);
-
-                const treeMeta = mapGenerator.getTree();
-                if(treeMeta && this.grid.isPixelInMap(treeMeta.pixelX, treeMeta.pixelY)) createTree(treeMeta);
-            });
-
-            //Calculate bioms percent
-            chunk.biomsPercent = {};
-            const tilesNumberInOneChunk = sizeUnitsConverter.chunkAreaInTiles();
-            chunk.biomsPercent[objectTypes.sandTile] = chunk.countByTypeInChunk(objectTypes.sandTile) / tilesNumberInOneChunk;
-            chunk.biomsPercent[objectTypes.waterTile] = chunk.countByTypeInChunk(objectTypes.waterTile) / tilesNumberInOneChunk;
-            chunk.biomsPercent[objectTypes.grassTile] = chunk.countByTypeInChunk(objectTypes.grassTile) / tilesNumberInOneChunk;
-
-            chunk.hasSlimeSpawner = chunk.biomsPercent[objectTypes.grassTile] >= slimeSpawnCondition.grassTilesPercent
-                && mapGenerator.noise(chunk.chunkX, chunk.chunkY) <= slimeSpawnCondition.probability;
-        }
-    };
-    World.prototype.createPhysicsGroups ??= function(scene) {
-        this.physicsGroups[objectTypes.waterTile] = scene.physics.add.staticGroup();
-        this.physicsGroups[objectTypes.sandTile] = scene.physics.add.staticGroup();
-        this.physicsGroups[objectTypes.grassTile] = scene.physics.add.staticGroup();
-        this.physicsGroups[objectTypes.littleOak] = scene.physics.add.staticGroup();
-        this.physicsGroups[objectTypes.bigOak] = scene.physics.add.staticGroup();
-        this.physicsGroups[objectTypes.heightOak] = scene.physics.add.staticGroup();
-        this.physicsGroups[objectTypes.deadLittleOak] = scene.physics.add.staticGroup();
-        this.physicsGroups[objectTypes.deadBigOak] = scene.physics.add.staticGroup();
-        this.physicsGroups[objectTypes.deadHeightOak] = scene.physics.add.staticGroup();
-        this.physicsGroups[objectTypes.player] = scene.physics.add.group();
-        this.physicsGroups[objectTypes.slime] = scene.physics.add.group();
-        this.physicsGroups[objectTypes.fireball] = scene.physics.add.group();
-        this.physicsGroups[objectTypes.explosion] = scene.physics.add.staticGroup();
-    };
-    World.prototype.getFromPool ??= function(objectType, pixelX, pixelY, animationKey, animationFrame, chunk) {
-        const obj = this.physicsGroups[objectType].get(pixelX, pixelY, animationKey, animationFrame)
-            .setActive(true)
-            .setVisible(true);
-        obj.body.enable = true;
-        obj.colliders?.forEach(collider => collider.active = true);
-        obj.chunk = chunk ?? this.grid.getChunkByPixel(obj.x, obj.y);
-        obj.chunk.addToChunk(obj, objectType);
-        return obj;
-    };
-    World.prototype.disposeToPool ??= function(obj) {
-        obj.setActive(false).setVisible(false).resetPipeline();
-        obj.body.enable = false;
-        obj.setDepth(0);
-        obj.colliders?.forEach(collider => collider.active = false);
-    };
-    World.prototype.disposeToPoolAndRemoveFromGrid ??= function(obj) {
-        this.disposeToPool(obj);
-        obj.chunk.removeFromChunk(obj, obj.type);
-    }
-
+    this.slimeSpawnCondition = slimeSpawnCondition;
     this.createPhysicsGroups(scene);
+}
+World.prototype.checkDistanceToBorder = function(pixelX, pixelY) {
+    return this.grid.checkDistanceToBorder(pixelX, pixelY, this.distanceToBorderForLoading);
+};
+World.prototype.generateChunksFor = function(pixelX, pixelY) {
+    const result = this.grid.shiftCenterToPixel(pixelX, pixelY);
+
+    for(const chunk of result.destroyedChunks)
+        chunk.forEachObj(obj => this.disposeToPool(obj));
+
+    for(const chunk of result.createdChunks) {
+        //terrain generation
+        chunk.forEachTile((tileX, tileY) => {
+            mapGenerator.generate(tileX, tileY);
+            const tileType = mapGenerator.getTileType();
+            createTile(tileX, tileY, tileType);
+
+            const treeMeta = mapGenerator.getTree();
+            if(treeMeta && this.grid.isPixelInMap(treeMeta.pixelX, treeMeta.pixelY)) createTree(treeMeta);
+        });
+
+        //Calculate bioms percent
+        chunk.biomsPercent = {};
+        const tilesNumberInOneChunk = sizeUnitsConverter.chunkAreaInTiles();
+        chunk.biomsPercent[objectTypes.sandTile] = chunk.countByTypeInChunk(objectTypes.sandTile) / tilesNumberInOneChunk;
+        chunk.biomsPercent[objectTypes.waterTile] = chunk.countByTypeInChunk(objectTypes.waterTile) / tilesNumberInOneChunk;
+        chunk.biomsPercent[objectTypes.grassTile] = chunk.countByTypeInChunk(objectTypes.grassTile) / tilesNumberInOneChunk;
+
+        chunk.hasSlimeSpawner = chunk.biomsPercent[objectTypes.grassTile] >= this.slimeSpawnCondition.grassTilesPercent
+            && mapGenerator.noise(chunk.chunkX, chunk.chunkY) <= this.slimeSpawnCondition.probability;
+    }
+};
+World.prototype.createPhysicsGroups = function(scene) {
+    this.physicsGroups[objectTypes.waterTile] = scene.physics.add.staticGroup();
+    this.physicsGroups[objectTypes.sandTile] = scene.physics.add.staticGroup();
+    this.physicsGroups[objectTypes.grassTile] = scene.physics.add.staticGroup();
+    this.physicsGroups[objectTypes.littleOak] = scene.physics.add.staticGroup();
+    this.physicsGroups[objectTypes.bigOak] = scene.physics.add.staticGroup();
+    this.physicsGroups[objectTypes.heightOak] = scene.physics.add.staticGroup();
+    this.physicsGroups[objectTypes.deadLittleOak] = scene.physics.add.staticGroup();
+    this.physicsGroups[objectTypes.deadBigOak] = scene.physics.add.staticGroup();
+    this.physicsGroups[objectTypes.deadHeightOak] = scene.physics.add.staticGroup();
+    this.physicsGroups[objectTypes.player] = scene.physics.add.group();
+    this.physicsGroups[objectTypes.slime] = scene.physics.add.group();
+    this.physicsGroups[objectTypes.fireball] = scene.physics.add.group();
+    this.physicsGroups[objectTypes.explosion] = scene.physics.add.staticGroup();
+};
+World.prototype.getFromPool = function(objectType, pixelX, pixelY, animationKey, animationFrame, chunk) {
+    const obj = this.physicsGroups[objectType].get(pixelX, pixelY, animationKey, animationFrame)
+        .setActive(true)
+        .setVisible(true);
+    obj.body.enable = true;
+    obj.colliders?.forEach(collider => collider.active = true);
+    obj.chunk = chunk ?? this.grid.getChunkByPixel(obj.x, obj.y);
+    obj.chunk.addToChunk(obj, objectType);
+    return obj;
+};
+World.prototype.disposeToPool = function(obj) {
+    obj.setActive(false).setVisible(false).resetPipeline();
+    obj.body.enable = false;
+    obj.setDepth(0);
+    obj.colliders?.forEach(collider => collider.active = false);
+};
+World.prototype.disposeToPoolAndRemoveFromGrid = function(obj) {
+    this.disposeToPool(obj);
+    obj.chunk.removeFromChunk(obj, obj.type);
 }
 
 
@@ -476,19 +478,24 @@ function createMinimap(scene, scale) {
 }
 
 
-function prepareShaderPipelines(scene) {
-    const night = new Phaser.Renderer.WebGL.Pipelines.PostFXPipeline({
+function prepareNightPipeline(scene) {
+    nightPipeline = new Phaser.Renderer.WebGL.Pipelines.PostFXPipeline({
         game: scene.game,
         renderTarget: true,
         fragShader: scene.cache.shader.get('night').fragmentSrc
     });
-    night.onPreRender = function() {
-        night.set1f('uIntensity', 0.3);
+    nightPipeline.intensity = 0.3;
+    nightPipeline.isEnabled = false;
+    nightPipeline.onPreRender = function() {
+        this.setBoolean('uIsEnabled', this.isEnabled);
+        this.set1f('uIntensity', this.intensity);
     };
-
-    function GrayPipeline() { return night; }
-    scene.renderer.pipelines.addPostPipeline('night', GrayPipeline);
+    scene.renderer.pipelines.addPostPipeline('night', function NightPipeline() { return nightPipeline; });
     scene.cameras.main.setPostPipeline('night');
+}
+
+function setEnableNightPipeline(isEnabled) {
+    nightPipeline.isEnabled = isEnabled;
 }
 
 
@@ -524,11 +531,13 @@ function create() {
     sizeUnitsConverter = new SizeUnitsConverter(60, 60, 10, 5, 5);
     mapGenerator = new MapGenerator(sizeUnitsConverter);
 
+    calendar = new Calendar(5, 20, 5, 20);
+
     prepareSlimeAnimation(this);
     preparePlayerAnimation(this);
     prepareFireballAnimation(this);
     prepareExplosionAnimation(this);
-    prepareShaderPipelines(this);
+    prepareNightPipeline(this);
 
     const slimeSpawnCondition = { grassTilesPercent: 0.75, probability: 0.05, maxSlimes: 3 };
     world = new World(this, 2, slimeSpawnCondition);
@@ -559,6 +568,8 @@ function create() {
 }
 
 function update(time, delta) {
+    calendar.update(time);
+    setEnableNightPipeline(calendar.isNight());
     movePlayer();
     moveSlimes(time);
     moveFireballs(delta);
