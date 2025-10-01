@@ -12,15 +12,21 @@ export function Calendar(morningInSec, afternoonInSec, eveningInSec, nightInSec)
     this.eveningInMs = eveningInSec * 1000;
     this.nightInMs = nightInSec * 1000;
 
-    setCurrentTime(this, 0);
-
-    this.previousState = Object.setPrototypeOf({}, Calendar.prototype);
-    copyState(this, this.previousState);
+    this.setCurrentTime(0);
 }
 
-Calendar.prototype.update = function(totalElapsedTimeInMs) {
-    copyState(this, this.previousState);
-    setCurrentTime(this, totalElapsedTimeInMs);
+Calendar.prototype.setCurrentTime = function(totalElapsedTimeInMs) {
+    this.msSinceDayStart = totalElapsedTimeInMs % getTotalDayDurationInMs(this);
+    this.totalDays = Math.floor(totalElapsedTimeInMs / getTotalDayDurationInMs(this));
+
+    if(this.msSinceDayStart <= this.morningInMs)
+        this.currentPhase = dayPhases.morning;
+    else if(this.msSinceDayStart <= getFirstPartOfDayInMs(this))
+        this.currentPhase = dayPhases.afternoon;
+    else if(this.msSinceDayStart <= getDaylightHoursInMs(this))
+        this.currentPhase = dayPhases.evening;
+    else
+        this.currentPhase = dayPhases.night;
 };
 
 Calendar.prototype.isMorning = function() {
@@ -61,16 +67,8 @@ Calendar.prototype.getCurrentPhaseProgress = function() {
     else return this.getMsSincePhaseStart() / this.nightInMs;
 };
 
-Calendar.prototype.hasPhaseChanged = function() {
-    return this.currentPhase != this.previousState.currentPhase;
-};
-
 Calendar.prototype.getTotalDays = function() {
     return this.totalDays;
-};
-
-Calendar.prototype.hasDayChanged = function() {
-    return this.totalDays != this.previousState.totalDays;
 };
 
 
@@ -84,29 +82,4 @@ function getDaylightHoursInMs(calendar) {
 
 function getTotalDayDurationInMs(calendar) {
     return calendar.morningInMs + calendar.afternoonInMs + calendar.eveningInMs + calendar.nightInMs;
-}
-
-function setCurrentTime(calendar, totalElapsedTimeInMs) {
-    calendar.msSinceDayStart = totalElapsedTimeInMs % getTotalDayDurationInMs(calendar);
-    calendar.totalDays = Math.floor(totalElapsedTimeInMs / getTotalDayDurationInMs(calendar));
-
-    if(calendar.msSinceDayStart <= calendar.morningInMs)
-        calendar.currentPhase = dayPhases.morning;
-    else if(calendar.msSinceDayStart <= getFirstPartOfDayInMs(calendar))
-        calendar.currentPhase = dayPhases.afternoon;
-    else if(calendar.msSinceDayStart <= getDaylightHoursInMs(calendar))
-        calendar.currentPhase = dayPhases.evening;
-    else
-        calendar.currentPhase = dayPhases.night;
-}
-
-function copyState(calendar, otherCalendar) {
-    otherCalendar.morningInMs = calendar.morningInMs;
-    otherCalendar.afternoonInMs = calendar.afternoonInMs;
-    otherCalendar.eveningInMs = calendar.eveningInMs;
-    otherCalendar.nightInMs = calendar.nightInMs;
-
-    otherCalendar.msSinceDayStart = calendar.msSinceDayStart;
-    otherCalendar.totalDays = calendar.totalDays;
-    otherCalendar.currentPhase = calendar.currentPhase;
 }

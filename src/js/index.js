@@ -2,7 +2,7 @@ import {SizeUnitsConverter} from './sizeUnitsConverter.js';
 import {objectTypes} from './objectTypes.js';
 import {MapGenerator} from './mapGenerator.js';
 import {GridContainer} from './gridContainer.js';
-import {dayPhases, Calendar} from './calendar.js';
+import {Calendar, dayPhases} from './calendar.js';
 import Phaser from 'phaser';
 
 const minimap = {};
@@ -20,13 +20,18 @@ const slimeStates = Object.freeze({
     attack: 'attack'
 });
 
-function addImageFromAtlas(scene, atlasName, frameName, imageName) {
-    const frame = scene.textures.getFrame(atlasName, frameName);
-    scene.textures.addSpriteSheetFromAtlas(imageName, {
-        atlas: atlasName,
-        frame: frameName,
-        frameWidth: frame.width,
-        frameHeight: frame.height
+function preloadImageFromAtlas(scene, atlasName, frameName, imageName) {
+    if(!scene.textures.exists(atlasName))
+        scene.load.atlas(atlasName, atlasName + '.png', atlasName + '.json');
+
+    scene.load.on('complete', () => {
+        const frame = scene.textures.getFrame(atlasName, frameName);
+        scene.textures.addSpriteSheetFromAtlas(imageName, {
+            atlas: atlasName,
+            frame: frameName,
+            frameWidth: frame.width,
+            frameHeight: frame.height
+        });
     });
 }
 
@@ -478,24 +483,46 @@ function createMinimap(scene, scale) {
 }
 
 
-function prepareNightPipeline(scene) {
+function prepareAmbientLightPipeline(scene, morningPhaseTransitionFraction, afternoonPhaseTransitionFraction, eveningPhaseTransitionFraction, nightPhaseTransitionFraction, currentDayPhase, currentDayPhaseProgress) {
     nightPipeline = new Phaser.Renderer.WebGL.Pipelines.PostFXPipeline({
         game: scene.game,
         renderTarget: true,
         fragShader: scene.cache.shader.get('night').fragmentSrc
     });
-    nightPipeline.intensity = 0.3;
-    nightPipeline.isEnabled = false;
+
+    updateAmbientLightPipeline(currentDayPhase, currentDayPhaseProgress);
+    nightPipeline.morningPhaseTransitionFraction = morningPhaseTransitionFraction;
+    nightPipeline.afternoonPhaseTransitionFraction = afternoonPhaseTransitionFraction;
+    nightPipeline.eveningPhaseTransitionFraction = eveningPhaseTransitionFraction;
+    nightPipeline.nightPhaseTransitionFraction = nightPhaseTransitionFraction;
+
     nightPipeline.onPreRender = function() {
-        this.setBoolean('uIsEnabled', this.isEnabled);
+        this.set1i('uDayPhase', this.dayPhase);
         this.set1f('uIntensity', this.intensity);
     };
     scene.renderer.pipelines.addPostPipeline('night', function NightPipeline() { return nightPipeline; });
     scene.cameras.main.setPostPipeline('night');
 }
 
-function setEnableNightPipeline(isEnabled) {
-    nightPipeline.isEnabled = isEnabled;
+function updateAmbientLightPipeline(currentDayPhase, currentDayPhaseProgress) {
+    switch(currentDayPhase) {
+        case dayPhases.morning:
+            nightPipeline.dayPhase = 1;
+            nightPipeline.intensity = Math.min(1, currentDayPhaseProgress / nightPipeline.morningPhaseTransitionFraction);
+            break;
+        case dayPhases.afternoon:
+            nightPipeline.dayPhase = 2;
+            nightPipeline.intensity = Math.min(1, currentDayPhaseProgress / nightPipeline.afternoonPhaseTransitionFraction);
+            break;
+        case dayPhases.evening:
+            nightPipeline.dayPhase = 3;
+            nightPipeline.intensity = Math.min(1, currentDayPhaseProgress / nightPipeline.eveningPhaseTransitionFraction);
+            break;
+        case dayPhases.night:
+            nightPipeline.dayPhase = 4;
+            nightPipeline.intensity = Math.min(1, currentDayPhaseProgress / nightPipeline.nightPhaseTransitionFraction);
+            break;
+    }
 }
 
 
@@ -511,18 +538,15 @@ function preload() {
     this.load.image(objectTypes.sandTile, 'sand_tile.jpg');
     this.load.image(objectTypes.grassTile, 'grass_tile.jpg');
     this.load.atlas('character', 'character.png', 'character.json');
-    this.load.atlas('trees', 'trees.png', 'trees.json');
     this.load.atlas('slime', 'slime.png', 'slime.json');
     this.load.atlas('fireball', 'fireball.png', 'fireball.json');
     this.load.atlas('explosion', 'explosion.png', 'explosion.json');
-    this.load.on('complete', () => {
-        addImageFromAtlas(this, 'trees', '0', objectTypes.littleOak);
-        addImageFromAtlas(this, 'trees', '1', objectTypes.bigOak);
-        addImageFromAtlas(this, 'trees', '2', objectTypes.heightOak);
-        addImageFromAtlas(this, 'trees', '3', objectTypes.deadLittleOak);
-        addImageFromAtlas(this, 'trees', '4', objectTypes.deadBigOak);
-        addImageFromAtlas(this, 'trees', '5', objectTypes.deadHeightOak);
-    });
+    preloadImageFromAtlas(this, 'trees', '0', objectTypes.littleOak);
+    preloadImageFromAtlas(this, 'trees', '1', objectTypes.bigOak);
+    preloadImageFromAtlas(this, 'trees', '2', objectTypes.heightOak);
+    preloadImageFromAtlas(this, 'trees', '3', objectTypes.deadLittleOak);
+    preloadImageFromAtlas(this, 'trees', '4', objectTypes.deadBigOak);
+    preloadImageFromAtlas(this, 'trees', '5', objectTypes.deadHeightOak);
 
     this.load.glsl('night', 'shaders/night.glsl');
 }
@@ -531,13 +555,13 @@ function create() {
     sizeUnitsConverter = new SizeUnitsConverter(60, 60, 10, 5, 5);
     mapGenerator = new MapGenerator(sizeUnitsConverter);
 
-    calendar = new Calendar(5, 20, 5, 20);
+    calendar = new Calendar(5, 5, 5, 5);
 
     prepareSlimeAnimation(this);
     preparePlayerAnimation(this);
     prepareFireballAnimation(this);
     prepareExplosionAnimation(this);
-    prepareNightPipeline(this);
+    prepareAmbientLightPipeline(this, 0.2, 0.2, 0.2, 0.2, calendar.getCurrentDayPhase(), calendar.getCurrentPhaseProgress());
 
     const slimeSpawnCondition = { grassTilesPercent: 0.75, probability: 0.05, maxSlimes: 3 };
     world = new World(this, 2, slimeSpawnCondition);
@@ -568,8 +592,7 @@ function create() {
 }
 
 function update(time, delta) {
-    calendar.update(time);
-    setEnableNightPipeline(calendar.isNight());
+    calendar.setCurrentTime(time);
     movePlayer();
     moveSlimes(time);
     moveFireballs(delta);
@@ -582,6 +605,8 @@ function update(time, delta) {
     }
 
     fixRenderingOrder(this);
+
+    updateAmbientLightPipeline(calendar.getCurrentDayPhase(), calendar.getCurrentPhaseProgress());
 }
 
 const config = {
