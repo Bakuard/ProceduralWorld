@@ -309,7 +309,7 @@ function createTree(treeMeta) {
 
 function World(scene, distanceToBorderPerChunk, slimeSpawnCondition) {
     this.distanceToBorderForLoading = distanceToBorderPerChunk * sizeUnitsConverter.chunkWidthInPixels();
-    this.grid = new GridContainer(sizeUnitsConverter, 0, 0);
+    this.grid = new GridContainer(sizeUnitsConverter, { chunkLeft: 0, chunkTop: 0 });
     this.physicsGroups = {};
     this.slimeSpawnCondition = slimeSpawnCondition;
     this.createPhysicsGroups(scene);
@@ -552,10 +552,10 @@ function preload() {
 }
 
 function create() {
-    sizeUnitsConverter = new SizeUnitsConverter(60, 60, 10, 5, 5);
-    mapGenerator = new MapGenerator(sizeUnitsConverter);
+    sizeUnitsConverter = new SizeUnitsConverter({ tileWidth: 60, tileHeight: 60, chunkSizeInTile: 10, worldWidthInChunk: 5, worldHeightInChunk:5 });
+    mapGenerator = new MapGenerator(sizeUnitsConverter, { seed: Math.randomIntegerInRange(0, 1_000_000), octaves: 16, persistence: 0.5, frequency: 0.01, frequencyMod: 2, distanceBetweenTreesInTile: 2, treeRandomOffsetInPixel: 30});
 
-    calendar = new Calendar(5, 5, 5, 5);
+    calendar = new Calendar({ morningInSec: 5, afternoonInSec: 5, eveningInSec: 5, nightInSec: 5 });
 
     prepareSlimeAnimation(this);
     preparePlayerAnimation(this);
@@ -592,7 +592,7 @@ function create() {
 }
 
 function update(time, delta) {
-    calendar.setCurrentTime(time);
+    calendar.setCurrentTime(delta);
     movePlayer();
     moveSlimes(time);
     moveFireballs(delta);
