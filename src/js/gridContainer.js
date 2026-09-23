@@ -1,11 +1,11 @@
 import {objectTypes} from "./objectTypes.js";
 import './util.js';
 
-export function GridContainer(sizeUnitsConverter, chunkLeft, chunkTop) {
+export function GridContainer(sizeUnitsConverter, gridContainerConfig) {
     this.sizeUnitsConverter = sizeUnitsConverter;
-    this.border = createBorder(sizeUnitsConverter, chunkLeft, chunkTop);
+    this.border = createBorder(sizeUnitsConverter, gridContainerConfig.chunkLeft, gridContainerConfig.chunkTop);
     this.chunks = [];
-};
+}
 
 GridContainer.prototype.getChunkByPixel = function(pixelX, pixelY) {
     const chunkX = this.sizeUnitsConverter.chunkXFromPixelX(pixelX);
@@ -33,11 +33,11 @@ GridContainer.prototype.isPixelInMap = function(pixelX, pixelY) {
         && pixelY < this.border.pixelBottom;
 };
 
-GridContainer.prototype.checkDistanceToBorder = function(pixelX, pixelY, allowedDistanceInPixels) {
-    return pixelX - this.border.pixelLeft < allowedDistanceInPixels
-        || this.border.pixelRight - pixelX < allowedDistanceInPixels
-        || pixelY - this.border.pixelTop < allowedDistanceInPixels
-        || this.border.pixelBottom - pixelY < allowedDistanceInPixels;
+GridContainer.prototype.checkDistanceToBorder = function(pixelX, pixelY, distanceInPixels) {
+    return pixelX - this.border.pixelLeft < distanceInPixels
+        || this.border.pixelRight - pixelX < distanceInPixels
+        || pixelY - this.border.pixelTop < distanceInPixels
+        || this.border.pixelBottom - pixelY < distanceInPixels;
 };
 
 GridContainer.prototype.forEachObjWithType = function(objType, callback) {
@@ -82,7 +82,7 @@ function createBorder(sizeUnitsConverter, chunkLeft, chunkTop) {
     border.pixelBottom = sizeUnitsConverter.topPixelOfChunk(border.chunkBottom);
     border.pixelRight = sizeUnitsConverter.leftPixelOfChunk(border.chunkRight);
     return border;
-};
+}
 
 function getChunk(grid, chunkX, chunkY) {
     if(!grid.isChunkInMap(chunkX, chunkY)) return null;
@@ -90,7 +90,7 @@ function getChunk(grid, chunkX, chunkY) {
     const localChunkX = chunkX - grid.border.chunkLeft;
     const localChunkY = chunkY - grid.border.chunkTop;
     return grid.chunks[localChunkX + localChunkY * grid.sizeUnitsConverter.worldWidthInChunk];
-};
+}
 
 function shiftCenterToChunk(grid, chunkX, chunkY) {
     const newChunkLeft = chunkX - Math.floor(grid.sizeUnitsConverter.worldWidthInChunk / 2);
@@ -119,7 +119,7 @@ function shiftCenterToChunk(grid, chunkX, chunkY) {
     grid.chunks = newChunks;
 
     return { newBorder: grid.border, oldBorder: oldBorder, createdChunks: createdChunks, destroyedChunks: destroyedChunks };
-};
+}
 
 
 function Chunk(sizeUnitsConverter, chunkLeft, chunkTop) {
@@ -131,7 +131,7 @@ function Chunk(sizeUnitsConverter, chunkLeft, chunkTop) {
     this.pixelBottom = sizeUnitsConverter.topPixelOfChunk(chunkTop) + sizeUnitsConverter.chunkHeightInPixels();
     this.pixelRight = sizeUnitsConverter.leftPixelOfChunk(chunkLeft) + sizeUnitsConverter.chunkWidthInPixels();
     this.objectsByType = {};
-};
+}
 
 Chunk.prototype.addToChunk = function(obj, objType) {
     this.objectsByType[objType] ??= [];
@@ -162,4 +162,4 @@ Chunk.prototype.forEachObj = function(callback) {
 function forEachObjOfChunkWithType(chunk, objType, callback) {
     const objects = chunk.objectsByType[objType] ??= [];
     for(let i = objects.length - 1; i >= 0; --i) callback(objects[i]);
-};
+}

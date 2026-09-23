@@ -6,18 +6,20 @@ export const dayPhases = Object.freeze({
 });
 
 
-export function Calendar(morningInSec, afternoonInSec, eveningInSec, nightInSec) {
-    this.morningInMs = morningInSec * 1000;
-    this.afternoonInMs = afternoonInSec * 1000;
-    this.eveningInMs = eveningInSec * 1000;
-    this.nightInMs = nightInSec * 1000;
+export function Calendar(calendarConfig) {
+    this.morningInMs = calendarConfig.morningInSec * 1000;
+    this.afternoonInMs = calendarConfig.afternoonInSec * 1000;
+    this.eveningInMs = calendarConfig.eveningInSec * 1000;
+    this.nightInMs = calendarConfig.nightInSec * 1000;
 
+    this.totalElapsedTimeInMs = 0;
     this.setCurrentTime(0);
 }
 
-Calendar.prototype.setCurrentTime = function(totalElapsedTimeInMs) {
-    this.msSinceDayStart = totalElapsedTimeInMs % getTotalDayDurationInMs(this);
-    this.totalDays = Math.floor(totalElapsedTimeInMs / getTotalDayDurationInMs(this));
+Calendar.prototype.setCurrentTime = function(deltaTimeInMs) {
+    this.totalElapsedTimeInMs += deltaTimeInMs;
+    this.msSinceDayStart = this.totalElapsedTimeInMs % getTotalDayDurationInMs(this);
+    this.totalDays = Math.floor(this.totalElapsedTimeInMs / getTotalDayDurationInMs(this));
 
     if(this.msSinceDayStart <= this.morningInMs)
         this.currentPhase = dayPhases.morning;

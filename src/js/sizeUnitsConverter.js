@@ -1,9 +1,9 @@
-export function SizeUnitsConverter(tileWidth, tileHeight, chunkSizeInTile, worldWidthInChunk, worldHeightInChunk) {
-    this.tileWidth = tileWidth;
-    this.tileHeight = tileHeight;
-    this.chunkSizeInTile = chunkSizeInTile;
-    this.worldWidthInChunk = worldWidthInChunk;
-    this.worldHeightInChunk = worldHeightInChunk;
+export function SizeUnitsConverter(sizeUnitsConverterConfig) {
+    this.tileWidth = sizeUnitsConverterConfig.tileWidth;
+    this.tileHeight = sizeUnitsConverterConfig.tileHeight;
+    this.chunkSizeInTile = sizeUnitsConverterConfig.chunkSizeInTile;
+    this.worldWidthInChunk = sizeUnitsConverterConfig.worldWidthInChunk;
+    this.worldHeightInChunk = sizeUnitsConverterConfig.worldHeightInChunk;
 };
 
 SizeUnitsConverter.prototype.worldWidthInPixels = function() {
