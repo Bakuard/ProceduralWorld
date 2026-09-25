@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vite';
 
 export default defineConfig({
     root: 'src',
@@ -8,9 +8,9 @@ export default defineConfig({
         minify: false,
         rollupOptions: {
             output: {
-                entryFileNames: 'js/index.js',
-                chunkFileNames: 'js/chunk-[name].js',
+                entryFileNames: 'js/index-[hash].js',
                 assetFileNames: 'resources/[name].[ext]',
+                inlineDynamicImports: true
             }
         }
     }

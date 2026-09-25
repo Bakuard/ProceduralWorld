@@ -96,7 +96,7 @@ function shiftCenterToChunk(grid, chunkX, chunkY) {
     const newChunkLeft = chunkX - Math.floor(grid.sizeUnitsConverter.worldWidthInChunk / 2);
     const newChunkTop = chunkY - Math.floor(grid.sizeUnitsConverter.worldHeightInChunk / 2);
 
-    const newChunks = [], createdChunks = [], destroyedChunks = [];
+    const allChunks = [], createdChunks = [], destroyedChunks = [];
 
     for(let y = 0; y < grid.sizeUnitsConverter.worldHeightInChunk; y++) {
         for(let x = 0; x < grid.sizeUnitsConverter.worldWidthInChunk; x++) {
@@ -105,7 +105,7 @@ function shiftCenterToChunk(grid, chunkX, chunkY) {
                 chunk = new Chunk(grid.sizeUnitsConverter, x + newChunkLeft, y + newChunkTop);
                 createdChunks.push(chunk);
             }
-            newChunks.push(chunk);
+            allChunks.push(chunk);
         }
     }
 
@@ -116,7 +116,7 @@ function shiftCenterToChunk(grid, chunkX, chunkY) {
         if(!grid.isChunkInMap(chunk.chunkX, chunk.chunkY))
             destroyedChunks.push(chunk);
 
-    grid.chunks = newChunks;
+    grid.chunks = allChunks;
 
     return { newBorder: grid.border, oldBorder: oldBorder, createdChunks: createdChunks, destroyedChunks: destroyedChunks };
 }
@@ -146,12 +146,12 @@ Chunk.prototype.countByTypeInChunk = function(objType) {
     return this.objectsByType[objType]?.length ?? 0;
 };
 
-Chunk.prototype.forEachTile = function(callback) {
+Chunk.prototype.forEachTileCoords = function(callback) {
     const tileLeft = this.sizeUnitsConverter.leftTileOfChunk(this.chunkX);
     const tileTop = this.sizeUnitsConverter.topTileOfChunk(this.chunkY);
     for(let y = 0; y < this.sizeUnitsConverter.chunkSizeInTile; y++)
         for (let x = 0; x < this.sizeUnitsConverter.chunkSizeInTile; x++)
-            callback(tileLeft + x, tileTop + y);
+            callback(tileLeft + x, tileTop + y, x, y);
 };
 
 Chunk.prototype.forEachObj = function(callback) {

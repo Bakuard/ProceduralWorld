@@ -5,6 +5,7 @@
   "main": "electron.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite",
     "vite:build": "vite build",
     "vite:preview": "vite preview",
     "electron:start": "electron-forge start",
@@ -14,7 +15,7 @@
   "private": true,
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
-    "phaser": "^3.90.0"
+    "pixi.js": "^8.21.0"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.8.1",

@@ -1,4 +1,12 @@
-body, div, canvas {
-    margin: auto;
+body, canvas, main {
+    margin: 0;
     padding: 0;
+}
+
+canvas {
+    display: block;
+}
+
+.canvasContainer {
+    height: 100vh;
 }

@@ -75,7 +75,7 @@ function generateTree(mapGenerator, tileX, tileY) {
     const pixelX = mapGenerator.sizeUnitsConverter.centerPixelXOfTile(tileX) + offsetVector.x;
     const pixelY = mapGenerator.sizeUnitsConverter.centerPixelYOfTile(tileY) + offsetVector.y;
 
-    return { pixelX: pixelX, pixelY: pixelY, treeType: chooseTreeType(noiseForTree) };
+    return { globalPixelX: pixelX, globalPixelY: pixelY, treeType: chooseTreeType(noiseForTree) };
 }
 
 function generateTileType(height) {

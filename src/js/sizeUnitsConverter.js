@@ -22,6 +22,14 @@ SizeUnitsConverter.prototype.chunkHeightInPixels = function() {
     return this.chunkSizeInTile * this.tileHeight;
 };
 
+SizeUnitsConverter.prototype.tileWidthInPixels = function() {
+    return this.tileWidth;
+}
+
+SizeUnitsConverter.prototype.tileHeightInPixels = function() {
+    return this.tileHeight;
+}
+
 SizeUnitsConverter.prototype.chunkXFromPixelX = function(pixelX) {
     return Math.floor(pixelX / this.chunkWidthInPixels());
 };
