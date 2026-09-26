@@ -1,8 +1,9 @@
-import { WebGLRenderer, Assets, Container, Sprite, Ticker } from 'pixi.js';
+import { WebGLRenderer, Assets, Container, Sprite, AnimatedSprite, Ticker } from 'pixi.js';
 import {objectTypes} from "./objectTypes";
 import {SizeUnitsConverter} from "./sizeUnitsConverter";
 import {GridContainer} from "./gridContainer";
 import {MapGenerator} from "./mapGenerator";
+import {EventManager, keyboardEvents} from "./EventManager";
 
 let renderer;
 let stage;
@@ -10,12 +11,24 @@ let ticker;
 let sizeUnitsConverter;
 let worldGrid;
 let mapGenerator;
+let eventManager;
+let playerSprite;
 
 async function loadTextures() {
     await Assets.load({ alias: objectTypes.waterTile, src: 'water_tile.jpg' });
     await Assets.load({ alias: objectTypes.sandTile, src: 'sand_tile.jpg' });
     await Assets.load({ alias: objectTypes.grassTile, src: 'grass_tile.jpg' });
     await Assets.load('trees.json');
+    await Assets.load({ alias: objectTypes.player, src: 'character.json' });
+}
+
+
+function createPlayerSprite(pixelX, pixelY) {
+    const playerSprite = new AnimatedSprite(Assets.get(objectTypes.player).animations['idle'], false);
+    playerSprite.position.set(pixelX, pixelY);
+    playerSprite.animationSpeed = 0.06;
+    playerSprite.play();
+    return playerSprite;
 }
 
 
@@ -65,12 +78,18 @@ function generateChunksFor(pixelX, pixelY) {
 }
 
 
+function update(ticker) {
+    playerSprite.update(ticker);
+    renderer.render(stage);
+}
+
 async function setup() {
     await loadTextures();
 
     sizeUnitsConverter = new SizeUnitsConverter({ tileWidth: 60, tileHeight: 60, chunkSizeInTile: 10, worldWidthInChunk: 5, worldHeightInChunk: 5 });
     mapGenerator = new MapGenerator(sizeUnitsConverter, { seed: Math.randomIntegerInRange(0, 1_000_000), octaves: 16, persistence: 0.5, frequency: 0.01, frequencyMod: 2, distanceBetweenTreesInTile: 2, treeRandomOffsetInPixel: 30 });
     worldGrid = new GridContainer(sizeUnitsConverter, { chunkLeft: 0, chunkTop: 0 });
+    eventManager = new EventManager();
 
     const domContainer = document.querySelector('.canvasContainer');
     renderer = new WebGLRenderer();
@@ -82,8 +101,10 @@ async function setup() {
     domContainer.appendChild(renderer.canvas);
 
     stage = new Container();
-
     generateChunksFor(800, 500);
+
+    playerSprite = createPlayerSprite(800, 800);
+    stage.addChild(playerSprite);
 
     window.addEventListener('resize', () => {
         const newWidth = domContainer.clientWidth;
@@ -91,15 +112,13 @@ async function setup() {
         renderer.resize(newWidth, newHeight);
     });
 
-    ticker = new Ticker();
-    ticker.add((ticker) => {
-        update(ticker.deltaTime);
+    document.addEventListener('keydown', event => {
+        eventManager.setEvent(event.code, true);
     });
-    ticker.start();
-}
 
-function update(deltaTime) {
-    renderer.render(stage);
+    ticker = new Ticker();
+    ticker.add((ticker) => update(ticker));
+    ticker.start();
 }
 
 setup();
