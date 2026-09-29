@@ -13,6 +13,8 @@ let worldGrid;
 let mapGenerator;
 let eventManager;
 let playerSprite;
+let playerData;
+let objectsSpriteContainer;
 
 async function loadTextures() {
     await Assets.load({ alias: objectTypes.waterTile, src: 'water_tile.jpg' });
@@ -26,9 +28,16 @@ async function loadTextures() {
 function createPlayerSprite(pixelX, pixelY) {
     const playerSprite = new AnimatedSprite(Assets.get(objectTypes.player).animations['idle'], false);
     playerSprite.position.set(pixelX, pixelY);
+    playerSprite.anchor.set(0.5, 1);
     playerSprite.animationSpeed = 0.06;
     playerSprite.play();
     return playerSprite;
+}
+
+function createPlayer(pixelX, pixelY) {
+    playerData = { x: pixelX, y: pixelY };
+    playerSprite = createPlayerSprite(pixelX, pixelY);
+    stage.addChild(playerSprite);
 }
 
 
@@ -41,40 +50,40 @@ function createTileSprite(tileLocalInChunkX, tileLocalInChunkY, tileType) {
     return tileSprite;
 }
 
-function createTreeSprite(treeMeta, chunk) {
+function createTreeSprite(treeMeta) {
     const treeSprite = new Sprite(Assets.get(treeMeta.treeType));
-    treeSprite.position.set(treeMeta.globalPixelX - chunk.pixelLeft, treeMeta.globalPixelY - chunk.pixelTop);
+    treeSprite.position.set(treeMeta.globalPixelX, treeMeta.globalPixelY);
+    treeSprite.anchor.set(0.5, 1);
+    treeSprite._zIndex = treeMeta.globalPixelY;
     return treeSprite;
 }
 
 function generateChunksFor(pixelX, pixelY) {
     const result = worldGrid.shiftCenterToPixel(pixelX, pixelY);
-    for(let i = 0; i < result.createdChunks.length; i++) {
-        const chunk = result.createdChunks[i];
 
-        const tilesSpriteContainer = new Container();
-        tilesSpriteContainer.position.set(chunk.pixelLeft, chunk.pixelTop);
+    objectsSpriteContainer.position.set(worldGrid.border.pixelLeft, worldGrid.border.pixelTop);
 
-        const treesSpriteContainer = new Container();
-        treesSpriteContainer.position.set(chunk.pixelLeft, chunk.pixelTop);
+    for(let chunk of result.createdChunks) {
+        chunk.spriteContainer = new Container();
+        chunk.spriteContainer.position.set(chunk.pixelLeft, chunk.pixelTop);
 
         chunk.forEachTileCoords((tileGlobalX, tileGlobalY, tileLocalInChunkX, tileLocalInChunkY) => {
             mapGenerator.generate(tileGlobalX, tileGlobalY);
 
             const tileType = mapGenerator.getTileType();
             const tileSprite = createTileSprite(tileLocalInChunkX, tileLocalInChunkY, tileType);
-            tilesSpriteContainer.addChild(tileSprite);
+            chunk.spriteContainer.addChild(tileSprite);
 
             const treeMeta = mapGenerator.getTree();
             if (treeMeta) {
-                const treeSprite = createTreeSprite(treeMeta, chunk);
-                treesSpriteContainer.addChild(treeSprite);
+                const treeSprite = createTreeSprite(treeMeta);
+                objectsSpriteContainer.addChild(treeSprite);
             }
         });
 
-        stage.addChildAt(tilesSpriteContainer, i);
-        stage.addChild(treesSpriteContainer);
+        stage.addChild(chunk.spriteContainer);
     }
+    stage.addChild(objectsSpriteContainer);
 }
 
 
@@ -91,6 +100,7 @@ async function setup() {
     worldGrid = new GridContainer(sizeUnitsConverter, { chunkLeft: 0, chunkTop: 0 });
     eventManager = new EventManager();
 
+    //Создаем Renderer
     const domContainer = document.querySelector('.canvasContainer');
     renderer = new WebGLRenderer();
     await renderer.init({
@@ -100,22 +110,21 @@ async function setup() {
     });
     domContainer.appendChild(renderer.canvas);
 
+    //Инициализируем контейнеры для спрайтов
+    objectsSpriteContainer = new Container();
     stage = new Container();
     generateChunksFor(800, 500);
+    createPlayer(800, 500);
 
-    playerSprite = createPlayerSprite(800, 800);
-    stage.addChild(playerSprite);
-
+    //Подписываемся на внешние события
     window.addEventListener('resize', () => {
-        const newWidth = domContainer.clientWidth;
-        const newHeight = domContainer.clientHeight;
-        renderer.resize(newWidth, newHeight);
+        renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
     });
-
     document.addEventListener('keydown', event => {
         eventManager.setEvent(event.code, true);
     });
 
+    //Инициализируем и запускаем game loop
     ticker = new Ticker();
     ticker.add((ticker) => update(ticker));
     ticker.start();
