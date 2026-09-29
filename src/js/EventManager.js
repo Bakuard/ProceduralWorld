@@ -8,7 +8,7 @@ export const keyboardEvents = Object.freeze({
 
 export class EventManager {
     constructor() {
-        this.clearAllEvents();
+        this.clearAll();
     }
 
     registerInbox(eventBoxName, ...eventNames) {
@@ -18,7 +18,7 @@ export class EventManager {
         }
     }
 
-    setEvent(eventName, event) {
+    pushEvent(eventName, event) {
         const inputBoxes = (this.eventToInputBoxes[eventName] ??= {});
         Object.keys(inputBoxes).forEach(eventBoxName => inputBoxes[eventBoxName] = event);
     }
@@ -28,12 +28,12 @@ export class EventManager {
         return inputBoxes && inputBoxes[eventBoxName] != null;
     }
 
-    clearEventFor(eventBoxName, eventName) {
+    clearEvent(eventBoxName, eventName) {
         const inputBoxes = this.eventToInputBoxes[eventName];
         if (inputBoxes) inputBoxes[eventBoxName] = null;
     }
 
-    hasThenClearEventFor(eventBoxName, eventName) {
+    hasThenClear(eventBoxName, eventName) {
         const inputBoxes = this.eventToInputBoxes[eventName];
         if (!inputBoxes) return false;
 
@@ -47,7 +47,7 @@ export class EventManager {
         if (inputBoxes) Object.keys(inputBoxes).forEach(eventBoxName => inputBoxes[eventBoxName] = null);
     }
 
-    clearAllEvents() {
+    clearAll() {
         this.eventToInputBoxes = {};
     }
 }

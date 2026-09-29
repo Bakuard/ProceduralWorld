@@ -4,6 +4,7 @@ import {SizeUnitsConverter} from "./sizeUnitsConverter";
 import {GridContainer} from "./gridContainer";
 import {MapGenerator} from "./mapGenerator";
 import {EventManager, keyboardEvents} from "./EventManager";
+import {Vector} from "./Vector";
 
 let renderer;
 let stage;
@@ -12,8 +13,7 @@ let sizeUnitsConverter;
 let worldGrid;
 let mapGenerator;
 let eventManager;
-let playerSprite;
-let playerData;
+let player;
 let objectsSpriteContainer;
 
 async function loadTextures() {
@@ -29,15 +29,50 @@ function createPlayerSprite(pixelX, pixelY) {
     const playerSprite = new AnimatedSprite(Assets.get(objectTypes.player).animations['idle'], false);
     playerSprite.position.set(pixelX, pixelY);
     playerSprite.anchor.set(0.5, 1);
-    playerSprite.animationSpeed = 0.06;
-    playerSprite.play();
     return playerSprite;
 }
 
-function createPlayer(pixelX, pixelY) {
-    playerData = { x: pixelX, y: pixelY };
-    playerSprite = createPlayerSprite(pixelX, pixelY);
-    stage.addChild(playerSprite);
+function createPlayer(pixelX, pixelY, speed) {
+    player = { x: pixelX, y: pixelY, speed: speed, velocity: new Vector(), sprite: createPlayerSprite(pixelX, pixelY) };
+    eventManager.registerInbox('Player', keyboardEvents.KeyW, keyboardEvents.KeyA, keyboardEvents.KeyS, keyboardEvents.KeyD);
+    objectsSpriteContainer.addChild(player.sprite);
+    setPlayerAnimation('idle');
+}
+
+function setPlayerAnimation(animationName) {
+    if(animationName === 'idle' && player.animationName !== animationName) {
+        player.sprite.textures = Assets.get(objectTypes.player).animations[animationName];
+        player.sprite.animationSpeed = 0.06;
+        player.sprite.gotoAndPlay(0);
+        player.animationName = animationName;
+    } else if(animationName === 'run' && player.animationName !== animationName) {
+        player.sprite.textures = Assets.get(objectTypes.player).animations[animationName];
+        player.sprite.animationSpeed = 0.15;
+        player.sprite.gotoAndPlay(0);
+        player.animationName = animationName;
+    } else if(player.animationName !== animationName) {
+        throw 'Invalid player animation name';
+    }
+}
+
+function movePlayer(deltaMS) {
+    player.velocity.x = eventManager.hasEvent('Player', keyboardEvents.KeyD) - eventManager.hasEvent("Player", keyboardEvents.KeyA);
+    player.velocity.y = eventManager.hasEvent('Player', keyboardEvents.KeyS) - eventManager.hasEvent("Player", keyboardEvents.KeyW);
+    if(player.velocity.y !== 0 && player.velocity.x !== 0) {
+        player.velocity.x *= 0.707106; //sin 45 degree
+        player.velocity.y *= 0.707106; //cos 45 degree
+    }
+    player.velocity.scale(player.speed * (deltaMS / 1000));
+
+    player.x += player.velocity.x;
+    player.y += player.velocity.y;
+    player.sprite.position.set(player.x, player.y);
+    player.sprite.zIndex = player.y;
+
+    if(player.velocity.isZero()) setPlayerAnimation('idle');
+    else setPlayerAnimation('run');
+
+    if(player.velocity.x !== 0) player.sprite.scale.set(player.velocity.x >= 0 ? 1 : -1, 1);
 }
 
 
@@ -88,7 +123,8 @@ function generateChunksFor(pixelX, pixelY) {
 
 
 function update(ticker) {
-    playerSprite.update(ticker);
+    movePlayer(ticker.deltaMS);
+    player.sprite.update(ticker);
     renderer.render(stage);
 }
 
@@ -114,14 +150,17 @@ async function setup() {
     objectsSpriteContainer = new Container();
     stage = new Container();
     generateChunksFor(800, 500);
-    createPlayer(800, 500);
+    createPlayer(800, 1500, 170);
 
     //Подписываемся на внешние события
     window.addEventListener('resize', () => {
         renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
     });
     document.addEventListener('keydown', event => {
-        eventManager.setEvent(event.code, true);
+        eventManager.pushEvent(event.code, true);
+    });
+    document.addEventListener('keyup', event => {
+        eventManager.clearEventForAll(event.code);
     });
 
     //Инициализируем и запускаем game loop
