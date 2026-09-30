@@ -70,6 +70,14 @@ SizeUnitsConverter.prototype.topPixelOfChunk = function(chunkY) {
     return chunkY * this.chunkHeightInPixels();
 };
 
+SizeUnitsConverter.prototype.localPixelXInChunk = function(pixelX, chunkX) {
+    return pixelX - this.leftPixelOfChunk(chunkX);
+}
+
+SizeUnitsConverter.prototype.localPixelYInChunk = function(pixelY, chunkY) {
+    return pixelY - this.topPixelOfChunk(chunkY);
+}
+
 SizeUnitsConverter.prototype.leftPixelOfTile = function(tileX) {
     return tileX * this.tileWidth;
 };
@@ -85,3 +93,11 @@ SizeUnitsConverter.prototype.centerPixelXOfTile = function(tileX) {
 SizeUnitsConverter.prototype.centerPixelYOfTile = function(tileY) {
     return tileY * this.tileHeight + this.tileHeight / 2;
 };
+
+SizeUnitsConverter.prototype.localPixelXInTile = function(pixelX, tileX) {
+    return pixelX - this.leftPixelOfTile(tileX);
+}
+
+SizeUnitsConverter.prototype.localPixelYInTile = function(pixelY, tileY) {
+    return pixelY - this.topPixelOfTile(tileY);
+}

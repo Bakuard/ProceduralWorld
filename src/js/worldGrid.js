@@ -1,63 +1,63 @@
 import {objectTypes} from "./objectTypes.js";
 import './util.js';
 
-export function GridContainer(sizeUnitsConverter, gridContainerConfig) {
+export function WorldGrid(sizeUnitsConverter, gridContainerConfig) {
     this.sizeUnitsConverter = sizeUnitsConverter;
     this.border = createBorder(sizeUnitsConverter, gridContainerConfig.chunkLeft, gridContainerConfig.chunkTop);
     this.chunks = [];
 }
 
-GridContainer.prototype.getChunkByPixel = function(pixelX, pixelY) {
+WorldGrid.prototype.getChunkByPixel = function(pixelX, pixelY) {
     const chunkX = this.sizeUnitsConverter.chunkXFromPixelX(pixelX);
     const chunkY = this.sizeUnitsConverter.chunkYFromPixelY(pixelY)
     return getChunk(this, chunkX, chunkY);
 };
 
-GridContainer.prototype.shiftCenterToPixel = function(pixelX, pixelY) {
+WorldGrid.prototype.shiftCenterToPixel = function(pixelX, pixelY) {
     const chunkX = this.sizeUnitsConverter.chunkXFromPixelX(pixelX);
     const chunkY = this.sizeUnitsConverter.chunkYFromPixelY(pixelY)
     return shiftCenterToChunk(this, chunkX, chunkY);
 };
 
-GridContainer.prototype.isChunkInMap = function(chunkX, chunkY) {
+WorldGrid.prototype.isChunkInMap = function(chunkX, chunkY) {
     return chunkY >= this.border.chunkTop
         && chunkY < this.border.chunkBottom
         && chunkX >= this.border.chunkLeft
         && chunkX < this.border.chunkRight;
 };
 
-GridContainer.prototype.isPixelInMap = function(pixelX, pixelY) {
+WorldGrid.prototype.isPixelInMap = function(pixelX, pixelY) {
     return pixelX >= this.border.pixelLeft
         && pixelX < this.border.pixelRight
         && pixelY >= this.border.pixelTop
         && pixelY < this.border.pixelBottom;
 };
 
-GridContainer.prototype.checkDistanceToBorder = function(pixelX, pixelY, distanceInPixels) {
+WorldGrid.prototype.checkDistanceToBorder = function(pixelX, pixelY, distanceInPixels) {
     return pixelX - this.border.pixelLeft < distanceInPixels
         || this.border.pixelRight - pixelX < distanceInPixels
         || pixelY - this.border.pixelTop < distanceInPixels
         || this.border.pixelBottom - pixelY < distanceInPixels;
 };
 
-GridContainer.prototype.forEachObjWithType = function(objType, callback) {
+WorldGrid.prototype.forEachObjWithType = function(objType, callback) {
     for(const chunk of this.chunks)
         forEachObjOfChunkWithType(chunk, objType, callback);
 };
 
-GridContainer.prototype.fillArrayWithType = function(objType, array) {
+WorldGrid.prototype.fillArrayWithType = function(objType, array) {
     this.forEachObjWithType(objType, obj => array.push(obj));
     return array;
 };
 
-GridContainer.prototype.getAllObjectsGroupedByType = function() {
+WorldGrid.prototype.getAllObjectsGroupedByType = function() {
     const result = {};
     for(const objType of Object.values(objectTypes))
         result[objType] = this.fillArrayWithType(objType, []);
     return result;
 };
 
-GridContainer.prototype.forEachObjectInArea = function(objType, pixelLeft, pixelTop, pixelRight, pixelBottom, callback) {
+WorldGrid.prototype.forEachObjectInArea = function(objType, pixelLeft, pixelTop, pixelRight, pixelBottom, callback) {
     const filter = obj => obj.x >= pixelLeft && obj.x <= pixelRight && obj.y >= pixelTop && obj.y <= pixelBottom && callback(obj);
 
     const chunkLeft = this.sizeUnitsConverter.chunkXFromPixelX(pixelLeft);
@@ -70,6 +70,14 @@ GridContainer.prototype.forEachObjectInArea = function(objType, pixelLeft, pixel
             if(chunk) forEachObjOfChunkWithType(chunk, objType, filter);
         }
 };
+
+WorldGrid.prototype.localPixelXInWorld = function(pixelX) {
+    return pixelX - this.border.pixelLeft;
+}
+
+WorldGrid.prototype.localPixelYInWorld = function(pixelY) {
+    return pixelY - this.border.pixelTop;
+}
 
 function createBorder(sizeUnitsConverter, chunkLeft, chunkTop) {
     const border = {};
