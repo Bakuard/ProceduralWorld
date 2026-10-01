@@ -1,4 +1,4 @@
-import {Vector} from "./Vector";
+import {Vector} from "./vector";
 
 export class Camera {
     constructor(viewportWidth, viewportHeight, cameraConfig) {

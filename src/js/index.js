@@ -4,7 +4,7 @@ import {SizeUnitsConverter} from "./sizeUnitsConverter";
 import {WorldGrid} from "./worldGrid";
 import {MapGenerator} from "./mapGenerator";
 import {EventManager, keyboardEvents} from "./eventManager";
-import {Vector} from "./Vector";
+import {Vector} from "./vector";
 import {Camera} from "./camera";
 
 let renderer;
@@ -56,6 +56,15 @@ function setPlayerAnimation(animationName) {
     }
 }
 
+function updatePlayerAnimation() {
+    if(player.velocity.isZero()) setPlayerAnimation('idle');
+    else setPlayerAnimation('run');
+
+    if(player.velocity.x !== 0) player.sprite.scale.set(player.velocity.x >= 0 ? 1 : -1, 1);
+
+    player.sprite.update(ticker);
+}
+
 function movePlayer(deltaMS) {
     player.velocity.x = eventManager.hasEvent('Player', keyboardEvents.KeyD) - eventManager.hasEvent('Player', keyboardEvents.KeyA);
     player.velocity.y = eventManager.hasEvent('Player', keyboardEvents.KeyS) - eventManager.hasEvent('Player', keyboardEvents.KeyW);
@@ -68,10 +77,10 @@ function movePlayer(deltaMS) {
     player.x += player.velocity.x;
     player.y += player.velocity.y;
 
+    const playerSpriteX = worldGrid.localPixelXInWorld(player.x);
+    const playerSpriteY = worldGrid.localPixelYInWorld(player.y);
+    player.sprite.position.set(playerSpriteX, playerSpriteY);
     player.sprite.zIndex = player.y;
-    if(player.velocity.isZero()) setPlayerAnimation('idle');
-    else setPlayerAnimation('run');
-    if(player.velocity.x !== 0) player.sprite.scale.set(player.velocity.x >= 0 ? 1 : -1, 1);
 }
 
 
@@ -100,6 +109,7 @@ function generateChunksFor(pixelX, pixelY) {
     for(let chunk of result.createdChunks) {
         chunk.tileSpriteContainer = new Container();
         chunk.tileSpriteContainer.cullable = true;
+        chunk.tileSpriteContainer.position.set(worldGrid.localLeftPixelOfChunkInWorld(chunk.chunkX), worldGrid.localTopPixelOfChunkInWorld(chunk.chunkY));
 
         chunk.forEachTileCoords((tileGlobalX, tileGlobalY, localTileXInChunk, localTileYInChunk) => {
             mapGenerator.generate(tileGlobalX, tileGlobalY);
@@ -123,26 +133,15 @@ function generateChunksFor(pixelX, pixelY) {
 
 function updateCamera() {
     camera.setPosition(player.x, player.y);
-
-    worldGrid.chunks.forEach(chunk => {
-        const chunkSpriteX = camera.toViewportPixelX(chunk.pixelLeft);
-        const chunkSpriteY = camera.toViewportPixelY(chunk.pixelTop);
-        chunk.tileSpriteContainer.position.set(chunkSpriteX, chunkSpriteY);
-    });
-
-    const objectsSpriteX = camera.toViewportPixelX(worldGrid.border.pixelLeft);
-    const objectsSpriteY = camera.toViewportPixelY(worldGrid.border.pixelTop);
-    objectsSpriteContainer.position.set(objectsSpriteX, objectsSpriteY);
-
-    const playerSpriteX = worldGrid.localPixelXInWorld(player.x);
-    const playerSpriteY = worldGrid.localPixelYInWorld(player.y);
-    player.sprite.position.set(playerSpriteX, playerSpriteY);
+    const stageX = camera.toViewportPixelX(worldGrid.border.pixelLeft);
+    const stageY = camera.toViewportPixelY(worldGrid.border.pixelTop);
+    stage.position.set(stageX, stageY);
 }
 
 function update(ticker) {
     movePlayer(ticker.deltaMS);
+    updatePlayerAnimation();
     updateCamera();
-    player.sprite.update(ticker);
     renderer.render(stage);
 }
 
@@ -173,7 +172,7 @@ async function setup() {
 
     //Подписываемся на внешние события
     window.addEventListener('resize', () => {
-
+        camera.resize(domContainer.clientWidth, domContainer.clientHeight);
         renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
     });
     document.addEventListener('keydown', event => {

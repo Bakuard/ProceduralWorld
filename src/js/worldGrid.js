@@ -79,6 +79,16 @@ WorldGrid.prototype.localPixelYInWorld = function(pixelY) {
     return pixelY - this.border.pixelTop;
 }
 
+WorldGrid.prototype.localLeftPixelOfChunkInWorld = function(chunkX) {
+    const globalLeftPixelOfChunk = this.sizeUnitsConverter.leftPixelOfChunk(chunkX);
+    return this.localPixelXInWorld(globalLeftPixelOfChunk);
+}
+
+WorldGrid.prototype.localTopPixelOfChunkInWorld = function(chunkY) {
+    const globalTopPixelOfChunk = this.sizeUnitsConverter.topPixelOfChunk(chunkY);
+    return this.localPixelYInWorld(globalTopPixelOfChunk);
+}
+
 function createBorder(sizeUnitsConverter, chunkLeft, chunkTop) {
     const border = {};
     border.chunkTop = chunkTop;
