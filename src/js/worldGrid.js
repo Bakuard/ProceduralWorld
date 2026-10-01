@@ -114,7 +114,7 @@ function shiftCenterToChunk(grid, chunkX, chunkY) {
     const newChunkLeft = chunkX - Math.floor(grid.sizeUnitsConverter.worldWidthInChunk / 2);
     const newChunkTop = chunkY - Math.floor(grid.sizeUnitsConverter.worldHeightInChunk / 2);
 
-    const allChunks = [], createdChunks = [], destroyedChunks = [];
+    const allChunks = [], createdChunks = [], removedChunks = [], retainedChunks = [];
 
     for(let y = 0; y < grid.sizeUnitsConverter.worldHeightInChunk; y++) {
         for(let x = 0; x < grid.sizeUnitsConverter.worldWidthInChunk; x++) {
@@ -122,6 +122,8 @@ function shiftCenterToChunk(grid, chunkX, chunkY) {
             if(!chunk) {
                 chunk = new Chunk(grid.sizeUnitsConverter, x + newChunkLeft, y + newChunkTop);
                 createdChunks.push(chunk);
+            } else {
+                retainedChunks.push(chunk);
             }
             allChunks.push(chunk);
         }
@@ -132,11 +134,11 @@ function shiftCenterToChunk(grid, chunkX, chunkY) {
 
     for(const chunk of grid.chunks)
         if(!grid.isChunkInMap(chunk.chunkX, chunk.chunkY))
-            destroyedChunks.push(chunk);
+            removedChunks.push(chunk);
 
     grid.chunks = allChunks;
 
-    return { newBorder: grid.border, oldBorder: oldBorder, createdChunks: createdChunks, destroyedChunks: destroyedChunks };
+    return { newBorder: grid.border, oldBorder: oldBorder, createdChunks: createdChunks, removedChunks: removedChunks, retainedChunks: retainedChunks };
 }
 
 

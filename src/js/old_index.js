@@ -320,7 +320,7 @@ World.prototype.checkDistanceToBorder = function(pixelX, pixelY) {
 World.prototype.generateChunksFor = function(pixelX, pixelY) {
     const result = this.grid.shiftCenterToPixel(pixelX, pixelY);
 
-    for(const chunk of result.destroyedChunks)
+    for(const chunk of result.removedChunks)
         chunk.forEachObj(obj => this.disposeToPool(obj));
 
     for(const chunk of result.createdChunks) {

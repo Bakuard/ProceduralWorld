@@ -97,9 +97,9 @@ function createTreeSprite(treeMeta) {
     const treeSprite = new Sprite(Assets.get(treeMeta.treeType));
     treeSprite.anchor.set(0.5, 1);
     const treeSpriteX = worldGrid.localPixelXInWorld(treeMeta.globalPixelX);
-    const treeSpriteY = worldGrid.localPixelYInWorld(treeMeta.globalPixelY);
+    const treeSpriteY = worldGrid.localPixelYInWorld(treeMeta.targetGlobalPixelY);
     treeSprite.position.set(treeSpriteX, treeSpriteY);
-    treeSprite.zIndex = treeMeta.globalPixelY;
+    treeSprite.zIndex = treeMeta.targetGlobalPixelY;
     return treeSprite;
 }
 
@@ -132,7 +132,7 @@ function generateChunksFor(pixelX, pixelY) {
 
 
 function updateCamera() {
-    camera.setPosition(player.x, player.y);
+    camera.followIfOutOfDeadZone(player.x, player.y);
     const stageX = camera.toViewportPixelX(worldGrid.border.pixelLeft);
     const stageY = camera.toViewportPixelY(worldGrid.border.pixelTop);
     stage.position.set(stageX, stageY);
@@ -167,8 +167,9 @@ async function setup() {
     camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, { deadZoneLeftIndent: 0.4, deadZoneRightIndent: 0.4, deadZoneTopIndent: 0.4, deadZoneBottomIndent: 0.4 });
     objectsSpriteContainer = new Container();
     stage = new Container();
-    generateChunksFor(800, 500);
     createPlayer(800, 500, 170);
+    generateChunksFor(player.x, player.y);
+    camera.centerOn(player.x, player.y);
 
     //Подписываемся на внешние события
     window.addEventListener('resize', () => {
