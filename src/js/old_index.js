@@ -308,14 +308,14 @@ function createTree(treeMeta) {
 }
 
 function World(scene, distanceToBorderPerChunk, slimeSpawnCondition) {
-    this.distanceToBorderForLoading = distanceToBorderPerChunk * sizeUnitsConverter.chunkWidthInPixels();
+    this.distanceToBorderPerChunk = distanceToBorderPerChunk ;
     this.grid = new WorldGrid(sizeUnitsConverter, { chunkLeft: 0, chunkTop: 0 });
     this.physicsGroups = {};
     this.slimeSpawnCondition = slimeSpawnCondition;
     this.createPhysicsGroups(scene);
 }
 World.prototype.checkDistanceToBorder = function(pixelX, pixelY) {
-    return this.grid.checkDistanceToBorder(pixelX, pixelY, this.distanceToBorderForLoading);
+    return this.grid.checkDistanceToBorder(pixelX, pixelY, this.distanceToBorderPerChunk);
 };
 World.prototype.generateChunksFor = function(pixelX, pixelY) {
     const result = this.grid.shiftCenterToPixel(pixelX, pixelY);

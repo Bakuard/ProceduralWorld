@@ -97,10 +97,19 @@ function createTreeSprite(treeMeta) {
     const treeSprite = new Sprite(Assets.get(treeMeta.treeType));
     treeSprite.anchor.set(0.5, 1);
     const treeSpriteX = worldGrid.localPixelXInWorld(treeMeta.globalPixelX);
-    const treeSpriteY = worldGrid.localPixelYInWorld(treeMeta.targetGlobalPixelY);
+    const treeSpriteY = worldGrid.localPixelYInWorld(treeMeta.globalPixelY);
     treeSprite.position.set(treeSpriteX, treeSpriteY);
-    treeSprite.zIndex = treeMeta.targetGlobalPixelY;
+    treeSprite.zIndex = treeMeta.globalPixelY;
     return treeSprite;
+}
+
+function createTree(treeMeta) {
+    return {
+        x: treeMeta.globalPixelX,
+        y: treeMeta.globalPixelY,
+        type: treeMeta.treeType,
+        sprite: createTreeSprite(treeMeta)
+    };
 }
 
 function generateChunksFor(pixelX, pixelY) {
@@ -109,7 +118,9 @@ function generateChunksFor(pixelX, pixelY) {
     for(let chunk of result.createdChunks) {
         chunk.tileSpriteContainer = new Container();
         chunk.tileSpriteContainer.cullable = true;
-        chunk.tileSpriteContainer.position.set(worldGrid.localLeftPixelOfChunkInWorld(chunk.chunkX), worldGrid.localTopPixelOfChunkInWorld(chunk.chunkY));
+        const localLeftOfChunk = worldGrid.localLeftPixelOfChunkInWorld(chunk.chunkX);
+        const localTopOfChunk = worldGrid.localTopPixelOfChunkInWorld(chunk.chunkY);
+        chunk.tileSpriteContainer.position.set(localLeftOfChunk, localTopOfChunk);
 
         chunk.forEachTileCoords((tileGlobalX, tileGlobalY, localTileXInChunk, localTileYInChunk) => {
             mapGenerator.generate(tileGlobalX, tileGlobalY);
@@ -120,16 +131,40 @@ function generateChunksFor(pixelX, pixelY) {
 
             const treeMeta = mapGenerator.getTree();
             if (treeMeta) {
-                const treeSprite = createTreeSprite(treeMeta);
-                objectsSpriteContainer.addChild(treeSprite);
+                const tree = createTree(treeMeta);
+                chunk.addToChunk(tree, tree.type);
+                objectsSpriteContainer.addChild(tree.sprite);
             }
         });
 
         stage.addChild(chunk.tileSpriteContainer);
     }
-    stage.addChild(objectsSpriteContainer);
-}
 
+    for(let chunk of result.retainedChunks) {
+        const localLeftOfChunk = worldGrid.localLeftPixelOfChunkInWorld(chunk.chunkX);
+        const localTopOfChunk = worldGrid.localTopPixelOfChunkInWorld(chunk.chunkY);
+        chunk.tileSpriteContainer.position.set(localLeftOfChunk, localTopOfChunk);
+
+        chunk.forEachObj((obj, objType) => {
+            const spriteLocalX = worldGrid.localPixelXInWorld(obj.x);
+            const spriteLocalY = worldGrid.localPixelYInWorld(obj.y);
+            obj.sprite.position.set(spriteLocalX, spriteLocalY);
+            obj.sprite.zIndex = obj.y;
+        });
+    }
+
+    for(let chunk of result.removedChunks) {
+        chunk.tileSpriteContainer.removeFromParent();
+        chunk.tileSpriteContainer.destroy({ children: true });
+
+        chunk.forEachObj((obj, objType) => {
+            obj.sprite.removeFromParent();
+            obj.sprite.destroy();
+        });
+    }
+
+    stage.setChildIndex(objectsSpriteContainer, stage.children.length - 1);
+}
 
 function updateCamera() {
     camera.followIfOutOfDeadZone(player.x, player.y);
@@ -141,6 +176,10 @@ function updateCamera() {
 function update(ticker) {
     movePlayer(ticker.deltaMS);
     updatePlayerAnimation();
+
+    if(worldGrid.checkDistanceToBorder(player.x, player.y, 1.3))
+        generateChunksFor(player.x, player.y);
+
     updateCamera();
     renderer.render(stage);
 }
@@ -165,9 +204,10 @@ async function setup() {
 
     //Инициализируем контейнеры для спрайтов
     camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, { deadZoneLeftIndent: 0.4, deadZoneRightIndent: 0.4, deadZoneTopIndent: 0.4, deadZoneBottomIndent: 0.4 });
-    objectsSpriteContainer = new Container();
     stage = new Container();
-    createPlayer(800, 500, 170);
+    objectsSpriteContainer = new Container();
+    stage.addChild(objectsSpriteContainer);
+    createPlayer(150, 150, 170);
     generateChunksFor(player.x, player.y);
     camera.centerOn(player.x, player.y);
 

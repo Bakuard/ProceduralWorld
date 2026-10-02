@@ -33,7 +33,8 @@ WorldGrid.prototype.isPixelInMap = function(pixelX, pixelY) {
         && pixelY < this.border.pixelBottom;
 };
 
-WorldGrid.prototype.checkDistanceToBorder = function(pixelX, pixelY, distanceInPixels) {
+WorldGrid.prototype.checkDistanceToBorder = function(pixelX, pixelY, distanceInChunks) {
+    const distanceInPixels = distanceInChunks * this.sizeUnitsConverter.chunkWidthInPixels();
     return pixelX - this.border.pixelLeft < distanceInPixels
         || this.border.pixelRight - pixelX < distanceInPixels
         || pixelY - this.border.pixelTop < distanceInPixels
@@ -181,5 +182,5 @@ Chunk.prototype.forEachObj = function(callback) {
 
 function forEachObjOfChunkWithType(chunk, objType, callback) {
     const objects = chunk.objectsByType[objType] ??= [];
-    for(let i = objects.length - 1; i >= 0; --i) callback(objects[i]);
+    for(let i = objects.length - 1; i >= 0; --i) callback(objects[i], objType);
 }
