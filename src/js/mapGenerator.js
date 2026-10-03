@@ -2,7 +2,7 @@ import {objectTypes} from "./objectTypes.js";
 import './util.js';
 
 export function MapGenerator(sizeUnitsConverter, mapGeneratorConfig) {
-    this.seed = mapGeneratorConfig.seed;
+    this.seed = mapGeneratorConfig.seed ?? Math.randomIntegerInRange(0, 1_000_000);
     this.octaves = mapGeneratorConfig.octaves;
     this.persistence = mapGeneratorConfig.persistence;
     this.frequency = mapGeneratorConfig.frequency;

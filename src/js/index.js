@@ -1,4 +1,4 @@
-import { WebGLRenderer, Assets, Container, Sprite, AnimatedSprite, Ticker } from 'pixi.js';
+import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker} from 'pixi.js';
 import {objectTypes} from "./objectTypes";
 import {SizeUnitsConverter} from "./sizeUnitsConverter";
 import {WorldGrid} from "./worldGrid";
@@ -6,59 +6,117 @@ import {MapGenerator} from "./mapGenerator";
 import {EventManager, keyboardEvents} from "./eventManager";
 import {Vector} from "./vector";
 import {Camera} from "./camera";
+import {Calendar, dayPhases} from "./calendar";
 
-let renderer;
-let stage;
-let ticker;
+let Config;
 let sizeUnitsConverter;
 let worldGrid;
 let mapGenerator;
 let eventManager;
-let camera;
+let calendar;
 let player;
+
+let renderer;
+let stage;
+let ticker;
+let camera;
 let objectsSpriteContainer;
 
+let nightShaderCode;
+let nightShader;
+
 async function loadTextures() {
-    await Assets.load({ alias: objectTypes.waterTile, src: 'water_tile.jpg' });
-    await Assets.load({ alias: objectTypes.sandTile, src: 'sand_tile.jpg' });
-    await Assets.load({ alias: objectTypes.grassTile, src: 'grass_tile.jpg' });
-    await Assets.load('trees.json');
-    await Assets.load({ alias: objectTypes.player, src: 'character.json' });
+    await Assets.load({ alias: objectTypes.waterTile, src: 'img/water_tile.jpg' });
+    await Assets.load({ alias: objectTypes.sandTile, src: 'img/sand_tile.jpg' });
+    await Assets.load({ alias: objectTypes.grassTile, src: 'img/grass_tile.jpg' });
+    await Assets.load('img/trees.json');
+    await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
+}
+
+async function loadShaders() {
+    const response = await fetch('shaders/night.glsl');
+    if (!response.ok) throw `Fail to load shader source: ${response.statusText}`;
+    nightShaderCode = await response.text();
+}
+
+async function loadConfig() {
+    const response = await fetch('config/config.json');
+    if (!response.ok) throw `Fail to load config.json: ${response.statusText}`;
+    Config = await response.json();
 }
 
 
-function createPlayerSprite() {
-    const playerSprite = new AnimatedSprite(Assets.get(objectTypes.player).animations['idle'], false);
+function createShader() {
+    return Filter.from({
+        gl: {
+            fragment: nightShaderCode,
+            vertex: defaultFilterVert
+        },
+        resources: {
+            timeUniforms: {
+                uIntensity: { value: 0.0, type: 'f32' },
+                uDayPhase: { value: 1, type: 'i32' }
+            },
+        },
+    });
+}
+
+function updateShader() {
+    const currentDayPhaseProgress = calendar.getCurrentPhaseProgress();
+    const uniforms = nightShader.resources.timeUniforms.uniforms;
+    switch(calendar.getCurrentDayPhase()) {
+        case dayPhases.morning:
+            uniforms.uDayPhase = 1;
+            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.morningPhaseTransitionFraction);
+            break;
+        case dayPhases.afternoon:
+            uniforms.uDayPhase =2;
+            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.afternoonPhaseTransitionFraction);
+            break;
+        case dayPhases.evening:
+            uniforms.uDayPhase =3;
+            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.eveningPhaseTransitionFraction);
+            break;
+        case dayPhases.night:
+            uniforms.uDayPhase =4;
+            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.nightPhaseTransitionFraction);
+            break;
+    }
+}
+
+
+function createPlayerSprite(startAnimationName) {
+    const playerSprite = new AnimatedSprite(Assets.get(objectTypes.player).animations[startAnimationName], false);
     playerSprite.anchor.set(0.5, 1);
     return playerSprite;
 }
 
-function createPlayer(pixelX, pixelY, speed) {
-    player = { x: pixelX, y: pixelY, speed: speed, velocity: new Vector(), sprite: createPlayerSprite() };
+function createPlayer(playerConfig) {
+    player = { x: playerConfig.pixelX, y: playerConfig.pixelY, speed: playerConfig.speed, velocity: new Vector(), sprite: createPlayerSprite(playerConfig.startAnimation) };
     eventManager.registerInbox('Player', keyboardEvents.KeyW, keyboardEvents.KeyA, keyboardEvents.KeyS, keyboardEvents.KeyD);
     objectsSpriteContainer.addChild(player.sprite);
     setPlayerAnimation('idle');
 }
 
 function setPlayerAnimation(animationName) {
-    if(animationName === 'idle' && player.animationName !== animationName) {
+    if(animationName === 'idle') {
         player.sprite.textures = Assets.get(objectTypes.player).animations[animationName];
-        player.sprite.animationSpeed = 0.06;
+        player.sprite.animationSpeed = Config.player.animations.idle.animationSpeed;
         player.sprite.gotoAndPlay(0);
         player.animationName = animationName;
-    } else if(animationName === 'run' && player.animationName !== animationName) {
+    } else if(animationName === 'run') {
         player.sprite.textures = Assets.get(objectTypes.player).animations[animationName];
-        player.sprite.animationSpeed = 0.15;
+        player.sprite.animationSpeed = Config.player.animations.run.animationSpeed;
         player.sprite.gotoAndPlay(0);
         player.animationName = animationName;
-    } else if(player.animationName !== animationName) {
+    } else {
         throw 'Invalid player animation name';
     }
 }
 
 function updatePlayerAnimation() {
-    if(player.velocity.isZero()) setPlayerAnimation('idle');
-    else setPlayerAnimation('run');
+    if(player.velocity.isZero() && player.animationName !== 'idle') setPlayerAnimation('idle');
+    else if(!player.velocity.isZero() && player.animationName !== 'run') setPlayerAnimation('run');
 
     if(player.velocity.x !== 0) player.sprite.scale.set(player.velocity.x >= 0 ? 1 : -1, 1);
 
@@ -173,24 +231,30 @@ function updateCamera() {
     stage.position.set(stageX, stageY);
 }
 
+
 function update(ticker) {
+    calendar.updateCurrentTime(ticker.deltaMS);
     movePlayer(ticker.deltaMS);
     updatePlayerAnimation();
 
-    if(worldGrid.checkDistanceToBorder(player.x, player.y, 1.3))
+    if(worldGrid.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk))
         generateChunksFor(player.x, player.y);
 
     updateCamera();
+    updateShader();
     renderer.render(stage);
 }
 
 async function setup() {
     await loadTextures();
+    await loadShaders();
+    await loadConfig();
 
-    sizeUnitsConverter = new SizeUnitsConverter({ tileWidth: 60, tileHeight: 60, chunkSizeInTile: 10, worldWidthInChunk: 5, worldHeightInChunk: 5 });
-    mapGenerator = new MapGenerator(sizeUnitsConverter, { seed: Math.randomIntegerInRange(0, 1_000_000), octaves: 16, persistence: 0.5, frequency: 0.01, frequencyMod: 2, distanceBetweenTreesInTile: 2, treeRandomOffsetInPixel: 30 });
-    worldGrid = new WorldGrid(sizeUnitsConverter, { chunkLeft: 0, chunkTop: 0 });
+    sizeUnitsConverter = new SizeUnitsConverter(Config.sizeUnitsConverter);
+    mapGenerator = new MapGenerator(sizeUnitsConverter, Config.mapGenerator);
+    worldGrid = new WorldGrid(sizeUnitsConverter, Config.grid);
     eventManager = new EventManager();
+    calendar = new Calendar(Config.time);
 
     //Создаем Renderer
     const domContainer = document.querySelector('.canvasContainer');
@@ -203,13 +267,17 @@ async function setup() {
     domContainer.appendChild(renderer.canvas);
 
     //Инициализируем контейнеры для спрайтов
-    camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, { deadZoneLeftIndent: 0.4, deadZoneRightIndent: 0.4, deadZoneTopIndent: 0.4, deadZoneBottomIndent: 0.4 });
+    camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, Config.camera);
     stage = new Container();
     objectsSpriteContainer = new Container();
     stage.addChild(objectsSpriteContainer);
-    createPlayer(150, 150, 170);
+    createPlayer(Config.player);
     generateChunksFor(player.x, player.y);
     camera.centerOn(player.x, player.y);
+
+    //Подключаем шейдеры
+    nightShader = createShader();
+    stage.filters = [nightShader];
 
     //Подписываемся на внешние события
     window.addEventListener('resize', () => {

@@ -1,0 +1,53 @@
+{
+  "time": {
+    "morningPhaseTransitionFraction": 0.2,
+    "afternoonPhaseTransitionFraction": 0.2,
+    "eveningPhaseTransitionFraction": 0.2,
+    "nightPhaseTransitionFraction": 0.2,
+    "morningInSec": 5,
+    "afternoonInSec": 5,
+    "eveningInSec": 5,
+    "nightInSec": 5
+  },
+  "sizeUnitsConverter": {
+    "tileWidth": 60,
+    "tileHeight": 60,
+    "chunkSizeInTile": 10,
+    "worldWidthInChunk": 5,
+    "worldHeightInChunk": 5
+  },
+  "grid": {
+    "chunkLeft": 0,
+    "chunkTop": 0,
+    "loadDistanceInChunk": 1.3
+  },
+  "mapGenerator": {
+    "seed": null,
+    "octaves": 16,
+    "persistence": 0.5,
+    "frequency": 0.01,
+    "frequencyMod": 2,
+    "distanceBetweenTreesInTile": 2,
+    "treeRandomOffsetInPixel": 30
+  },
+  "camera": {
+    "deadZoneLeftIndent": 0.4,
+    "deadZoneRightIndent": 0.4,
+    "deadZoneTopIndent": 0.4,
+    "deadZoneBottomIndent": 0.4
+  },
+  "player": {
+    "pixelX": 150,
+    "pixelY": 150,
+    "speed": 170,
+    "startAnimation": "idle",
+    "animations": {
+      "idle": {
+        "animationSpeed": 0.06
+      },
+      "run": {
+        "animationSpeed": 0.15
+      }
+    }
+  }
+}

@@ -13,10 +13,10 @@ export function Calendar(calendarConfig) {
     this.nightInMs = calendarConfig.nightInSec * 1000;
 
     this.totalElapsedTimeInMs = 0;
-    this.setCurrentTime(0);
+    this.updateCurrentTime(0);
 }
 
-Calendar.prototype.setCurrentTime = function(deltaTimeInMs) {
+Calendar.prototype.updateCurrentTime = function(deltaTimeInMs) {
     this.totalElapsedTimeInMs += deltaTimeInMs;
     this.msSinceDayStart = this.totalElapsedTimeInMs % getTotalDayDurationInMs(this);
     this.totalDays = Math.floor(this.totalElapsedTimeInMs / getTotalDayDurationInMs(this));

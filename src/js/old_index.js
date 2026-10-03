@@ -592,7 +592,7 @@ function create() {
 }
 
 function update(time, delta) {
-    calendar.setCurrentTime(delta);
+    calendar.updateCurrentTime(delta);
     movePlayer();
     moveSlimes(time);
     moveFireballs(delta);
