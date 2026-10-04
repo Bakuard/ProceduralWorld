@@ -3,7 +3,7 @@ import {objectTypes} from "./objectTypes";
 import {SizeUnitsConverter} from "./sizeUnitsConverter";
 import {WorldGrid} from "./worldGrid";
 import {MapGenerator} from "./mapGenerator";
-import {EventManager, keyboardEvents} from "./eventManager";
+import {EventManager, InputEvents} from "./eventManager";
 import {Vector} from "./vector";
 import {Camera} from "./camera";
 import {Calendar, dayPhases} from "./calendar";
@@ -31,6 +31,7 @@ async function loadTextures() {
     await Assets.load({ alias: objectTypes.grassTile, src: 'img/grass_tile.jpg' });
     await Assets.load('img/trees.json');
     await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
+    await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
 }
 
 async function loadShaders() {
@@ -92,8 +93,16 @@ function createPlayerSprite(startAnimationName) {
 }
 
 function createPlayer(playerConfig) {
-    player = { x: playerConfig.pixelX, y: playerConfig.pixelY, speed: playerConfig.speed, velocity: new Vector(), sprite: createPlayerSprite(playerConfig.startAnimation) };
-    eventManager.registerInbox('Player', keyboardEvents.KeyW, keyboardEvents.KeyA, keyboardEvents.KeyS, keyboardEvents.KeyD);
+    player = {
+        x: playerConfig.pixelX,
+        y: playerConfig.pixelY,
+        speed: playerConfig.speed,
+        fireRateInMillis: playerConfig.fireRateInMillis,
+        lastFireTime: 0,
+        velocity: new Vector(),
+        sprite: createPlayerSprite(playerConfig.startAnimation)
+    };
+    eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
     objectsSpriteContainer.addChild(player.sprite);
     setPlayerAnimation('idle');
 }
@@ -114,7 +123,12 @@ function setPlayerAnimation(animationName) {
     }
 }
 
-function updatePlayerAnimation() {
+function updatePlayerView() {
+    const playerSpriteX = worldGrid.localPixelXInWorld(player.x);
+    const playerSpriteY = worldGrid.localPixelYInWorld(player.y);
+    player.sprite.position.set(playerSpriteX, playerSpriteY);
+    player.sprite.zIndex = player.y;
+
     if(player.velocity.isZero() && player.animationName !== 'idle') setPlayerAnimation('idle');
     else if(!player.velocity.isZero() && player.animationName !== 'run') setPlayerAnimation('run');
 
@@ -124,8 +138,8 @@ function updatePlayerAnimation() {
 }
 
 function movePlayer(deltaMS) {
-    player.velocity.x = eventManager.hasEvent('Player', keyboardEvents.KeyD) - eventManager.hasEvent('Player', keyboardEvents.KeyA);
-    player.velocity.y = eventManager.hasEvent('Player', keyboardEvents.KeyS) - eventManager.hasEvent('Player', keyboardEvents.KeyW);
+    player.velocity.x = eventManager.hasEvent('Player', InputEvents.KeyD) - eventManager.hasEvent('Player', InputEvents.KeyA);
+    player.velocity.y = eventManager.hasEvent('Player', InputEvents.KeyS) - eventManager.hasEvent('Player', InputEvents.KeyW);
     if(player.velocity.y !== 0 && player.velocity.x !== 0) {
         player.velocity.x *= 0.707106; //sin 45 degree
         player.velocity.y *= 0.707106; //cos 45 degree
@@ -134,11 +148,58 @@ function movePlayer(deltaMS) {
 
     player.x += player.velocity.x;
     player.y += player.velocity.y;
+}
 
-    const playerSpriteX = worldGrid.localPixelXInWorld(player.x);
-    const playerSpriteY = worldGrid.localPixelYInWorld(player.y);
-    player.sprite.position.set(playerSpriteX, playerSpriteY);
-    player.sprite.zIndex = player.y;
+function playerAttack() {
+    const mouseClick = eventManager.getThenClear('Player', InputEvents.MouseClick);
+    if(mouseClick && calendar.getTotalMS() > player.lastFireTime + player.fireRateInMillis) {
+
+        player.lastFireTime = calendar.getTotalMS();
+    }
+}
+
+
+function createFireballSprite(globalPixelX, globalPixelY) {
+    const fireballSprite = new AnimatedSprite(Assets.get(objectTypes.fireball).animations['fly']);
+    fireballSprite.animationSpeed = Config.fireball.animationSpeed;
+    fireballSprite.anchor.set(1, 0.5);
+    const fireballSpriteX = worldGrid.localPixelXInWorld(globalPixelX);
+    const fireballSpriteY = worldGrid.localPixelYInWorld(globalPixelY);
+    fireballSprite.position.set(fireballSpriteX, fireballSpriteY);
+    fireballSprite.zIndex = globalPixelY;
+    return fireballSprite;
+}
+
+function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPixelY, lifeTimeInMillis, speed, damage) {
+    return {
+        x: globalPixelX,
+        y: globalPixelY,
+        lifeTimeInMillis: lifeTimeInMillis,
+        speed: speed,
+        damage: damage,
+        velocity: new Vector(globalAimPixelX - globalPixelX, globalAimPixelY - globalPixelY),
+        sprite: createFireballSprite(globalPixelX, globalPixelY)
+    };
+}
+
+function updateAllFireballsView() {
+    worldGrid.forEachObjWithType(objectTypes.fireball, fireball => {
+        const fireballSpriteX = worldGrid.localPixelXInWorld(fireball.x);
+        const fireballSpriteY = worldGrid.localPixelYInWorld(fireball.y);
+        fireball.sprite.position.set(fireballSpriteX, fireballSpriteY);
+        fireball.sprite.zIndex = fireball.y;
+        fireball.sprite.rotation = fireball.velocity.getAngleInRadian();
+
+        fireball.sprite.update(ticker);
+    });
+}
+
+function moveAllFireballs(deltaMS) {
+    worldGrid.forEachObjWithType(objectTypes.fireball, fireball => {
+        fireball.velocity.normalize().scale(fireball.speed * (deltaMS / 1000));
+        fireball.x += fireball.velocity.x;
+        fireball.y += fireball.velocity.y;
+    });
 }
 
 
@@ -235,12 +296,15 @@ function updateCamera() {
 function update(ticker) {
     calendar.updateCurrentTime(ticker.deltaMS);
     movePlayer(ticker.deltaMS);
-    updatePlayerAnimation();
+    moveAllFireballs(ticker.deltaMS);
+    playerAttack();
 
     if(worldGrid.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk))
         generateChunksFor(player.x, player.y);
 
     updateCamera();
+    updatePlayerView();
+    updateAllFireballsView();
     updateShader();
     renderer.render(stage);
 }
@@ -289,6 +353,9 @@ async function setup() {
     });
     document.addEventListener('keyup', event => {
         eventManager.clearEventForAll(event.code);
+    });
+    document.addEventListener('click', event => {
+        eventManager.pushEvent(InputEvents.MouseClick, event);
     });
 
     //Инициализируем и запускаем game loop

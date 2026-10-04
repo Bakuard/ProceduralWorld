@@ -36,6 +36,9 @@
             "sourceSize": {"w": 56, "h": 38}
         }
     },
+    "animations": {
+        "fly": ["0", "1", "2", "3", "4"]
+    },
     "meta": {
         "image": "fireball.png",
         "format": "RGBA8888",

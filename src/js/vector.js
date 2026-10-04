@@ -47,6 +47,10 @@ export class Vector {
         return this;
     }
 
+    getAngleInRadian() {
+        return Math.atan2(this.y, this.x);
+    }
+
     clone() {
         return new Vector(this.x, this.y);
     }

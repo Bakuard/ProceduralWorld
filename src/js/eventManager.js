@@ -1,9 +1,11 @@
-export const keyboardEvents = Object.freeze({
+export const InputEvents = Object.freeze({
     KeyW: "KeyW",
     KeyA: "KeyA",
     KeyS: "KeyS",
     KeyD: "KeyD",
-    KeyE: "KeyE"
+    KeyE: "KeyE",
+    KeyM: "KeyM",
+    MouseClick: "MouseClick"
 });
 
 export class EventManager {
@@ -28,11 +30,6 @@ export class EventManager {
         return inputBoxes && inputBoxes[eventBoxName] != null;
     }
 
-    clearEvent(eventBoxName, eventName) {
-        const inputBoxes = this.eventToInputBoxes[eventName];
-        if (inputBoxes) inputBoxes[eventBoxName] = null;
-    }
-
     hasThenClear(eventBoxName, eventName) {
         const inputBoxes = this.eventToInputBoxes[eventName];
         if (!inputBoxes) return false;
@@ -40,6 +37,25 @@ export class EventManager {
         const result = inputBoxes[eventBoxName] != null;
         inputBoxes[eventBoxName] = null;
         return result;
+    }
+
+    getEvent(eventBoxName, eventName) {
+        const inputBoxes = this.eventToInputBoxes[eventName];
+        return inputBoxes && inputBoxes[eventBoxName];
+    }
+
+    getThenClear(eventBoxName, eventName) {
+        const inputBoxes = this.eventToInputBoxes[eventName];
+        if (!inputBoxes) return null;
+
+        const result = inputBoxes[eventBoxName];
+        inputBoxes[eventBoxName] = null;
+        return result;
+    }
+
+    clearEvent(eventBoxName, eventName) {
+        const inputBoxes = this.eventToInputBoxes[eventName];
+        if (inputBoxes) inputBoxes[eventBoxName] = null;
     }
 
     clearEventForAll(eventName) {

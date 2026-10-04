@@ -73,6 +73,10 @@ Calendar.prototype.getTotalDays = function() {
     return this.totalDays;
 };
 
+Calendar.prototype.getTotalMS = function() {
+    return this.totalElapsedTimeInMs;
+}
+
 
 function getFirstPartOfDayInMs(calendar) {
     return calendar.morningInMs + calendar.afternoonInMs;
