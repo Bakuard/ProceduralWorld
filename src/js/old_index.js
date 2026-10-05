@@ -1,7 +1,7 @@
 import {SizeUnitsConverter} from './sizeUnitsConverter.js';
 import {objectTypes} from './objectTypes.js';
 import {MapGenerator} from './mapGenerator.js';
-import {WorldGrid} from './worldGrid.js';
+import {GridStore} from './gridStore.js';
 import {Calendar, dayPhases} from './calendar.js';
 import Phaser from 'phaser';
 
@@ -309,7 +309,7 @@ function createTree(treeMeta) {
 
 function World(scene, distanceToBorderPerChunk, slimeSpawnCondition) {
     this.distanceToBorderPerChunk = distanceToBorderPerChunk ;
-    this.grid = new WorldGrid(sizeUnitsConverter, { chunkLeft: 0, chunkTop: 0 });
+    this.grid = new GridStore(sizeUnitsConverter, { chunkLeft: 0, chunkTop: 0 });
     this.physicsGroups = {};
     this.slimeSpawnCondition = slimeSpawnCondition;
     this.createPhysicsGroups(scene);

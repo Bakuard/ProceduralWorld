@@ -52,9 +52,15 @@
     }
   },
   "fireball": {
-    "animationSpeed": 0.07,
+    "zIndexOffset": 40,
+    "spriteScale": 0.8,
+    "animationSpeed": 0.14,
     "lifeTimeInMillis": 1500,
-    "speed": 170,
+    "speed": 300,
     "damage": 10
+  },
+  "explosion": {
+    "spriteScale": 1.2,
+    "animationSpeed": 0.08
   }
 }

@@ -64,4 +64,12 @@ export class Camera {
     toViewportPixelY(globalPixelY) {
         return globalPixelY + this.offsetVector.y;
     }
+
+    toGlobalPixelX(viewportPixelX) {
+        return viewportPixelX - this.offsetVector.x;
+    }
+
+    toGlobalPixelY(viewportPixelY) {
+        return viewportPixelY - this.offsetVector.y;
+    }
 }

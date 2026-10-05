@@ -1,20 +1,23 @@
 import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker} from 'pixi.js';
 import {objectTypes} from "./objectTypes";
 import {SizeUnitsConverter} from "./sizeUnitsConverter";
-import {WorldGrid} from "./worldGrid";
+import {GridStore} from "./gridStore";
 import {MapGenerator} from "./mapGenerator";
 import {EventManager, InputEvents} from "./eventManager";
 import {Vector} from "./vector";
 import {Camera} from "./camera";
 import {Calendar, dayPhases} from "./calendar";
+import {DenseArrayStore} from "./DenseArrayStore";
 
 let Config;
 let sizeUnitsConverter;
-let worldGrid;
+let gridStore;
 let mapGenerator;
 let eventManager;
 let calendar;
 let player;
+let allFireballs;
+let allExplosions;
 
 let renderer;
 let stage;
@@ -32,6 +35,7 @@ async function loadTextures() {
     await Assets.load('img/trees.json');
     await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
     await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
+    await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
 }
 
 async function loadShaders() {
@@ -124,8 +128,8 @@ function setPlayerAnimation(animationName) {
 }
 
 function updatePlayerView() {
-    const playerSpriteX = worldGrid.localPixelXInWorld(player.x);
-    const playerSpriteY = worldGrid.localPixelYInWorld(player.y);
+    const playerSpriteX = gridStore.localPixelXInGrid(player.x);
+    const playerSpriteY = gridStore.localPixelYInGrid(player.y);
     player.sprite.position.set(playerSpriteX, playerSpriteY);
     player.sprite.zIndex = player.y;
 
@@ -153,25 +157,69 @@ function movePlayer(deltaMS) {
 function playerAttack() {
     const mouseClick = eventManager.getThenClear('Player', InputEvents.MouseClick);
     if(mouseClick && calendar.getTotalMS() > player.lastFireTime + player.fireRateInMillis) {
+        const aimX = camera.toGlobalPixelX(mouseClick.clientX);
+        const aimY = camera.toGlobalPixelY(mouseClick.clientY);
+        createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage);
 
         player.lastFireTime = calendar.getTotalMS();
     }
 }
 
 
+function createExplosionSprite(globalPixelX, globalPixelY) {
+    const explosionSprite = new AnimatedSprite(Assets.get(objectTypes.explosion).animations['explode'], false);
+    explosionSprite.explosion = Config.explosion.animationSpeed;
+    explosionSprite.anchor.set(0.5, 1);
+    const explosionSpriteX = gridStore.localPixelXInGrid(globalPixelX);
+    const explosionSpriteY = gridStore.localPixelYInGrid(globalPixelY);
+    explosionSprite.position.set(explosionSpriteX, explosionSpriteY);
+    explosionSprite.scale.set(Config.explosion.spriteScale);
+    explosionSprite.zIndex = globalPixelY;
+    explosionSprite.loop = false;
+    explosionSprite.play();
+    return explosionSprite;
+}
+
+function createExplosion(globalPixelX, globalPixelY) {
+    const explosion = {
+        x: globalPixelX,
+        y: globalPixelY,
+        sprite: createExplosionSprite(globalPixelX, globalPixelY)
+    };
+    allExplosions.addLast(explosion);
+    objectsSpriteContainer.addChild(explosion.sprite);
+    explosion.sprite.onComplete = () => removeExplosion(explosion);
+}
+
+function removeExplosion(explosion) {
+    allExplosions.quickRemove(explosion);
+    explosion.sprite.removeFromParent();
+    explosion.sprite.destroy();
+}
+
+function updateAllExplosionsView() {
+    for(let i = allExplosions.getSize() - 1; i >= 0; i--) {
+        const explosion = allExplosions.get(i);
+        explosion.sprite.update(ticker);
+    }
+}
+
+
 function createFireballSprite(globalPixelX, globalPixelY) {
-    const fireballSprite = new AnimatedSprite(Assets.get(objectTypes.fireball).animations['fly']);
+    const fireballSprite = new AnimatedSprite(Assets.get(objectTypes.fireball).animations['fly'], false);
     fireballSprite.animationSpeed = Config.fireball.animationSpeed;
     fireballSprite.anchor.set(1, 0.5);
-    const fireballSpriteX = worldGrid.localPixelXInWorld(globalPixelX);
-    const fireballSpriteY = worldGrid.localPixelYInWorld(globalPixelY);
+    const fireballSpriteX = gridStore.localPixelXInGrid(globalPixelX);
+    const fireballSpriteY = gridStore.localPixelYInGrid(globalPixelY);
     fireballSprite.position.set(fireballSpriteX, fireballSpriteY);
-    fireballSprite.zIndex = globalPixelY;
+    fireballSprite.scale.set(Config.fireball.spriteScale);
+    fireballSprite.zIndex = globalPixelY + Config.fireball.zIndexOffset;
+    fireballSprite.play();
     return fireballSprite;
 }
 
 function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPixelY, lifeTimeInMillis, speed, damage) {
-    return {
+    const fireball = {
         x: globalPixelX,
         y: globalPixelY,
         lifeTimeInMillis: lifeTimeInMillis,
@@ -180,26 +228,46 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
         velocity: new Vector(globalAimPixelX - globalPixelX, globalAimPixelY - globalPixelY),
         sprite: createFireballSprite(globalPixelX, globalPixelY)
     };
+
+    allFireballs.addLast(fireball);
+    objectsSpriteContainer.addChild(fireball.sprite);
+}
+
+function removeFireball(fireball) {
+    allFireballs.quickRemove(fireball);
+    fireball.sprite.removeFromParent();
+    fireball.sprite.destroy();
 }
 
 function updateAllFireballsView() {
-    worldGrid.forEachObjWithType(objectTypes.fireball, fireball => {
-        const fireballSpriteX = worldGrid.localPixelXInWorld(fireball.x);
-        const fireballSpriteY = worldGrid.localPixelYInWorld(fireball.y);
+    allFireballs.forEach(fireball => {
+        const fireballSpriteX = gridStore.localPixelXInGrid(fireball.x);
+        const fireballSpriteY = gridStore.localPixelYInGrid(fireball.y);
         fireball.sprite.position.set(fireballSpriteX, fireballSpriteY);
-        fireball.sprite.zIndex = fireball.y;
+        fireball.sprite.zIndex = fireball.y + Config.fireball.zIndexOffset;
         fireball.sprite.rotation = fireball.velocity.getAngleInRadian();
 
         fireball.sprite.update(ticker);
     });
 }
 
-function moveAllFireballs(deltaMS) {
-    worldGrid.forEachObjWithType(objectTypes.fireball, fireball => {
-        fireball.velocity.normalize().scale(fireball.speed * (deltaMS / 1000));
-        fireball.x += fireball.velocity.x;
-        fireball.y += fireball.velocity.y;
-    });
+function moveFireball(fireball, deltaMS) {
+    fireball.velocity.normalize().scale(fireball.speed * (deltaMS / 1000));
+    fireball.x += fireball.velocity.x;
+    fireball.y += fireball.velocity.y;
+}
+
+function updateAllFireballs(deltaMS) {
+    for(let i = allFireballs.getSize() - 1; i >= 0; i--) {
+        const fireball = allFireballs.get(i);
+        moveFireball(fireball, deltaMS);
+
+        fireball.lifeTimeInMillis -= deltaMS;
+        if(fireball.lifeTimeInMillis <= 0) {
+            removeFireball(fireball);
+            createExplosion(fireball.x, fireball.y);
+        }
+    }
 }
 
 
@@ -215,8 +283,8 @@ function createTileSprite(localTileXInChunk, localTileYInChunk, tileType) {
 function createTreeSprite(treeMeta) {
     const treeSprite = new Sprite(Assets.get(treeMeta.treeType));
     treeSprite.anchor.set(0.5, 1);
-    const treeSpriteX = worldGrid.localPixelXInWorld(treeMeta.globalPixelX);
-    const treeSpriteY = worldGrid.localPixelYInWorld(treeMeta.globalPixelY);
+    const treeSpriteX = gridStore.localPixelXInGrid(treeMeta.globalPixelX);
+    const treeSpriteY = gridStore.localPixelYInGrid(treeMeta.globalPixelY);
     treeSprite.position.set(treeSpriteX, treeSpriteY);
     treeSprite.zIndex = treeMeta.globalPixelY;
     return treeSprite;
@@ -232,13 +300,13 @@ function createTree(treeMeta) {
 }
 
 function generateChunksFor(pixelX, pixelY) {
-    const result = worldGrid.shiftCenterToPixel(pixelX, pixelY);
+    const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
 
     for(let chunk of result.createdChunks) {
         chunk.tileSpriteContainer = new Container();
         chunk.tileSpriteContainer.cullable = true;
-        const localLeftOfChunk = worldGrid.localLeftPixelOfChunkInWorld(chunk.chunkX);
-        const localTopOfChunk = worldGrid.localTopPixelOfChunkInWorld(chunk.chunkY);
+        const localLeftOfChunk = gridStore.localLeftPixelOfChunkInWorld(chunk.chunkX);
+        const localTopOfChunk = gridStore.localTopPixelOfChunkInWorld(chunk.chunkY);
         chunk.tileSpriteContainer.position.set(localLeftOfChunk, localTopOfChunk);
 
         chunk.forEachTileCoords((tileGlobalX, tileGlobalY, localTileXInChunk, localTileYInChunk) => {
@@ -260,13 +328,13 @@ function generateChunksFor(pixelX, pixelY) {
     }
 
     for(let chunk of result.retainedChunks) {
-        const localLeftOfChunk = worldGrid.localLeftPixelOfChunkInWorld(chunk.chunkX);
-        const localTopOfChunk = worldGrid.localTopPixelOfChunkInWorld(chunk.chunkY);
+        const localLeftOfChunk = gridStore.localLeftPixelOfChunkInWorld(chunk.chunkX);
+        const localTopOfChunk = gridStore.localTopPixelOfChunkInWorld(chunk.chunkY);
         chunk.tileSpriteContainer.position.set(localLeftOfChunk, localTopOfChunk);
 
         chunk.forEachObj((obj, objType) => {
-            const spriteLocalX = worldGrid.localPixelXInWorld(obj.x);
-            const spriteLocalY = worldGrid.localPixelYInWorld(obj.y);
+            const spriteLocalX = gridStore.localPixelXInGrid(obj.x);
+            const spriteLocalY = gridStore.localPixelYInGrid(obj.y);
             obj.sprite.position.set(spriteLocalX, spriteLocalY);
             obj.sprite.zIndex = obj.y;
         });
@@ -287,8 +355,8 @@ function generateChunksFor(pixelX, pixelY) {
 
 function updateCamera() {
     camera.followIfOutOfDeadZone(player.x, player.y);
-    const stageX = camera.toViewportPixelX(worldGrid.border.pixelLeft);
-    const stageY = camera.toViewportPixelY(worldGrid.border.pixelTop);
+    const stageX = camera.toViewportPixelX(gridStore.border.pixelLeft);
+    const stageY = camera.toViewportPixelY(gridStore.border.pixelTop);
     stage.position.set(stageX, stageY);
 }
 
@@ -296,15 +364,16 @@ function updateCamera() {
 function update(ticker) {
     calendar.updateCurrentTime(ticker.deltaMS);
     movePlayer(ticker.deltaMS);
-    moveAllFireballs(ticker.deltaMS);
+    updateAllFireballs(ticker.deltaMS);
     playerAttack();
 
-    if(worldGrid.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk))
+    if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk))
         generateChunksFor(player.x, player.y);
 
     updateCamera();
     updatePlayerView();
     updateAllFireballsView();
+    updateAllExplosionsView();
     updateShader();
     renderer.render(stage);
 }
@@ -316,9 +385,11 @@ async function setup() {
 
     sizeUnitsConverter = new SizeUnitsConverter(Config.sizeUnitsConverter);
     mapGenerator = new MapGenerator(sizeUnitsConverter, Config.mapGenerator);
-    worldGrid = new WorldGrid(sizeUnitsConverter, Config.grid);
+    gridStore = new GridStore(sizeUnitsConverter, Config.grid);
     eventManager = new EventManager();
     calendar = new Calendar(Config.time);
+    allFireballs = new DenseArrayStore();
+    allExplosions = new DenseArrayStore();
 
     //Создаем Renderer
     const domContainer = document.querySelector('.canvasContainer');
