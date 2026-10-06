@@ -1,104 +1,104 @@
 {
     "frames": {
-        "0": {
+        "explode0": {
             "frame": {"x": 0, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "1": {
+        "explode1": {
             "frame": {"x": 45, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "2": {
+        "explode2": {
             "frame": {"x": 90, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "3": {
+        "explode3": {
             "frame": {"x": 135, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "4": {
+        "explode4": {
             "frame": {"x": 180, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "5": {
+        "explode5": {
             "frame": {"x": 225, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "6": {
+        "explode6": {
             "frame": {"x": 270, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "7": {
+        "explode7": {
             "frame": {"x": 315, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "8": {
+        "explode8": {
             "frame": {"x": 360, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "9": {
+        "explode9": {
             "frame": {"x": 405, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "10": {
+        "explode10": {
             "frame": {"x": 450, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "11": {
+        "explode11": {
             "frame": {"x": 495, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "12": {
+        "explode12": {
             "frame": {"x": 540, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "13": {
+        "explode13": {
             "frame": {"x": 585, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 45, "h": 54},
             "sourceSize": {"w": 45, "h": 54}
         },
-        "14": {
+        "explode14": {
             "frame": {"x": 630, "y": 0, "w": 45, "h": 54},
             "rotated": false,
             "trimmed": false,
@@ -107,7 +107,9 @@
         }
     },
     "animations": {
-        "explode": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"]
+        "explode": ["explode0", "explode1", "explode2", "explode3", "explode4", "explode5",
+            "explode6", "explode7", "explode8", "explode9", "explode10", "explode11", "explode12",
+            "explode13", "explode14"]
     },
     "meta": {
         "image": "explosion.png",

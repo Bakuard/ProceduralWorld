@@ -1,90 +1,90 @@
 {
     "frames": {
-        "0": {
+        "slime_run1": {
             "frame": {"x": 0, "y": 0, "w": 36, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "1": {
+        "slime_run2": {
             "frame": {"x": 36, "y": 0, "w": 36, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "2": {
+        "slime_run3": {
             "frame": {"x": 72, "y": 0, "w": 36, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "3": {
+        "slime_run4": {
             "frame": {"x": 108, "y": 0, "w": 36, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "4": {
+        "slime_run5": {
             "frame": {"x": 144, "y": 0, "w": 36, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "5": {
+        "slime_run6": {
             "frame": {"x": 180, "y": 0, "w": 35, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 35, "h": 30},
             "sourceSize": {"w": 35, "h": 30}
         },
-        "6": {
+        "slime_run7": {
             "frame": {"x": 216, "y": 0, "w": 35, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 35, "h": 30},
             "sourceSize": {"w": 35, "h": 30}
         },
-        "7": {
+        "slime_run8": {
             "frame": {"x": 252, "y": 0, "w": 36, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "8": {
+        "slime_run9": {
             "frame": {"x": 288, "y": 0, "w": 36, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "9": {
+        "slime_run10": {
             "frame": {"x": 324, "y": 0, "w": 36, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "10": {
+        "slime_run11": {
             "frame": {"x": 360, "y": 0, "w": 36, "h": 30},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "11": {
+        "slime_idle1": {
             "frame": {"x": 0, "y": 31, "w": 36, "h": 29},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 36, "h": 30},
             "sourceSize": {"w": 36, "h": 30}
         },
-        "12": {
+        "slime_idle2": {
             "frame": {"x": 36, "y": 31, "w": 36, "h": 29},
             "rotated": false,
             "trimmed": false,
@@ -92,8 +92,12 @@
             "sourceSize": {"w": 36, "h": 30}
         }
     },
+    "animations": {
+        "slime_idle": ["slime_idle1", "slime_idle2"],
+        "slime_run": ["slime_run1", "slime_run2", "slime_run3", "slime_run4", "slime_run5", "slime_run6", "slime_run7", "slime_run8", "slime_run9", "slime_run10", "slime_run11"]
+    },
     "meta": {
-        "image": "New Piskel.png",
+        "image": "slime.png",
         "format": "RGBA8888",
         "size": {"w": 396, "h": 60}
     }

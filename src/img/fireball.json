@@ -1,34 +1,34 @@
 {
     "frames": {
-        "0": {
+        "fireball_fly0": {
             "frame": {"x": 0, "y": 0, "w": 56, "h": 38},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 56, "h": 38},
             "sourceSize": {"w": 56, "h": 38}
         },
-        "1": {
+        "fireball_fly1": {
             "frame": {"x": 56, "y": 0, "w": 56, "h": 38},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 56, "h": 38},
             "sourceSize": {"w": 56, "h": 38}
         },
-        "2": {
+        "fireball_fly2": {
             "frame": {"x": 112, "y": 0, "w": 56, "h": 38},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 56, "h": 38},
             "sourceSize": {"w": 56, "h": 38}
         },
-        "3": {
+        "fireball_fly3": {
             "frame": {"x": 168, "y": 0, "w": 56, "h": 38},
             "rotated": false,
             "trimmed": false,
             "spriteSourceSize": {"x": 0, "y": 0, "w": 56, "h": 38},
             "sourceSize": {"w": 56, "h": 38}
         },
-        "4": {
+        "fireball_fly4": {
             "frame": {"x": 224, "y": 0, "w": 56, "h": 38},
             "rotated": false,
             "trimmed": false,
@@ -37,7 +37,7 @@
         }
     },
     "animations": {
-        "fly": ["0", "1", "2", "3", "4"]
+        "fly": ["fireball_fly0", "fireball_fly1", "fireball_fly2", "fireball_fly3", "fireball_fly4"]
     },
     "meta": {
         "image": "fireball.png",

@@ -36,6 +36,7 @@ async function loadTextures() {
     await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
     await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
     await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
+    await Assets.load({ alias: objectTypes.slime, src: 'img/slime.json' });
 }
 
 async function loadShaders() {
@@ -168,7 +169,7 @@ function playerAttack() {
 
 function createExplosionSprite(globalPixelX, globalPixelY) {
     const explosionSprite = new AnimatedSprite(Assets.get(objectTypes.explosion).animations['explode'], false);
-    explosionSprite.explosion = Config.explosion.animationSpeed;
+    explosionSprite.animationSpeed = Config.explosion.animationSpeed;
     explosionSprite.anchor.set(0.5, 1);
     const explosionSpriteX = gridStore.localPixelXInGrid(globalPixelX);
     const explosionSpriteY = gridStore.localPixelYInGrid(globalPixelY);
@@ -271,6 +272,43 @@ function updateAllFireballs(deltaMS) {
 }
 
 
+function createSlimeSprite() {
+    const slimeSprite = new AnimatedSprite(Assets.get(objectTypes.slime).animations['slime_idle'], false);
+    slimeSprite.animationSpeed = Config.slime.animations.idle.animationSpeed;
+    slimeSprite.anchor.set(0.5, 1);
+    return slimeSprite;
+}
+
+function createSlime(globalPixelX, globalPixelY, chunk) {
+    const slime = {
+        x: globalPixelX,
+        y: globalPixelY,
+        spawnPointX: globalPixelX,
+        spawnPointY: globalPixelY,
+        speed: Config.slime.speed,
+        sprite: createSlimeSprite()
+    };
+
+    chunk.addToChunk(slime, objectTypes.slime);
+    objectsSpriteContainer.addChild(chunk.sprite);
+    setSlimeAnimation('slime_idle');
+}
+
+function setSlimeAnimation(animationName) {
+    if(animationName === 'slime_idle') {
+
+    } else if(animationName === 'slime_run') {
+
+    } else {
+
+    }
+}
+
+function spawnSlimes() {
+    
+}
+
+
 function createTileSprite(localTileXInChunk, localTileYInChunk, tileType) {
     const topTilePixel = sizeUnitsConverter.topPixelOfTile(localTileYInChunk);
     const leftTilePixel = sizeUnitsConverter.leftPixelOfTile(localTileXInChunk);
@@ -309,6 +347,7 @@ function generateChunksFor(pixelX, pixelY) {
         const localTopOfChunk = gridStore.localTopPixelOfChunkInWorld(chunk.chunkY);
         chunk.tileSpriteContainer.position.set(localLeftOfChunk, localTopOfChunk);
 
+        let countGrassTiles = 0;
         chunk.forEachTileCoords((tileGlobalX, tileGlobalY, localTileXInChunk, localTileYInChunk) => {
             mapGenerator.generate(tileGlobalX, tileGlobalY);
 
@@ -322,7 +361,11 @@ function generateChunksFor(pixelX, pixelY) {
                 chunk.addToChunk(tree, tree.type);
                 objectsSpriteContainer.addChild(tree.sprite);
             }
+
+            if(tileType === objectTypes.grassTile) ++countGrassTiles;
         });
+        chunk.hasSlimeSpawner = (countGrassTiles / sizeUnitsConverter.chunkAreaInTiles() >= Config.slime.minGrassTilePercentForSpawn)
+                                && mapGenerator.noise(chunk.chunkX, chunk.chunkY) <= Config.slime.spawnerProbabilityInChunk;
 
         stage.addChild(chunk.tileSpriteContainer);
     }

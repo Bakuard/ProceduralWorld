@@ -1,41 +1,41 @@
 {
   "frames": {
-    "idle1": {
+    "player_idle1": {
       "frame": {"x": 0, "y": 0, "w": 75, "h": 81},
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {"x": 0, "y": 0, "w": 75, "h": 81},
       "sourceSize": {"w": 75, "h": 81}
     },
-    "idle2": {
+    "player_idle2": {
       "frame": {"x": 75, "y": 0, "w": 75, "h": 81},
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {"x": 0, "y": 0, "w": 75, "h": 81},
       "sourceSize": {"w": 75, "h": 81}
     },
-    "run1": {
+    "player_run1": {
       "frame": {"x": 0, "y": 81, "w": 75, "h": 81},
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {"x": 0, "y": 0, "w": 75, "h": 81},
       "sourceSize": {"w": 75, "h": 81}
     },
-    "run2": {
+    "player_run2": {
       "frame": {"x": 75, "y": 81, "w": 75, "h": 81},
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {"x": 0, "y": 0, "w": 75, "h": 81},
       "sourceSize": {"w": 75, "h": 81}
     },
-    "run3": {
+    "player_run3": {
       "frame": {"x": 150, "y": 81, "w": 75, "h": 81},
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {"x": 0, "y": 0, "w": 75, "h": 81},
       "sourceSize": {"w": 75, "h": 81}
     },
-    "run4": {
+    "player_run4": {
       "frame": {"x": 225, "y": 81, "w": 75, "h": 81},
       "rotated": false,
       "trimmed": true,
@@ -44,8 +44,8 @@
     }
   },
   "animations": {
-    "idle": ["idle1", "idle2"],
-    "run": ["run2", "run3", "run3", "run4"]
+    "idle": ["player_idle1", "player_idle2"],
+    "run": ["player_run1", "player_run3", "player_run3", "player_run4"]
   },
   "meta": {
     "image": "character.png",

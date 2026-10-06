@@ -61,6 +61,21 @@
   },
   "explosion": {
     "spriteScale": 1.2,
-    "animationSpeed": 0.08
+    "animationSpeed": 0.7
+  },
+  "slime": {
+    "maxSlimesInChunk": 3,
+    "minGrassTilePercentForSpawn": 0.75,
+    "spawnerProbabilityInChunk": 0.05,
+    "speed": 200,
+    "roamingRadiusInPixels": 200,
+    "animations": {
+      "idle": {
+        "animationSpeed": 0.06
+      },
+      "run": {
+        "animationSpeed": 0.06
+      }
+    }
   }
 }
