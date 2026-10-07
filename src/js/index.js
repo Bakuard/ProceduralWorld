@@ -274,26 +274,40 @@ function updateAllFireballs(deltaMS) {
 }
 
 
+const slimeStates = Object.freeze({
+    idle: 'idle',
+    roam: 'roam',
+    chase: 'chase',
+    attack: 'attack'
+});
+
 function createSlimeSprite() {
     const slimeSprite = new AnimatedSprite(Assets.get(objectTypes.slime).animations['slime_idle'], false);
-    slimeSprite.animationSpeed = Config.slime.animations.idle.animationSpeed;
     slimeSprite.anchor.set(0.5, 1);
+    slimeSprite.scale.set(Config.slime.spriteScale);
     return slimeSprite;
 }
 
-function createSlime(globalPixelX, globalPixelY, chunk) {
+function createSlime(globalPixelX, globalPixelY) {
     const slime = {
         x: globalPixelX,
         y: globalPixelY,
         spawnPointX: globalPixelX,
         spawnPointY: globalPixelY,
+        aimX: globalPixelX,
+        aimY: globalPixelY,
         speed: Config.slime.speed,
+        state: slimeStates.idle,
+        idleDurationInMS: Config.slime.idleDurationInSec * 1000,
+        roamingDurationInMS: Config.slime.roamingDurationInSec * 1000,
+        velocity: new Vector(),
         sprite: createSlimeSprite()
     };
 
+    const chunk = gridStore.getChunkByPixel(globalPixelX, globalPixelY);
     chunk.addToChunk(slime, objectTypes.slime);
-    objectsSpriteContainer.addChild(chunk.sprite);
-    setSlimeAnimation('slime_idle');
+    objectsSpriteContainer.addChild(slime.sprite);
+    setSlimeAnimation(slime, 'slime_idle');
 }
 
 function setSlimeAnimation(slime, animationName) {
@@ -309,6 +323,59 @@ function setSlimeAnimation(slime, animationName) {
     } else {
         throw 'Invalid slime animation name: ' + animationName;
     }
+}
+
+function updateAllSlimesView() {
+    gridStore.forEachObjWithType(objectTypes.slime, slime => {
+        const spriteX = gridStore.localPixelXInGrid(slime.x);
+        const spriteY = gridStore.localPixelYInGrid(slime.y);
+        slime.sprite.position.set(spriteX, spriteY);
+        slime.sprite.zIndex = slime.y;
+
+        slime.sprite.update(ticker);
+    });
+}
+
+function choseNextRandomAimIfNeeded(slime) {
+    const distanceX = Math.abs(slime.x - slime.aimX);
+    const distanceY = Math.abs(slime.y - slime.aimY);
+    if(distanceX <= 20 && distanceY <= 20) {
+        const nextAimX = Math.randomIntegerInRange(slime.spawnPointX - Config.slime.roamingRadiusInPixels, slime.spawnPointX + Config.slime.roamingRadiusInPixels);
+        const nextAimY = Math.randomIntegerInRange(slime.spawnPointY - Config.slime.roamingRadiusInPixels, slime.spawnPointY + Config.slime.roamingRadiusInPixels);
+        slime.aimX = Math.clamp(nextAimX, gridStore.border.pixelLeft, gridStore.border.pixelRight);
+        slime.aimY = Math.clamp(nextAimY, gridStore.border.pixelTop, gridStore.border.pixelBottom);
+
+        slime.velocity.set(slime.aimX - slime.x, slime.aimY - slime.y);
+    }
+}
+
+function updateAllSlimes(deltaMS) {
+    gridStore.forEachObjWithType(objectTypes.slime, slime => {
+        if(slime.state === slimeStates.idle) {
+            slime.idleDurationInMS -= deltaMS;
+            if(slime.idleDurationInMS <= 0) {
+                slime.idleDurationInMS = Config.slime.idleDurationInSec * 1000;
+                slime.state = slimeStates.roam;
+                setSlimeAnimation(slime, 'slime_run');
+            }
+        } else if(slime.state === slimeStates.roam) {
+            choseNextRandomAimIfNeeded(slime);
+            slime.velocity.normalize().scale(slime.speed  * (deltaMS / 1000));
+            slime.x += slime.velocity.x;
+            slime.y += slime.velocity.y;
+
+            slime.roamingDurationInMS -= deltaMS;
+            if(slime.roamingDurationInMS <= 0) {
+                slime.roamingDurationInMS = Config.slime.roamingDurationInSec * 1000;
+                slime.state = slimeStates.idle;
+                setSlimeAnimation(slime, 'slime_idle');
+            }
+        } else if(slime.state === slimeStates.chase) {
+
+        } else if(slime.state === slimeStates.attack) {
+
+        }
+    });
 }
 
 
@@ -411,6 +478,7 @@ function update(ticker) {
     calendar.updateCurrentTime(ticker.deltaMS);
     movePlayer(ticker.deltaMS);
     updateAllFireballs(ticker.deltaMS);
+    updateAllSlimes(ticker.deltaMS);
     playerAttack();
 
     if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk))
@@ -420,6 +488,7 @@ function update(ticker) {
     updatePlayerView();
     updateAllFireballsView();
     updateAllExplosionsView();
+    updateAllSlimesView();
     updateShader();
     renderer.render(stage);
 }
@@ -455,6 +524,7 @@ async function setup() {
     createPlayer(Config.player);
     generateChunksFor(player.x, player.y);
     camera.centerOn(player.x, player.y);
+    createSlime(player.x, player.y);
 
     //Подключаем шейдеры
     nightShader = createShader();

@@ -37,8 +37,8 @@
     "deadZoneBottomIndent": 0.4
   },
   "player": {
-    "pixelX": 150,
-    "pixelY": 150,
+    "pixelX": 0,
+    "pixelY": 0,
     "speed": 170,
     "startAnimation": "idle",
     "fireRateInMillis": 500
@@ -54,10 +54,13 @@
     "spriteScale": 1.2
   },
   "slime": {
+    "spriteScale": 1.5,
     "maxSlimesInChunk": 3,
     "minGrassTilePercentForSpawn": 0.75,
     "spawnerProbabilityInChunk": 0.05,
     "speed": 200,
-    "roamingRadiusInPixels": 200
+    "idleDurationInSec": 2,
+    "roamingDurationInSec": 6,
+    "roamingRadiusInPixels": 300
   }
 }

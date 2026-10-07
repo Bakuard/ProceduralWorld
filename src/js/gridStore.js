@@ -72,12 +72,12 @@ GridStore.prototype.forEachObjectInArea = function(objType, pixelLeft, pixelTop,
         }
 };
 
-GridStore.prototype.localPixelXInGrid = function(globalPixelX) {
-    return globalPixelX - this.border.pixelLeft;
+GridStore.prototype.localPixelXInGrid = function(pixelX) {
+    return pixelX - this.border.pixelLeft;
 }
 
-GridStore.prototype.localPixelYInGrid = function(globalPixelY) {
-    return globalPixelY - this.border.pixelTop;
+GridStore.prototype.localPixelYInGrid = function(pixelY) {
+    return pixelY - this.border.pixelTop;
 }
 
 GridStore.prototype.localLeftPixelOfChunkInWorld = function(chunkX) {
