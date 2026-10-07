@@ -96,6 +96,16 @@
         "slime_idle": ["slime_idle1", "slime_idle2"],
         "slime_run": ["slime_run1", "slime_run2", "slime_run3", "slime_run4", "slime_run5", "slime_run6", "slime_run7", "slime_run8", "slime_run9", "slime_run10", "slime_run11"]
     },
+    "animationsConfig": {
+        "slime_idle": {
+            "frameRate": 0.06,
+            "loop": true
+        },
+        "slime_run": {
+            "frameRate": 0.06,
+            "loop": true
+        }
+    },
     "meta": {
         "image": "slime.png",
         "format": "RGBA8888",

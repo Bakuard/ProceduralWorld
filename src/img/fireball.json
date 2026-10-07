@@ -39,6 +39,12 @@
     "animations": {
         "fly": ["fireball_fly0", "fireball_fly1", "fireball_fly2", "fireball_fly3", "fireball_fly4"]
     },
+    "animationsConfig": {
+        "fly": {
+            "frameRate": 0.14,
+            "loop": true
+        }
+    },
     "meta": {
         "image": "fireball.png",
         "format": "RGBA8888",

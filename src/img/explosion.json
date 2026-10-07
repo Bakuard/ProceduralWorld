@@ -111,6 +111,12 @@
             "explode6", "explode7", "explode8", "explode9", "explode10", "explode11", "explode12",
             "explode13", "explode14"]
     },
+    "animationsConfig": {
+        "explode": {
+            "frameRate": 0.7,
+            "loop": false
+        }
+    },
     "meta": {
         "image": "explosion.png",
         "format": "RGBA8888",

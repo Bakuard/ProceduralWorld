@@ -45,7 +45,17 @@
   },
   "animations": {
     "idle": ["player_idle1", "player_idle2"],
-    "run": ["player_run1", "player_run3", "player_run3", "player_run4"]
+    "run": ["player_run1", "player_run2", "player_run3", "player_run4"]
+  },
+  "animationsConfig": {
+    "idle": {
+      "frameRate": 0.06,
+      "loop": true
+    },
+    "run": {
+      "frameRate": 0.15,
+      "loop": true
+    }
   },
   "meta": {
     "image": "character.png",

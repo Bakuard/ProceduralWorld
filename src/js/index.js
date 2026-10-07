@@ -113,18 +113,17 @@ function createPlayer(playerConfig) {
 }
 
 function setPlayerAnimation(animationName) {
-    if(animationName === 'idle') {
-        player.sprite.textures = Assets.get(objectTypes.player).animations[animationName];
-        player.sprite.animationSpeed = Config.player.animations.idle.animationSpeed;
-        player.sprite.gotoAndPlay(0);
-        player.animationName = animationName;
-    } else if(animationName === 'run') {
-        player.sprite.textures = Assets.get(objectTypes.player).animations[animationName];
-        player.sprite.animationSpeed = Config.player.animations.run.animationSpeed;
+    const spritesheet = Assets.get(objectTypes.player);
+    const texture = spritesheet.animations[animationName];
+    if(texture) {
+        const animationConfig = spritesheet.data.animationsConfig[animationName];
+        player.sprite.textures = texture;
+        player.sprite.animationSpeed = animationConfig.frameRate;
+        player.sprite.loop = animationConfig.loop;
         player.sprite.gotoAndPlay(0);
         player.animationName = animationName;
     } else {
-        throw 'Invalid player animation name';
+        throw 'Invalid player animation name: ' + animationName;
     }
 }
 
@@ -168,16 +167,17 @@ function playerAttack() {
 
 
 function createExplosionSprite(globalPixelX, globalPixelY) {
-    const explosionSprite = new AnimatedSprite(Assets.get(objectTypes.explosion).animations['explode'], false);
-    explosionSprite.animationSpeed = Config.explosion.animationSpeed;
+    const spritesheet = Assets.get(objectTypes.explosion);
+    const explosionSprite = new AnimatedSprite(spritesheet.animations['explode'], false);
+    explosionSprite.animationSpeed = spritesheet.data.animationsConfig['explode'].frameRate;
+    explosionSprite.loop = spritesheet.data.animationsConfig['explode'].loop;
+    explosionSprite.play();
     explosionSprite.anchor.set(0.5, 1);
     const explosionSpriteX = gridStore.localPixelXInGrid(globalPixelX);
     const explosionSpriteY = gridStore.localPixelYInGrid(globalPixelY);
     explosionSprite.position.set(explosionSpriteX, explosionSpriteY);
     explosionSprite.scale.set(Config.explosion.spriteScale);
     explosionSprite.zIndex = globalPixelY;
-    explosionSprite.loop = false;
-    explosionSprite.play();
     return explosionSprite;
 }
 
@@ -207,15 +207,17 @@ function updateAllExplosionsView() {
 
 
 function createFireballSprite(globalPixelX, globalPixelY) {
-    const fireballSprite = new AnimatedSprite(Assets.get(objectTypes.fireball).animations['fly'], false);
-    fireballSprite.animationSpeed = Config.fireball.animationSpeed;
+    const spritesheet = Assets.get(objectTypes.fireball);
+    const fireballSprite = new AnimatedSprite(spritesheet.animations['fly'], false);
+    fireballSprite.animationSpeed = spritesheet.data.animationsConfig['fly'].frameRate;
+    fireballSprite.loop = spritesheet.data.animationsConfig['fly'].loop;
+    fireballSprite.play();
     fireballSprite.anchor.set(1, 0.5);
     const fireballSpriteX = gridStore.localPixelXInGrid(globalPixelX);
     const fireballSpriteY = gridStore.localPixelYInGrid(globalPixelY);
     fireballSprite.position.set(fireballSpriteX, fireballSpriteY);
     fireballSprite.scale.set(Config.fireball.spriteScale);
     fireballSprite.zIndex = globalPixelY + Config.fireball.zIndexOffset;
-    fireballSprite.play();
     return fireballSprite;
 }
 
@@ -294,18 +296,19 @@ function createSlime(globalPixelX, globalPixelY, chunk) {
     setSlimeAnimation('slime_idle');
 }
 
-function setSlimeAnimation(animationName) {
-    if(animationName === 'slime_idle') {
-
-    } else if(animationName === 'slime_run') {
-
+function setSlimeAnimation(slime, animationName) {
+    const spritesheet = Assets.get(objectTypes.slime);
+    const texture = spritesheet.animations[animationName];
+    if(texture) {
+        const animationConfig = spritesheet.data.animationsConfig[animationName];
+        slime.sprite.textures = texture;
+        slime.sprite.animationSpeed = animationConfig.frameRate;
+        slime.sprite.loop = animationConfig.loop;
+        slime.sprite.gotoAndPlay(0);
+        slime.animationName = animationName;
     } else {
-
+        throw 'Invalid slime animation name: ' + animationName;
     }
-}
-
-function spawnSlimes() {
-    
 }
 
 

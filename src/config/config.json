@@ -41,41 +41,23 @@
     "pixelY": 150,
     "speed": 170,
     "startAnimation": "idle",
-    "fireRateInMillis": 500,
-    "animations": {
-      "idle": {
-        "animationSpeed": 0.06
-      },
-      "run": {
-        "animationSpeed": 0.15
-      }
-    }
+    "fireRateInMillis": 500
   },
   "fireball": {
     "zIndexOffset": 40,
     "spriteScale": 0.8,
-    "animationSpeed": 0.14,
     "lifeTimeInMillis": 1500,
     "speed": 300,
     "damage": 10
   },
   "explosion": {
-    "spriteScale": 1.2,
-    "animationSpeed": 0.7
+    "spriteScale": 1.2
   },
   "slime": {
     "maxSlimesInChunk": 3,
     "minGrassTilePercentForSpawn": 0.75,
     "spawnerProbabilityInChunk": 0.05,
     "speed": 200,
-    "roamingRadiusInPixels": 200,
-    "animations": {
-      "idle": {
-        "animationSpeed": 0.06
-      },
-      "run": {
-        "animationSpeed": 0.06
-      }
-    }
+    "roamingRadiusInPixels": 200
   }
 }
