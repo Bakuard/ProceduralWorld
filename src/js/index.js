@@ -354,20 +354,23 @@ function updateAllSlimes(deltaMS) {
         if(slime.state === slimeStates.idle) {
             slime.idleDurationInMS -= deltaMS;
             if(slime.idleDurationInMS <= 0) {
-                slime.idleDurationInMS = Config.slime.idleDurationInSec * 1000;
                 slime.state = slimeStates.roam;
+                slime.roamingDurationInMS = Config.slime.roamingDurationInSec * 1000;
                 setSlimeAnimation(slime, 'slime_run');
             }
         } else if(slime.state === slimeStates.roam) {
-            choseNextRandomAimIfNeeded(slime);
-            slime.velocity.normalize().scale(slime.speed  * (deltaMS / 1000));
-            slime.x += slime.velocity.x;
-            slime.y += slime.velocity.y;
+            if(Math.inRange(slime.sprite.currentFrame, 6, 8)) {
+                slime.velocity.normalize().scale(slime.speed * (deltaMS / 1000));
+                slime.x += slime.velocity.x;
+                slime.y += slime.velocity.y;
+            } else {
+                choseNextRandomAimIfNeeded(slime);
+            }
 
             slime.roamingDurationInMS -= deltaMS;
             if(slime.roamingDurationInMS <= 0) {
-                slime.roamingDurationInMS = Config.slime.roamingDurationInSec * 1000;
                 slime.state = slimeStates.idle;
+                slime.idleDurationInMS = Config.slime.idleDurationInSec * 1000;
                 setSlimeAnimation(slime, 'slime_idle');
             }
         } else if(slime.state === slimeStates.chase) {

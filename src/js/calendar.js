@@ -5,6 +5,12 @@ export const dayPhases = Object.freeze({
     night: 'night'
 });
 
+const dayPhasesNumber = Object.freeze({
+    morning: 0,
+    afternoon: 1,
+    evening: 2,
+    night: 3
+});
 
 export function Calendar(calendarConfig) {
     this.morningInMs = calendarConfig.morningInSec * 1000;
@@ -45,6 +51,13 @@ Calendar.prototype.isEvening = function() {
 
 Calendar.prototype.isNight = function() {
     return this.currentPhase === dayPhases.night;
+};
+
+Calendar.prototype.compareCurrentTimeWith = function(phase, phaseProgress) {
+    const result = dayPhasesNumber[this.currentPhase] - dayPhasesNumber[phase];
+    if(result !== 0) return result;
+
+    return this.getCurrentPhaseProgress() - phaseProgress;
 };
 
 Calendar.prototype.getCurrentDayPhase = function() {

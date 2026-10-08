@@ -58,7 +58,7 @@
     "maxSlimesInChunk": 3,
     "minGrassTilePercentForSpawn": 0.75,
     "spawnerProbabilityInChunk": 0.05,
-    "speed": 200,
+    "speed": 130,
     "idleDurationInSec": 2,
     "roamingDurationInSec": 6,
     "roamingRadiusInPixels": 300

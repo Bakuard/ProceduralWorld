@@ -102,7 +102,7 @@
             "loop": true
         },
         "slime_run": {
-            "frameRate": 0.06,
+            "frameRate": 0.12,
             "loop": true
         }
     },
