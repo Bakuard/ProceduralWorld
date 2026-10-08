@@ -53,11 +53,9 @@ Calendar.prototype.isNight = function() {
     return this.currentPhase === dayPhases.night;
 };
 
-Calendar.prototype.compareCurrentTimeWith = function(phase, phaseProgress) {
-    const result = dayPhasesNumber[this.currentPhase] - dayPhasesNumber[phase];
-    if(result !== 0) return result;
-
-    return this.getCurrentPhaseProgress() - phaseProgress;
+Calendar.prototype.isCurrentPhaseBetween = function(phaseStart, phaseEnd) {
+    return dayPhasesNumber[phaseStart] <= dayPhasesNumber[this.currentPhase]
+        && dayPhasesNumber[this.currentPhase] <= dayPhasesNumber[phaseEnd];
 };
 
 Calendar.prototype.getCurrentDayPhase = function() {

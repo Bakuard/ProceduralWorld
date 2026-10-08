@@ -8,6 +8,7 @@ import {Vector} from "./vector";
 import {Camera} from "./camera";
 import {Calendar, dayPhases} from "./calendar";
 import {DenseArrayStore} from "./DenseArrayStore";
+import {Timer} from "./util";
 
 let Config;
 let sizeUnitsConverter;
@@ -280,6 +281,7 @@ const slimeStates = Object.freeze({
     chase: 'chase',
     attack: 'attack'
 });
+let spawnSlimeTimer;
 
 function createSlimeSprite() {
     const slimeSprite = new AnimatedSprite(Assets.get(objectTypes.slime).animations['slime_idle'], false);
@@ -288,7 +290,7 @@ function createSlimeSprite() {
     return slimeSprite;
 }
 
-function createSlime(globalPixelX, globalPixelY) {
+function createSlime(globalPixelX, globalPixelY, chunk) {
     const slime = {
         x: globalPixelX,
         y: globalPixelY,
@@ -304,10 +306,21 @@ function createSlime(globalPixelX, globalPixelY) {
         sprite: createSlimeSprite()
     };
 
-    const chunk = gridStore.getChunkByPixel(globalPixelX, globalPixelY);
     chunk.addToChunk(slime, objectTypes.slime);
     objectsSpriteContainer.addChild(slime.sprite);
     setSlimeAnimation(slime, 'slime_idle');
+}
+
+function spawnSlimes(deltaMS) {
+    if(calendar.isCurrentPhaseBetween(Config.slime.spawnDayPhaseStart, Config.slime.spawnDayPhaseEnd) && spawnSlimeTimer.tick(deltaMS)) {
+        for(let chunk of gridStore.chunks) {
+            if(chunk.hasSlimeSpawner && gridStore.countByTypeInChunkRadius(objectTypes.slime, chunk.chunkX, chunk.chunkY, 2) < Config.slime.maxSlimesInArea) {
+                const x = Math.randomIntegerInRange(chunk.pixelLeft, chunk.pixelRight);
+                const y = Math.randomIntegerInRange(chunk.pixelTop, chunk.pixelBottom);
+                createSlime(x, y, chunk);
+            }
+        }
+    }
 }
 
 function setSlimeAnimation(slime, animationName) {
@@ -349,6 +362,25 @@ function choseNextRandomAimIfNeeded(slime) {
     }
 }
 
+function changeChunk(slime, oldX, oldY, newX, newY) {
+    const currentChunk = gridStore.getChunkByPixel(oldX, oldY);
+    const nextChunk = gridStore.getChunkByPixel(newX, newY);
+
+    if (currentChunk === nextChunk) return;
+
+    currentChunk?.removeFromChunk(slime, objectTypes.slime);
+    nextChunk?.addToChunk(slime, objectTypes.slime);
+}
+
+function moveSlime(slime, deltaMS) {
+    const oldX = slime.x;
+    const oldY = slime.y;
+    slime.velocity.normalize().scale(slime.speed * (deltaMS / 1000));
+    slime.x += slime.velocity.x;
+    slime.y += slime.velocity.y;
+    changeChunk(slime, oldX, oldY, slime.x, slime.y);
+}
+
 function updateAllSlimes(deltaMS) {
     gridStore.forEachObjWithType(objectTypes.slime, slime => {
         if(slime.state === slimeStates.idle) {
@@ -360,9 +392,7 @@ function updateAllSlimes(deltaMS) {
             }
         } else if(slime.state === slimeStates.roam) {
             if(Math.inRange(slime.sprite.currentFrame, 6, 8)) {
-                slime.velocity.normalize().scale(slime.speed * (deltaMS / 1000));
-                slime.x += slime.velocity.x;
-                slime.y += slime.velocity.y;
+                moveSlime(slime, deltaMS);
             } else {
                 choseNextRandomAimIfNeeded(slime);
             }
@@ -481,6 +511,7 @@ function update(ticker) {
     calendar.updateCurrentTime(ticker.deltaMS);
     movePlayer(ticker.deltaMS);
     updateAllFireballs(ticker.deltaMS);
+    spawnSlimes(ticker.deltaMS);
     updateAllSlimes(ticker.deltaMS);
     playerAttack();
 
@@ -508,6 +539,7 @@ async function setup() {
     calendar = new Calendar(Config.time);
     allFireballs = new DenseArrayStore();
     allExplosions = new DenseArrayStore();
+    spawnSlimeTimer = Timer.ofSeconds(Config.slime.spawnRateInSec);
 
     //Создаем Renderer
     const domContainer = document.querySelector('.canvasContainer');
@@ -527,7 +559,6 @@ async function setup() {
     createPlayer(Config.player);
     generateChunksFor(player.x, player.y);
     camera.centerOn(player.x, player.y);
-    createSlime(player.x, player.y);
 
     //Подключаем шейдеры
     nightShader = createShader();

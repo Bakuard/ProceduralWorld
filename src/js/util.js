@@ -19,3 +19,27 @@ Math.randomIntegerInRange = function(min, max) {
 Math.clamp = function(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
+
+export class Timer {
+    static ofSeconds(seconds) {
+        return new Timer(seconds * 1000);
+    }
+
+    constructor(totalMS) {
+        this.totalMS = totalMS;
+        this.currentTimeMS = 0;
+    }
+
+    tick(deltaTimeMS) {
+        this.currentTimeMS += deltaTimeMS;
+        if (this.currentTimeMS >= this.totalMS) {
+            this.currentTimeMS = this.currentTimeMS - this.totalMS;
+            return true;
+        }
+        return false;
+    }
+
+    getTotalSeconds() {
+        return this.totalMS / 1000;
+    }
+}

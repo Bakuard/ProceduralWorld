@@ -55,10 +55,13 @@
   },
   "slime": {
     "spriteScale": 1.5,
-    "maxSlimesInChunk": 3,
+    "maxSlimesInArea": 5,
     "minGrassTilePercentForSpawn": 0.75,
     "spawnerProbabilityInChunk": 0.05,
-    "speed": 130,
+    "spawnRateInSec": 1,
+    "spawnDayPhaseStart": "morning",
+    "spawnDayPhaseEnd": "afternoon",
+    "speed": 100,
     "idleDurationInSec": 2,
     "roamingDurationInSec": 6,
     "roamingRadiusInPixels": 300

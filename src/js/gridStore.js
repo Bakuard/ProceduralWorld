@@ -72,6 +72,16 @@ GridStore.prototype.forEachObjectInArea = function(objType, pixelLeft, pixelTop,
         }
 };
 
+GridStore.prototype.countByTypeInChunkRadius = function(objType, centerChunkX, centerChunkY, radiusInChunk) {
+    let count = 0;
+    for(let x = centerChunkX - radiusInChunk; x <= centerChunkX + radiusInChunk; x++) {
+        for(let y = centerChunkY - radiusInChunk; y <= centerChunkY + radiusInChunk; y++) {
+            count += getChunk(this, x, y)?.countByTypeInChunk(objType) ?? 0;
+        }
+    }
+    return count;
+};
+
 GridStore.prototype.localPixelXInGrid = function(pixelX) {
     return pixelX - this.border.pixelLeft;
 }
