@@ -15,6 +15,7 @@
   "private": true,
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
+    "matter-js": "^0.20.0",
     "pixi.js": "^8.21.0"
   },
   "devDependencies": {

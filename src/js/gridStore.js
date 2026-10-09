@@ -159,8 +159,8 @@ function Chunk(sizeUnitsConverter, chunkLeft, chunkTop) {
     this.chunkX = chunkLeft;
     this.pixelTop = sizeUnitsConverter.topPixelOfChunk(chunkTop);
     this.pixelLeft = sizeUnitsConverter.leftPixelOfChunk(chunkLeft);
-    this.pixelBottom = sizeUnitsConverter.topPixelOfChunk(chunkTop) + sizeUnitsConverter.chunkHeightInPixels();
-    this.pixelRight = sizeUnitsConverter.leftPixelOfChunk(chunkLeft) + sizeUnitsConverter.chunkWidthInPixels();
+    this.pixelBottom = sizeUnitsConverter.bottomPixelOfChunk(chunkTop);
+    this.pixelRight = sizeUnitsConverter.rightPixelOfChunk(chunkLeft);
     this.objectsByType = {};
 }
 

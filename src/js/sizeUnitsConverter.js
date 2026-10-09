@@ -70,6 +70,14 @@ SizeUnitsConverter.prototype.topPixelOfChunk = function(chunkY) {
     return chunkY * this.chunkHeightInPixels();
 };
 
+SizeUnitsConverter.prototype.rightPixelOfChunk = function(chunkX) {
+    return this.leftPixelOfChunk(chunkX) + this.chunkWidthInPixels();
+};
+
+SizeUnitsConverter.prototype.bottomPixelOfChunk = function(chunkX) {
+    return this.topPixelOfChunk(chunkX) + this.chunkHeightInPixels();
+};
+
 SizeUnitsConverter.prototype.localPixelXInContainingChunk = function(pixelX) {
     const chunkX = this.chunkXFromPixelX(pixelX);
     return pixelX - this.leftPixelOfChunk(chunkX);
