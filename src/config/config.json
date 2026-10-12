@@ -48,7 +48,8 @@
     "spriteScale": 0.8,
     "lifeTimeInMillis": 1500,
     "speed": 300,
-    "damage": 10
+    "damage": 10,
+    "bodyRadius": 10
   },
   "explosion": {
     "spriteScale": 1.2

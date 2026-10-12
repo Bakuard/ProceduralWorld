@@ -1,4 +1,4 @@
-import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker} from 'pixi.js';
+import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics} from 'pixi.js';
 import {objectTypes} from "./objectTypes";
 import {SizeUnitsConverter} from "./sizeUnitsConverter";
 import {GridStore} from "./gridStore";
@@ -7,8 +7,9 @@ import {EventManager, InputEvents} from "./eventManager";
 import {Vector} from "./vector";
 import {Camera} from "./camera";
 import {Calendar, dayPhases} from "./calendar";
-import {DenseArrayStore} from "./DenseArrayStore";
+import {DenseArray, UnorderedPool} from "./UnorderedPool";
 import {Timer} from "./util";
+import Matter from 'matter-js';
 
 let Config;
 let sizeUnitsConverter;
@@ -19,12 +20,24 @@ let calendar;
 let player;
 let allFireballs;
 let allExplosions;
+const slimeStates = Object.freeze({
+    idle: 'idle',
+    roam: 'roam',
+    chase: 'chase',
+    attack: 'attack'
+});
+let spawnSlimeTimer;
+let allPhysicsBodies;
+
+let collisionDetector;
 
 let renderer;
 let stage;
 let ticker;
 let camera;
+let allTileSpritesContainer;
 let objectsSpriteContainer;
+let debugPhysicsGraphics;
 
 let nightShaderCode;
 let nightShader;
@@ -89,6 +102,19 @@ function updateShader() {
             uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.nightPhaseTransitionFraction);
             break;
     }
+}
+
+
+function debugDrawAllPhysicsBodies() {
+    debugPhysicsGraphics.clear().setStrokeStyle({ width: 2, color: 0x00ff00 });
+
+    allPhysicsBodies.forEach(body => {
+        if(body.circleRadius > 0) {
+            const x = gridStore.localPixelXInGrid(body.position.x);
+            const y = gridStore.localPixelYInGrid(body.position.y);
+            debugPhysicsGraphics.circle(x, y, body.circleRadius).stroke();
+        }
+    });
 }
 
 
@@ -167,84 +193,84 @@ function playerAttack() {
 }
 
 
-function createExplosionSprite(globalPixelX, globalPixelY) {
+function createExplosionSprite() {
     const spritesheet = Assets.get(objectTypes.explosion);
     const explosionSprite = new AnimatedSprite(spritesheet.animations['explode'], false);
     explosionSprite.animationSpeed = spritesheet.data.animationsConfig['explode'].frameRate;
     explosionSprite.loop = spritesheet.data.animationsConfig['explode'].loop;
-    explosionSprite.play();
     explosionSprite.anchor.set(0.5, 1);
-    const explosionSpriteX = gridStore.localPixelXInGrid(globalPixelX);
-    const explosionSpriteY = gridStore.localPixelYInGrid(globalPixelY);
-    explosionSprite.position.set(explosionSpriteX, explosionSpriteY);
     explosionSprite.scale.set(Config.explosion.spriteScale);
-    explosionSprite.zIndex = globalPixelY;
     return explosionSprite;
 }
 
 function createExplosion(globalPixelX, globalPixelY) {
-    const explosion = {
-        x: globalPixelX,
-        y: globalPixelY,
-        sprite: createExplosionSprite(globalPixelX, globalPixelY)
-    };
-    allExplosions.addLast(explosion);
+    const explosion = allExplosions.acquire(() => ({ sprite: createExplosionSprite()}));
+    const spriteX = gridStore.localPixelXInGrid(globalPixelX);
+    const spriteY = gridStore.localPixelYInGrid(globalPixelY);
+    explosion.sprite.position.set(spriteX, spriteY);
+    explosion.sprite.zIndex = globalPixelY;
+    explosion.sprite.gotoAndPlay(0);
+
     objectsSpriteContainer.addChild(explosion.sprite);
     explosion.sprite.onComplete = () => removeExplosion(explosion);
 }
 
 function removeExplosion(explosion) {
-    allExplosions.quickRemove(explosion);
     explosion.sprite.removeFromParent();
-    explosion.sprite.destroy();
+    allExplosions.release(explosion);
 }
 
 function updateAllExplosionsView() {
-    for(let i = allExplosions.getSize() - 1; i >= 0; i--) {
-        const explosion = allExplosions.get(i);
-        explosion.sprite.update(ticker);
-    }
+    allExplosions.forEachUsed(explosion => explosion.sprite.update(ticker));
 }
 
 
-function createFireballSprite(globalPixelX, globalPixelY) {
+function createFireballSprite() {
     const spritesheet = Assets.get(objectTypes.fireball);
     const fireballSprite = new AnimatedSprite(spritesheet.animations['fly'], false);
     fireballSprite.animationSpeed = spritesheet.data.animationsConfig['fly'].frameRate;
     fireballSprite.loop = spritesheet.data.animationsConfig['fly'].loop;
     fireballSprite.play();
     fireballSprite.anchor.set(1, 0.5);
-    const fireballSpriteX = gridStore.localPixelXInGrid(globalPixelX);
-    const fireballSpriteY = gridStore.localPixelYInGrid(globalPixelY);
-    fireballSprite.position.set(fireballSpriteX, fireballSpriteY);
     fireballSprite.scale.set(Config.fireball.spriteScale);
-    fireballSprite.zIndex = globalPixelY + Config.fireball.zIndexOffset;
     return fireballSprite;
 }
 
-function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPixelY, lifeTimeInMillis, speed, damage) {
-    const fireball = {
-        x: globalPixelX,
-        y: globalPixelY,
-        lifeTimeInMillis: lifeTimeInMillis,
-        speed: speed,
-        damage: damage,
-        velocity: new Vector(globalAimPixelX - globalPixelX, globalAimPixelY - globalPixelY),
-        sprite: createFireballSprite(globalPixelX, globalPixelY)
-    };
+function createPhysicsBody(globalPixelX, globalPixelY) {
+    const body = Matter.Bodies.circle(globalPixelX, globalPixelY, Config.fireball.bodyRadius);
+    body.newPosition = { x: globalPixelX, y: globalPixelY };
+    return body;
+}
 
-    allFireballs.addLast(fireball);
+function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPixelY, lifeTimeInMillis, speed, damage) {
+    let fireball = allFireballs.acquire(() => ({
+        velocity: new Vector(),
+        sprite: createFireballSprite(),
+        body: createPhysicsBody(globalPixelX, globalPixelY)
+    }));
+    fireball.x = globalPixelX;
+    fireball.y = globalPixelY;
+    fireball.lifeTimeInMillis = lifeTimeInMillis;
+    fireball.speed = speed;
+    fireball.damage = damage;
+    fireball.velocity.set(globalAimPixelX - globalPixelX, globalAimPixelY - globalPixelY);
+
+    fireball.body.newPosition.x = globalPixelX;
+    fireball.body.newPosition.y = globalPixelY;
+    Matter.Body.setPosition(fireball.body, fireball.body.newPosition);
+
     objectsSpriteContainer.addChild(fireball.sprite);
+    allPhysicsBodies.addLast(fireball.body);
 }
 
 function removeFireball(fireball) {
-    allFireballs.quickRemove(fireball);
     fireball.sprite.removeFromParent();
-    fireball.sprite.destroy();
+    allFireballs.release(fireball);
+    allPhysicsBodies.quickRemove(fireball.body);
 }
 
 function updateAllFireballsView() {
-    allFireballs.forEach(fireball => {
+    allFireballs.forEachUsed(fireball => {
         const fireballSpriteX = gridStore.localPixelXInGrid(fireball.x);
         const fireballSpriteY = gridStore.localPixelYInGrid(fireball.y);
         fireball.sprite.position.set(fireballSpriteX, fireballSpriteY);
@@ -259,11 +285,11 @@ function moveFireball(fireball, deltaMS) {
     fireball.velocity.normalize().scale(fireball.speed * (deltaMS / 1000));
     fireball.x += fireball.velocity.x;
     fireball.y += fireball.velocity.y;
+    Matter.Body.setPosition(fireball.body, { x: fireball.x, y: fireball.y });
 }
 
 function updateAllFireballs(deltaMS) {
-    for(let i = allFireballs.getSize() - 1; i >= 0; i--) {
-        const fireball = allFireballs.get(i);
+    allFireballs.forEachUsed(fireball => {
         moveFireball(fireball, deltaMS);
 
         fireball.lifeTimeInMillis -= deltaMS;
@@ -271,17 +297,9 @@ function updateAllFireballs(deltaMS) {
             removeFireball(fireball);
             createExplosion(fireball.x, fireball.y);
         }
-    }
+    });
 }
 
-
-const slimeStates = Object.freeze({
-    idle: 'idle',
-    roam: 'roam',
-    chase: 'chase',
-    attack: 'attack'
-});
-let spawnSlimeTimer;
 
 function createSlimeSprite() {
     const slimeSprite = new AnimatedSprite(Assets.get(objectTypes.slime).animations['slime_idle'], false);
@@ -444,11 +462,11 @@ function generateChunksFor(pixelX, pixelY) {
     const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
 
     for(let chunk of result.createdChunks) {
-        chunk.tileSpriteContainer = new Container();
-        chunk.tileSpriteContainer.cullable = true;
+        chunk.tileSpritesContainer = new Container();
+        chunk.tileSpritesContainer.cullable = true;
         const localLeftOfChunk = gridStore.localLeftPixelOfChunkInWorld(chunk.chunkX);
         const localTopOfChunk = gridStore.localTopPixelOfChunkInWorld(chunk.chunkY);
-        chunk.tileSpriteContainer.position.set(localLeftOfChunk, localTopOfChunk);
+        chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
 
         let countGrassTiles = 0;
         chunk.forEachTileCoords((tileGlobalX, tileGlobalY, localTileXInChunk, localTileYInChunk) => {
@@ -456,7 +474,7 @@ function generateChunksFor(pixelX, pixelY) {
 
             const tileType = mapGenerator.getTileType();
             const tileSprite = createTileSprite(localTileXInChunk, localTileYInChunk, tileType);
-            chunk.tileSpriteContainer.addChild(tileSprite);
+            chunk.tileSpritesContainer.addChild(tileSprite);
 
             const treeMeta = mapGenerator.getTree();
             if (treeMeta) {
@@ -470,13 +488,13 @@ function generateChunksFor(pixelX, pixelY) {
         chunk.hasSlimeSpawner = (countGrassTiles / sizeUnitsConverter.chunkAreaInTiles() >= Config.slime.minGrassTilePercentForSpawn)
                                 && mapGenerator.noise(chunk.chunkX, chunk.chunkY) <= Config.slime.spawnerProbabilityInChunk;
 
-        stage.addChild(chunk.tileSpriteContainer);
+        allTileSpritesContainer.addChild(chunk.tileSpritesContainer);
     }
 
     for(let chunk of result.retainedChunks) {
         const localLeftOfChunk = gridStore.localLeftPixelOfChunkInWorld(chunk.chunkX);
         const localTopOfChunk = gridStore.localTopPixelOfChunkInWorld(chunk.chunkY);
-        chunk.tileSpriteContainer.position.set(localLeftOfChunk, localTopOfChunk);
+        chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
 
         chunk.forEachObj((obj, objType) => {
             const spriteLocalX = gridStore.localPixelXInGrid(obj.x);
@@ -487,16 +505,14 @@ function generateChunksFor(pixelX, pixelY) {
     }
 
     for(let chunk of result.removedChunks) {
-        chunk.tileSpriteContainer.removeFromParent();
-        chunk.tileSpriteContainer.destroy({ children: true });
+        chunk.tileSpritesContainer.removeFromParent();
+        chunk.tileSpritesContainer.destroy({ children: true });
 
         chunk.forEachObj((obj, objType) => {
             obj.sprite.removeFromParent();
             obj.sprite.destroy();
         });
     }
-
-    stage.setChildIndex(objectsSpriteContainer, stage.children.length - 1);
 }
 
 function updateCamera() {
@@ -524,22 +540,29 @@ function update(ticker) {
     updateAllExplosionsView();
     updateAllSlimesView();
     updateShader();
+    debugDrawAllPhysicsBodies();
     renderer.render(stage);
 }
 
 async function setup() {
+    //Загружаем ресурсы
     await loadTextures();
     await loadShaders();
     await loadConfig();
 
+    //Инициализируем основные хранилища данных
     sizeUnitsConverter = new SizeUnitsConverter(Config.sizeUnitsConverter);
     mapGenerator = new MapGenerator(sizeUnitsConverter, Config.mapGenerator);
     gridStore = new GridStore(sizeUnitsConverter, Config.grid);
     eventManager = new EventManager();
     calendar = new Calendar(Config.time);
-    allFireballs = new DenseArrayStore();
-    allExplosions = new DenseArrayStore();
+    allFireballs = new UnorderedPool();
+    allExplosions = new UnorderedPool();
     spawnSlimeTimer = Timer.ofSeconds(Config.slime.spawnRateInSec);
+    allPhysicsBodies = new DenseArray();
+
+    //Создаем и настраиваем обработку коллизий
+    collisionDetector = Matter.Detector.create({});
 
     //Создаем Renderer
     const domContainer = document.querySelector('.canvasContainer');
@@ -551,11 +574,17 @@ async function setup() {
     });
     domContainer.appendChild(renderer.canvas);
 
-    //Инициализируем контейнеры для спрайтов
+    //Создаем контейнеры для спрайтов и отладочную графику для физики
     camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, Config.camera);
     stage = new Container();
+    allTileSpritesContainer = new Container();
     objectsSpriteContainer = new Container();
+    debugPhysicsGraphics = new Graphics();
+    stage.addChild(allTileSpritesContainer);
     stage.addChild(objectsSpriteContainer);
+    stage.addChild(debugPhysicsGraphics);
+
+    //Создаем игровые объекты вместе с их спрайтами и физическими телами
     createPlayer(Config.player);
     generateChunksFor(player.x, player.y);
     camera.centerOn(player.x, player.y);

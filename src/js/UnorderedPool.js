@@ -2,26 +2,18 @@ export class UnorderedPool {
     constructor() {
         this.usedItems = new DenseArray();
         this.unusedItems = [];
-        this.inPool = Symbol('inPool');
     }
 
-    addAsUnused(item) {
-        if(!item[this.inPool]) {
-            this.unusedItems.push(item);
-            item[this.inPool] = true;
-        }
+    acquire(factoryCallback) {
+        const item = this.unusedItems.pop() ?? factoryCallback();
+        this.usedItems.addLast(item);
+        return item;
     }
 
     release(item) {
         const itemExist = this.usedItems.quickRemove(item);
         if(itemExist) this.unusedItems.push(item);
         return itemExist;
-    }
-
-    acquire() {
-        const item = this.unusedItems.pop();
-        this.usedItems.addLast(item);
-        return item;
     }
 
     getUsed(index) {
@@ -41,49 +33,55 @@ export class UnorderedPool {
     }
 }
 
-class DenseArray {
+export class DenseArray {
     constructor() {
-        this.array = [];
+        this.innerArray = [];
         this.indexInArray = Symbol('indexInArray');
     }
 
     addLast(item) {
-        if(item) {
-            this.setItemIndex(item, this.array.length);
-            this.array.push(item);
+        if(item && !this.contain(item)) {
+            this.#setItemIndex(item, this.innerArray.length);
+            this.innerArray.push(item);
         }
     }
 
     quickRemove(item) {
-        if(this.array.length > 0 && this.array[this.getItemIndex(item)] === item) {
-            const lastItem = this.array.at(-1);
-            this.setItemIndex(lastItem, this.getItemIndex(item));
-            this.array[this.getItemIndex(item)] = lastItem;
-            this.array.pop();
+        if(item && this.contain(item)) {
+            const itemIndex = this.#getItemIndex(item);
+            const lastItem = this.innerArray.at(-1);
+            this.#setItemIndex(lastItem, itemIndex);
+            this.innerArray[itemIndex] = lastItem;
+            this.innerArray.pop();
             return true;
         }
         return false;
     }
 
     get(index) {
-        return this.array[index];
+        return this.innerArray[index];
     }
 
     forEach(callback) {
-        for(let i = this.array.length - 1; i >= 0; i--) {
-            callback(this.array[i], i);
+        for(let i = this.innerArray.length - 1; i >= 0; i--) {
+            callback(this.innerArray[i], i);
         }
     }
 
     getSize() {
-        return this.array.length;
+        return this.innerArray.length;
     }
 
-    getItemIndex(item) {
+    contain(item) {
+        return this.innerArray[this.#getItemIndex(item)] === item;
+    }
+
+
+    #getItemIndex(item) {
         return item[this.indexInArray];
     }
 
-    setItemIndex(item, index) {
+    #setItemIndex(item, index) {
         item[this.indexInArray] = index;
     }
 }
