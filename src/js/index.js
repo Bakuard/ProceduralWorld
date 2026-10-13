@@ -7,7 +7,7 @@ import {EventManager, InputEvents} from "./eventManager";
 import {Vector} from "./vector";
 import {Camera} from "./camera";
 import {Calendar, dayPhases} from "./calendar";
-import {DenseArray, UnorderedPool} from "./UnorderedPool";
+import {DenseArray, UnorderedPool} from "./unorderedPool";
 import {Timer} from "./util";
 import Matter from 'matter-js';
 
@@ -110,9 +110,16 @@ function debugDrawAllPhysicsBodies() {
 
     allPhysicsBodies.forEach(body => {
         if(body.circleRadius > 0) {
-            const x = gridStore.localPixelXInGrid(body.position.x);
-            const y = gridStore.localPixelYInGrid(body.position.y);
+            const center = Matter.Vertices.centre(body.vertices);
+            const x = gridStore.localPixelXInGrid(center.x);
+            const y = gridStore.localPixelYInGrid(center.y);
             debugPhysicsGraphics.circle(x, y, body.circleRadius).stroke();
+        } else {
+            const x = gridStore.localPixelXInGrid(body.bounds.min.x);
+            const y = gridStore.localPixelYInGrid(body.bounds.min.y);
+            const width = body.bounds.max.x - body.bounds.min.x;
+            const height = body.bounds.max.y - body.bounds.min.y;
+            debugPhysicsGraphics.rect(x, y, width, height).stroke();
         }
     });
 }
@@ -124,6 +131,13 @@ function createPlayerSprite(startAnimationName) {
     return playerSprite;
 }
 
+function createPlayerPhysicsBody(globalPixelX, globalPixelY) {
+    const body = Matter.Bodies.rectangle(globalPixelX, globalPixelY - Config.player.bodyHeight / 2, Config.player.bodyWidth, Config.player.bodyHeight);
+    body.newPosition = { x: globalPixelX, y: globalPixelY };
+    Matter.Body.setCentre(body, body.newPosition);
+    return body;
+}
+
 function createPlayer(playerConfig) {
     player = {
         x: playerConfig.pixelX,
@@ -132,11 +146,13 @@ function createPlayer(playerConfig) {
         fireRateInMillis: playerConfig.fireRateInMillis,
         lastFireTime: 0,
         velocity: new Vector(),
-        sprite: createPlayerSprite(playerConfig.startAnimation)
+        sprite: createPlayerSprite(playerConfig.startAnimation),
+        body: createPlayerPhysicsBody(playerConfig.pixelX, playerConfig.pixelY)
     };
     eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
     objectsSpriteContainer.addChild(player.sprite);
     setPlayerAnimation('idle');
+    allPhysicsBodies.addLast(player.body);
 }
 
 function setPlayerAnimation(animationName) {
@@ -179,6 +195,10 @@ function movePlayer(deltaMS) {
 
     player.x += player.velocity.x;
     player.y += player.velocity.y;
+
+    player.body.newPosition.x = player.x;
+    player.body.newPosition.y = player.y;
+    Matter.Body.setPosition(player.body, player.body.newPosition);
 }
 
 function playerAttack() {
@@ -236,9 +256,10 @@ function createFireballSprite() {
     return fireballSprite;
 }
 
-function createPhysicsBody(globalPixelX, globalPixelY) {
-    const body = Matter.Bodies.circle(globalPixelX, globalPixelY, Config.fireball.bodyRadius);
+function createFireballPhysicsBody(globalPixelX, globalPixelY) {
+    const body = Matter.Bodies.circle(globalPixelX - Config.fireball.bodyRadius, globalPixelY, Config.fireball.bodyRadius);
     body.newPosition = { x: globalPixelX, y: globalPixelY };
+    Matter.Body.setCentre(body, body.newPosition);
     return body;
 }
 
@@ -246,7 +267,7 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
     let fireball = allFireballs.acquire(() => ({
         velocity: new Vector(),
         sprite: createFireballSprite(),
-        body: createPhysicsBody(globalPixelX, globalPixelY)
+        body: createFireballPhysicsBody(globalPixelX, globalPixelY)
     }));
     fireball.x = globalPixelX;
     fireball.y = globalPixelY;
@@ -285,7 +306,11 @@ function moveFireball(fireball, deltaMS) {
     fireball.velocity.normalize().scale(fireball.speed * (deltaMS / 1000));
     fireball.x += fireball.velocity.x;
     fireball.y += fireball.velocity.y;
-    Matter.Body.setPosition(fireball.body, { x: fireball.x, y: fireball.y });
+
+    fireball.body.newPosition.x = fireball.x;
+    fireball.body.newPosition.y = fireball.y;
+    Matter.Body.setPosition(fireball.body, fireball.body.newPosition);
+    Matter.Body.setAngle(fireball.body, fireball.velocity.getAngleInRadian());
 }
 
 function updateAllFireballs(deltaMS) {
@@ -308,6 +333,13 @@ function createSlimeSprite() {
     return slimeSprite;
 }
 
+function createSlimePhysicsBody(globalPixelX, globalPixelY) {
+    const body = Matter.Bodies.rectangle(globalPixelX, globalPixelY - Config.slime.bodyHeight / 2, Config.slime.bodyWidth, Config.slime.bodyHeight);
+    body.newPosition = { x: globalPixelX, y: globalPixelY };
+    Matter.Body.setCentre(body, body.newPosition);
+    return body;
+}
+
 function createSlime(globalPixelX, globalPixelY, chunk) {
     const slime = {
         x: globalPixelX,
@@ -321,12 +353,14 @@ function createSlime(globalPixelX, globalPixelY, chunk) {
         idleDurationInMS: Config.slime.idleDurationInSec * 1000,
         roamingDurationInMS: Config.slime.roamingDurationInSec * 1000,
         velocity: new Vector(),
-        sprite: createSlimeSprite()
+        sprite: createSlimeSprite(),
+        body: createSlimePhysicsBody(globalPixelX, globalPixelY)
     };
 
     chunk.addToChunk(slime, objectTypes.slime);
     objectsSpriteContainer.addChild(slime.sprite);
     setSlimeAnimation(slime, 'slime_idle');
+    allPhysicsBodies.addLast(slime.body);
 }
 
 function spawnSlimes(deltaMS) {
@@ -397,6 +431,10 @@ function moveSlime(slime, deltaMS) {
     slime.x += slime.velocity.x;
     slime.y += slime.velocity.y;
     changeChunk(slime, oldX, oldY, slime.x, slime.y);
+
+    slime.body.newPosition.x = slime.x;
+    slime.body.newPosition.y = slime.y;
+    Matter.Body.setPosition(slime.body, slime.body.newPosition);
 }
 
 function updateAllSlimes(deltaMS) {
@@ -511,6 +549,7 @@ function generateChunksFor(pixelX, pixelY) {
         chunk.forEachObj((obj, objType) => {
             obj.sprite.removeFromParent();
             obj.sprite.destroy();
+            allPhysicsBodies.quickRemove(obj.body);
         });
     }
 }

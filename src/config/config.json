@@ -41,7 +41,9 @@
     "pixelY": 0,
     "speed": 170,
     "startAnimation": "idle",
-    "fireRateInMillis": 500
+    "fireRateInMillis": 500,
+    "bodyWidth": 40,
+    "bodyHeight": 70
   },
   "fireball": {
     "zIndexOffset": 40,
@@ -65,6 +67,8 @@
     "speed": 100,
     "idleDurationInSec": 2,
     "roamingDurationInSec": 6,
-    "roamingRadiusInPixels": 300
+    "roamingRadiusInPixels": 300,
+    "bodyWidth": 36,
+    "bodyHeight": 30
   }
 }
