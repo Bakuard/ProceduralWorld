@@ -9,7 +9,7 @@ export class Vector {
         return this;
     }
 
-    scale(value) {
+    scaleBy(value) {
         this.x *= value;
         this.y *= value;
         return this;
@@ -38,12 +38,25 @@ export class Vector {
         return this;
     }
 
-    rotate(angleInRadian) {
+    negate() {
+        this.set(-this.x, -this.y);
+        return this;
+    }
+
+    rotateBy(angleInRadians) {
         const x = this.x;
         const y = this.y;
-        const cos = Math.cos(angleInRadian);
-        const sin = Math.sin(angleInRadian);
+        const cos = Math.cos(angleInRadians);
+        const sin = Math.sin(angleInRadians);
         this.set(x * cos - y * sin, x * sin + y * cos);
+        return this;
+    }
+
+    rotateTo(angleInRadians) {
+        const length = this.getLength();
+        const cos = Math.cos(angleInRadians);
+        const sin = Math.sin(angleInRadians);
+        this.set(cos * length, sin * length);
         return this;
     }
 

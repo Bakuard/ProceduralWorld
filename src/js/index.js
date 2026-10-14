@@ -7,9 +7,9 @@ import {EventManager, InputEvents} from "./eventManager";
 import {Vector} from "./vector";
 import {Camera} from "./camera";
 import {Calendar, dayPhases} from "./calendar";
-import {DenseArray, UnorderedPool} from "./unorderedPool";
+import {UnorderedPool} from "./unorderedPool";
 import {Timer} from "./util";
-import Matter from 'matter-js';
+import {CollisionManager} from "./collisions";
 
 let Config;
 let sizeUnitsConverter;
@@ -27,9 +27,8 @@ const slimeStates = Object.freeze({
     attack: 'attack'
 });
 let spawnSlimeTimer;
-let allPhysicsBodies;
 
-let collisionDetector;
+let collisionManager;
 
 let renderer;
 let stage;
@@ -108,36 +107,30 @@ function updateShader() {
 function debugDrawAllPhysicsBodies() {
     debugPhysicsGraphics.clear().setStrokeStyle({ width: 2, color: 0x00ff00 });
 
-    allPhysicsBodies.forEach(body => {
+    collisionManager.forEachBody(body => {
+        const width = body.bounds.max.x - body.bounds.min.x;
+        const height = body.bounds.max.y - body.bounds.min.y;
+
         if(body.circleRadius > 0) {
-            const center = Matter.Vertices.centre(body.vertices);
-            const x = gridStore.localPixelXInGrid(center.x);
-            const y = gridStore.localPixelYInGrid(center.y);
+            const centerX = body.bounds.min.x + width / 2;
+            const centerY = body.bounds.min.y + height / 2;
+            const x = gridStore.localPixelXInGrid(centerX);
+            const y = gridStore.localPixelYInGrid(centerY);
             debugPhysicsGraphics.circle(x, y, body.circleRadius).stroke();
         } else {
             const x = gridStore.localPixelXInGrid(body.bounds.min.x);
             const y = gridStore.localPixelYInGrid(body.bounds.min.y);
-            const width = body.bounds.max.x - body.bounds.min.x;
-            const height = body.bounds.max.y - body.bounds.min.y;
             debugPhysicsGraphics.rect(x, y, width, height).stroke();
         }
     });
 }
 
-function handleCollisions() {
-    Matter.Detector.setBodies(collisionDetector, allPhysicsBodies.innerArray);
-
-    Matter.Detector.collisions(collisionDetector).forEach(collision => {
-        if(!collision.collided) return;
-
-        const objA = collision.bodyA.owner;
-        const objB = collision.bodyB.owner;
-        if(objA.type === objectTypes.slime && objB.type === objectTypes.fireball) {
-            handleFireballAndSlimeCollision(objB, objA);
-        } else if(objA.type === objectTypes.fireball && objB.type === objectTypes.slime) {
-            handleFireballAndSlimeCollision(objA, objB);
-        }
-    });
+function allCollisionHandler(objA, objB, bodyA, bodyB) {
+    if(objA.type === objectTypes.slime && objB.type === objectTypes.fireball) {
+        handleFireballAndSlimeCollision(objB, objA);
+    } else if(objA.type === objectTypes.fireball && objB.type === objectTypes.slime) {
+        handleFireballAndSlimeCollision(objA, objB);
+    }
 }
 
 function handleFireballAndSlimeCollision(fireball, slime) {
@@ -152,14 +145,6 @@ function createPlayerSprite(startAnimationName) {
     return playerSprite;
 }
 
-function createPlayerPhysicsBody(globalPixelX, globalPixelY, owner) {
-    const body = Matter.Bodies.rectangle(globalPixelX, globalPixelY - Config.player.bodyHeight / 2, Config.player.bodyWidth, Config.player.bodyHeight);
-    body.newPosition = { x: globalPixelX, y: globalPixelY };
-    Matter.Body.setCentre(body, body.newPosition);
-    body.owner = owner;
-    return body;
-}
-
 function createPlayer(playerConfig) {
     player = {
         type: objectTypes.player,
@@ -171,12 +156,12 @@ function createPlayer(playerConfig) {
         velocity: new Vector(),
         sprite: createPlayerSprite(playerConfig.startAnimation)
     };
-    player.body = createPlayerPhysicsBody(playerConfig.pixelX, playerConfig.pixelY, player);
+    player.body = collisionManager.createRectCollider(playerConfig.pixelX, playerConfig.pixelY, Config.player.bodyWidth, Config.player.bodyHeight, 0.5, 1, player);
 
     eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
     objectsSpriteContainer.addChild(player.sprite);
     setPlayerAnimation('idle');
-    allPhysicsBodies.addLast(player.body);
+    collisionManager.registerBody(player.body);
 }
 
 function setPlayerAnimation(animationName) {
@@ -215,14 +200,12 @@ function movePlayer(deltaMS) {
         player.velocity.x *= 0.707106; //sin 45 degree
         player.velocity.y *= 0.707106; //cos 45 degree
     }
-    player.velocity.scale(player.speed * (deltaMS / 1000));
+    player.velocity.scaleBy(player.speed * (deltaMS / 1000));
 
     player.x += player.velocity.x;
     player.y += player.velocity.y;
 
-    player.body.newPosition.x = player.x;
-    player.body.newPosition.y = player.y;
-    Matter.Body.setPosition(player.body, player.body.newPosition);
+    collisionManager.setPosition(player.body, player.x, player.y);
 }
 
 function playerAttack() {
@@ -280,14 +263,6 @@ function createFireballSprite() {
     return fireballSprite;
 }
 
-function createFireballPhysicsBody(globalPixelX, globalPixelY, owner) {
-    const body = Matter.Bodies.circle(globalPixelX - Config.fireball.bodyRadius, globalPixelY, Config.fireball.bodyRadius);
-    body.newPosition = { x: globalPixelX, y: globalPixelY };
-    Matter.Body.setCentre(body, body.newPosition);
-    body.owner = owner;
-    return body;
-}
-
 function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPixelY, lifeTimeInMillis, speed, damage) {
     let fireball = allFireballs.acquire(() => {
         const newFireball = {
@@ -295,7 +270,7 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
             velocity: new Vector(),
             sprite: createFireballSprite()
         };
-        newFireball.body = createFireballPhysicsBody(globalPixelX, globalPixelY, newFireball);
+        newFireball.body = collisionManager.createCircleCollider(globalPixelX, globalPixelY, Config.fireball.bodyRadius, 1, 0.5, newFireball);
         return newFireball;
     });
     fireball.x = globalPixelX;
@@ -304,19 +279,16 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
     fireball.speed = speed;
     fireball.damage = damage;
     fireball.velocity.set(globalAimPixelX - globalPixelX, globalAimPixelY - globalPixelY);
-
-    fireball.body.newPosition.x = globalPixelX;
-    fireball.body.newPosition.y = globalPixelY;
-    Matter.Body.setPosition(fireball.body, fireball.body.newPosition);
+    collisionManager.setPosition(fireball.body, globalPixelX, globalPixelY);
 
     objectsSpriteContainer.addChild(fireball.sprite);
-    allPhysicsBodies.addLast(fireball.body);
+    collisionManager.registerBody(fireball.body);
 }
 
 function removeFireball(fireball) {
     fireball.sprite.removeFromParent();
     allFireballs.release(fireball);
-    allPhysicsBodies.quickRemove(fireball.body);
+    collisionManager.unregisterBody(fireball.body);
 }
 
 function updateAllFireballsView() {
@@ -332,14 +304,11 @@ function updateAllFireballsView() {
 }
 
 function moveFireball(fireball, deltaMS) {
-    fireball.velocity.normalize().scale(fireball.speed * (deltaMS / 1000));
+    fireball.velocity.normalize().scaleBy(fireball.speed * (deltaMS / 1000));
     fireball.x += fireball.velocity.x;
     fireball.y += fireball.velocity.y;
 
-    fireball.body.newPosition.x = fireball.x;
-    fireball.body.newPosition.y = fireball.y;
-    Matter.Body.setPosition(fireball.body, fireball.body.newPosition);
-    Matter.Body.setAngle(fireball.body, fireball.velocity.getAngleInRadian());
+    collisionManager.setPositionAndAngle(fireball.body, fireball.x, fireball.y, fireball.velocity.getAngleInRadian());
 }
 
 function updateAllFireballs(deltaMS) {
@@ -362,14 +331,6 @@ function createSlimeSprite() {
     return slimeSprite;
 }
 
-function createSlimePhysicsBody(globalPixelX, globalPixelY, owner) {
-    const body = Matter.Bodies.rectangle(globalPixelX, globalPixelY - Config.slime.bodyHeight / 2, Config.slime.bodyWidth, Config.slime.bodyHeight);
-    body.newPosition = { x: globalPixelX, y: globalPixelY };
-    Matter.Body.setCentre(body, body.newPosition);
-    body.owner = owner;
-    return body;
-}
-
 function createSlime(globalPixelX, globalPixelY, chunk) {
     const slime = {
         type: objectTypes.slime,
@@ -386,12 +347,12 @@ function createSlime(globalPixelX, globalPixelY, chunk) {
         velocity: new Vector(),
         sprite: createSlimeSprite()
     };
-    slime.body = createSlimePhysicsBody(globalPixelX, globalPixelY, slime);
+    slime.body = collisionManager.createRectCollider(globalPixelX, globalPixelY, Config.slime.bodyWidth, Config.slime.bodyHeight, 0.5, 1, slime);
 
     chunk.addToChunk(slime, objectTypes.slime);
     objectsSpriteContainer.addChild(slime.sprite);
     setSlimeAnimation(slime, 'slime_idle');
-    allPhysicsBodies.addLast(slime.body);
+    collisionManager.registerBody(slime.body);
 }
 
 function spawnSlimes(deltaMS) {
@@ -458,14 +419,12 @@ function changeChunk(slime, oldX, oldY, newX, newY) {
 function moveSlime(slime, deltaMS) {
     const oldX = slime.x;
     const oldY = slime.y;
-    slime.velocity.normalize().scale(slime.speed * (deltaMS / 1000));
+    slime.velocity.normalize().scaleBy(slime.speed * (deltaMS / 1000));
     slime.x += slime.velocity.x;
     slime.y += slime.velocity.y;
     changeChunk(slime, oldX, oldY, slime.x, slime.y);
 
-    slime.body.newPosition.x = slime.x;
-    slime.body.newPosition.y = slime.y;
-    Matter.Body.setPosition(slime.body, slime.body.newPosition);
+    collisionManager.setPosition(slime.body, slime.x, slime.y);
 }
 
 function updateAllSlimes(deltaMS) {
@@ -580,7 +539,7 @@ function generateChunksFor(pixelX, pixelY) {
         chunk.forEachObj((obj, objType) => {
             obj.sprite.removeFromParent();
             obj.sprite.destroy();
-            allPhysicsBodies.quickRemove(obj.body);
+            collisionManager.unregisterBody(obj.body);
         });
     }
 }
@@ -604,7 +563,7 @@ function update(ticker) {
     if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk))
         generateChunksFor(player.x, player.y);
 
-    handleCollisions();
+    collisionManager.handleCollisions(allCollisionHandler);
 
     updateCamera();
     updatePlayerView();
@@ -631,10 +590,9 @@ async function setup() {
     allFireballs = new UnorderedPool();
     allExplosions = new UnorderedPool();
     spawnSlimeTimer = Timer.ofSeconds(Config.slime.spawnRateInSec);
-    allPhysicsBodies = new DenseArray();
 
     //Создаем и настраиваем обработку коллизий
-    collisionDetector = Matter.Detector.create({});
+    collisionManager = new CollisionManager();
 
     //Создаем Renderer
     const domContainer = document.querySelector('.canvasContainer');
