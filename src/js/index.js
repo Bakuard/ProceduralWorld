@@ -124,6 +124,27 @@ function debugDrawAllPhysicsBodies() {
     });
 }
 
+function handleCollisions() {
+    Matter.Detector.setBodies(collisionDetector, allPhysicsBodies.innerArray);
+
+    Matter.Detector.collisions(collisionDetector).forEach(collision => {
+        if(!collision.collided) return;
+
+        const objA = collision.bodyA.owner;
+        const objB = collision.bodyB.owner;
+        if(objA.type === objectTypes.slime && objB.type === objectTypes.fireball) {
+            handleFireballAndSlimeCollision(objB, objA);
+        } else if(objA.type === objectTypes.fireball && objB.type === objectTypes.slime) {
+            handleFireballAndSlimeCollision(objA, objB);
+        }
+    });
+}
+
+function handleFireballAndSlimeCollision(fireball, slime) {
+    removeFireball(fireball);
+    createExplosion(fireball.x, fireball.y);
+}
+
 
 function createPlayerSprite(startAnimationName) {
     const playerSprite = new AnimatedSprite(Assets.get(objectTypes.player).animations[startAnimationName], false);
@@ -131,24 +152,27 @@ function createPlayerSprite(startAnimationName) {
     return playerSprite;
 }
 
-function createPlayerPhysicsBody(globalPixelX, globalPixelY) {
+function createPlayerPhysicsBody(globalPixelX, globalPixelY, owner) {
     const body = Matter.Bodies.rectangle(globalPixelX, globalPixelY - Config.player.bodyHeight / 2, Config.player.bodyWidth, Config.player.bodyHeight);
     body.newPosition = { x: globalPixelX, y: globalPixelY };
     Matter.Body.setCentre(body, body.newPosition);
+    body.owner = owner;
     return body;
 }
 
 function createPlayer(playerConfig) {
     player = {
+        type: objectTypes.player,
         x: playerConfig.pixelX,
         y: playerConfig.pixelY,
         speed: playerConfig.speed,
         fireRateInMillis: playerConfig.fireRateInMillis,
         lastFireTime: 0,
         velocity: new Vector(),
-        sprite: createPlayerSprite(playerConfig.startAnimation),
-        body: createPlayerPhysicsBody(playerConfig.pixelX, playerConfig.pixelY)
+        sprite: createPlayerSprite(playerConfig.startAnimation)
     };
+    player.body = createPlayerPhysicsBody(playerConfig.pixelX, playerConfig.pixelY, player);
+
     eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
     objectsSpriteContainer.addChild(player.sprite);
     setPlayerAnimation('idle');
@@ -224,7 +248,7 @@ function createExplosionSprite() {
 }
 
 function createExplosion(globalPixelX, globalPixelY) {
-    const explosion = allExplosions.acquire(() => ({ sprite: createExplosionSprite()}));
+    const explosion = allExplosions.acquire(() => ({ type: objectTypes.explosion, sprite: createExplosionSprite()}));
     const spriteX = gridStore.localPixelXInGrid(globalPixelX);
     const spriteY = gridStore.localPixelYInGrid(globalPixelY);
     explosion.sprite.position.set(spriteX, spriteY);
@@ -256,19 +280,24 @@ function createFireballSprite() {
     return fireballSprite;
 }
 
-function createFireballPhysicsBody(globalPixelX, globalPixelY) {
+function createFireballPhysicsBody(globalPixelX, globalPixelY, owner) {
     const body = Matter.Bodies.circle(globalPixelX - Config.fireball.bodyRadius, globalPixelY, Config.fireball.bodyRadius);
     body.newPosition = { x: globalPixelX, y: globalPixelY };
     Matter.Body.setCentre(body, body.newPosition);
+    body.owner = owner;
     return body;
 }
 
 function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPixelY, lifeTimeInMillis, speed, damage) {
-    let fireball = allFireballs.acquire(() => ({
-        velocity: new Vector(),
-        sprite: createFireballSprite(),
-        body: createFireballPhysicsBody(globalPixelX, globalPixelY)
-    }));
+    let fireball = allFireballs.acquire(() => {
+        const newFireball = {
+            type: objectTypes.fireball,
+            velocity: new Vector(),
+            sprite: createFireballSprite()
+        };
+        newFireball.body = createFireballPhysicsBody(globalPixelX, globalPixelY, newFireball);
+        return newFireball;
+    });
     fireball.x = globalPixelX;
     fireball.y = globalPixelY;
     fireball.lifeTimeInMillis = lifeTimeInMillis;
@@ -333,15 +362,17 @@ function createSlimeSprite() {
     return slimeSprite;
 }
 
-function createSlimePhysicsBody(globalPixelX, globalPixelY) {
+function createSlimePhysicsBody(globalPixelX, globalPixelY, owner) {
     const body = Matter.Bodies.rectangle(globalPixelX, globalPixelY - Config.slime.bodyHeight / 2, Config.slime.bodyWidth, Config.slime.bodyHeight);
     body.newPosition = { x: globalPixelX, y: globalPixelY };
     Matter.Body.setCentre(body, body.newPosition);
+    body.owner = owner;
     return body;
 }
 
 function createSlime(globalPixelX, globalPixelY, chunk) {
     const slime = {
+        type: objectTypes.slime,
         x: globalPixelX,
         y: globalPixelY,
         spawnPointX: globalPixelX,
@@ -353,9 +384,9 @@ function createSlime(globalPixelX, globalPixelY, chunk) {
         idleDurationInMS: Config.slime.idleDurationInSec * 1000,
         roamingDurationInMS: Config.slime.roamingDurationInSec * 1000,
         velocity: new Vector(),
-        sprite: createSlimeSprite(),
-        body: createSlimePhysicsBody(globalPixelX, globalPixelY)
+        sprite: createSlimeSprite()
     };
+    slime.body = createSlimePhysicsBody(globalPixelX, globalPixelY, slime);
 
     chunk.addToChunk(slime, objectTypes.slime);
     objectsSpriteContainer.addChild(slime.sprite);
@@ -489,9 +520,9 @@ function createTreeSprite(treeMeta) {
 
 function createTree(treeMeta) {
     return {
+        type: treeMeta.treeType,
         x: treeMeta.globalPixelX,
         y: treeMeta.globalPixelY,
-        type: treeMeta.treeType,
         sprite: createTreeSprite(treeMeta)
     };
 }
@@ -572,6 +603,8 @@ function update(ticker) {
 
     if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk))
         generateChunksFor(player.x, player.y);
+
+    handleCollisions();
 
     updateCamera();
     updatePlayerView();
