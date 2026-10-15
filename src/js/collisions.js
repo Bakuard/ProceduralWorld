@@ -6,6 +6,7 @@ export class CollisionManager {
     constructor() {
         this.collisionDetector = Matter.Detector.create({});
         this.allPhysicsBodies = new DenseArray();
+        this.physicsBodiesListWasChanged = false;
     }
 
     createCircleCollider(pixelX, pixelY, radius, anchorX, anchorY, owner) {
@@ -13,7 +14,7 @@ export class CollisionManager {
         const centerOffsetY = (0.5 - anchorY) * radius * 2;
 
         const body = Matter.Bodies.circle(pixelX + centerOffsetX, pixelY + centerOffsetY, radius);
-        body.positionAnnOffset = { x: pixelX, y: pixelY, offset: new Vector(centerOffsetX, centerOffsetY) };
+        body.positionAndOffset = { x: pixelX, y: pixelY, offset: new Vector(centerOffsetX, centerOffsetY) };
         body.owner = owner;
 
         return body;
@@ -24,31 +25,31 @@ export class CollisionManager {
         const centerOffsetY = (0.5 - anchorY) * height;
 
         const body = Matter.Bodies.rectangle(pixelX + centerOffsetX, pixelY + centerOffsetY, width, height);
-        body.positionAnnOffset = { x: pixelX, y: pixelY, offset: new Vector(centerOffsetX, centerOffsetY) };
+        body.positionAndOffset = { x: pixelX, y: pixelY, offset: new Vector(centerOffsetX, centerOffsetY) };
         body.owner = owner;
 
         return body;
     }
 
     setPosition(body, x, y) {
-        body.positionAnnOffset.x = x + body.positionAnnOffset.offset.x;
-        body.positionAnnOffset.y = y + body.positionAnnOffset.offset.y;
-        Matter.Body.setPosition(body, body.positionAnnOffset);
+        body.positionAndOffset.x = x + body.positionAndOffset.offset.x;
+        body.positionAndOffset.y = y + body.positionAndOffset.offset.y;
+        Matter.Body.setPosition(body, body.positionAndOffset);
     }
 
     setPositionAndAngle(body, x, y, angle) {
         Matter.Body.setAngle(body, angle);
-        body.positionAnnOffset.offset.rotateTo(angle).negate();
+        body.positionAndOffset.offset.rotateTo(angle).negate();
 
         this.setPosition(body, x, y);
     }
 
     registerBody(body) {
-        this.allPhysicsBodies.addLast(body);
+        this.physicsBodiesListWasChanged |= this.allPhysicsBodies.addLast(body);
     }
 
     unregisterBody(body) {
-        this.allPhysicsBodies.quickRemove(body);
+        this.physicsBodiesListWasChanged |= this.allPhysicsBodies.quickRemove(body);
     }
 
     forEachBody(callback) {
@@ -56,7 +57,10 @@ export class CollisionManager {
     }
 
     handleCollisions(callbackHandler) {
-        Matter.Detector.setBodies(this.collisionDetector, this.allPhysicsBodies.innerArray);
+        if(this.physicsBodiesListWasChanged) {
+            Matter.Detector.setBodies(this.collisionDetector, this.allPhysicsBodies.innerArray);
+            this.physicsBodiesListWasChanged = false;
+        }
 
         Matter.Detector.collisions(this.collisionDetector).forEach(collision => {
             const objA = collision.bodyA.owner;

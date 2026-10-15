@@ -24,6 +24,10 @@ export class UnorderedPool {
         return this.usedItems.getSize();
     }
 
+    getCountUnusedItems() {
+        return this.unusedItems.length;
+    }
+
     getCountAllItems() {
         return this.usedItems.getSize() + this.unusedItems.length;
     }
@@ -43,7 +47,9 @@ export class DenseArray {
         if(item && !this.contain(item)) {
             this.#setItemIndex(item, this.innerArray.length);
             this.innerArray.push(item);
+            return true;
         }
+        return false;
     }
 
     quickRemove(item) {

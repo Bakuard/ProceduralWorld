@@ -90,12 +90,12 @@ GridStore.prototype.localPixelYInGrid = function(pixelY) {
     return pixelY - this.border.pixelTop;
 }
 
-GridStore.prototype.localLeftPixelOfChunkInWorld = function(chunkX) {
+GridStore.prototype.localLeftPixelOfChunkInGrid = function(chunkX) {
     const globalLeftPixelOfChunk = this.sizeUnitsConverter.leftPixelOfChunk(chunkX);
     return this.localPixelXInGrid(globalLeftPixelOfChunk);
 }
 
-GridStore.prototype.localTopPixelOfChunkInWorld = function(chunkY) {
+GridStore.prototype.localTopPixelOfChunkInGrid = function(chunkY) {
     const globalTopPixelOfChunk = this.sizeUnitsConverter.topPixelOfChunk(chunkY);
     return this.localPixelYInGrid(globalTopPixelOfChunk);
 }
@@ -162,6 +162,7 @@ function Chunk(sizeUnitsConverter, chunkLeft, chunkTop) {
     this.pixelBottom = sizeUnitsConverter.bottomPixelOfChunk(chunkTop);
     this.pixelRight = sizeUnitsConverter.rightPixelOfChunk(chunkLeft);
     this.objectsByType = {};
+    this.tiles = [];
 }
 
 Chunk.prototype.addToChunk = function(obj, objType) {
@@ -175,6 +176,19 @@ Chunk.prototype.removeFromChunk = function(obj, objType) {
 
 Chunk.prototype.countByTypeInChunk = function(objType) {
     return this.objectsByType[objType]?.length ?? 0;
+};
+
+Chunk.prototype.getTileContainerByLocalCoords = function(localTileX, localTileY) {
+    const index = localTileX + localTileY * this.sizeUnitsConverter.chunkAreaInTiles();
+    this.tiles[index] ??= {};
+    return this.tiles[index];
+};
+
+Chunk.prototype.forEachTileContainer = function(callback) {
+    this.forEachTileCoords((globalTileX, globalTileY, localTileX, localTileY) => {
+        const tileContainer = this.getTileContainerByLocalCoords(localTileX, localTileY);
+        callback(globalTileX, globalTileY, localTileX, localTileY, tileContainer);
+    });
 };
 
 Chunk.prototype.forEachTileCoords = function(callback) {
