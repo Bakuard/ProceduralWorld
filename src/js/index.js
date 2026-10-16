@@ -29,6 +29,8 @@ let spawnSlimeTimer;
 
 let collisionManager;
 
+let minimap;
+
 let renderer;
 let stage;
 let ticker;
@@ -36,6 +38,7 @@ let camera;
 let allTileSpritesContainer;
 let objectsSpriteContainer;
 let debugPhysicsGraphics;
+let gameObjects;
 
 let nightShaderCode;
 let nightShader;
@@ -49,6 +52,7 @@ async function loadTextures() {
     await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
     await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
     await Assets.load({ alias: objectTypes.slime, src: 'img/slime.json' });
+    //await Assets.load({ alias: });
 }
 
 async function loadShaders() {
@@ -477,11 +481,13 @@ function createTileSprite(tileType) {
     return tileSprite;
 }
 
-function createTile(localTileXInChunk, localTileYInChunk, tileType) {
+function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTileYInChunk, tileType) {
     const tile = allPools[tileType].acquire(() => ({
         type: tileType,
         sprite: createTileSprite(tileType)
     }));
+    tile.x = leftPixelOfTile;
+    tile.y = topPixelOfTile;
     const topTilePixel = sizeUnitsConverter.topPixelOfTile(localTileYInChunk);
     const leftTilePixel = sizeUnitsConverter.leftPixelOfTile(localTileXInChunk);
     tile.sprite.position.set(leftTilePixel, topTilePixel);
@@ -551,7 +557,13 @@ function generateChunksFor(pixelX, pixelY) {
             mapGenerator.generate(tileGlobalX, tileGlobalY);
 
             const tileType = mapGenerator.getTileType();
-            const tile = createTile(localTileXInChunk, localTileYInChunk, tileType);
+            const tile = createTile(
+                sizeUnitsConverter.leftPixelOfTile(tileGlobalX),
+                sizeUnitsConverter.topPixelOfTile(tileGlobalY),
+                localTileXInChunk,
+                localTileYInChunk,
+                tileType)
+            ;
             chunk.tileSpritesContainer.addChild(tile.sprite);
             chunk.getTileContainerByLocalCoords(localTileXInChunk, localTileYInChunk).tile = tile;
 
@@ -571,11 +583,65 @@ function generateChunksFor(pixelX, pixelY) {
     }
 }
 
+
+function createMinimap(viewportWidth, viewportHeight, scale) {
+    eventManager.registerInbox("Minimap", InputEvents.KeyM);
+
+    const sizeInPixel = Math.min(viewportWidth, viewportHeight) * scale;
+    minimap = {
+        container: new Container(),
+        tiles: new Graphics(),
+        objects: new Graphics(),
+        sizeInPixel,
+        left: (viewportWidth - sizeInPixel) / 2,
+        top: (viewportHeight - sizeInPixel) / 2
+    };
+    minimap.container.addChild(minimap.tiles, minimap.objects);
+    minimap.container.position.set(minimap.left, minimap.top);
+    minimap.container.visible = false;
+}
+
+function updateMinimap() {
+    if(!minimap.container.visible) return;
+
+    minimap.tiles.clear();
+    allPools[objectTypes.sandTile].forEachUsed(tile => {
+        const viewX = gridStore.localPixelXInGrid(tile.x);
+        const viewY = gridStore.localPixelYInGrid(tile.y);
+        minimap.tiles.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
+    });
+    minimap.tiles.fill(0xFFFF00);
+
+    allPools[objectTypes.waterTile].forEachUsed(tile => {
+        const viewX = gridStore.localPixelXInGrid(tile.x);
+        const viewY = gridStore.localPixelYInGrid(tile.y);
+        minimap.tiles.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
+    });
+    minimap.tiles.fill(0x000080);
+
+    allPools[objectTypes.grassTile].forEachUsed(tile => {
+        const viewX = gridStore.localPixelXInGrid(tile.x);
+        const viewY = gridStore.localPixelYInGrid(tile.y);
+        minimap.tiles.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
+    });
+    minimap.tiles.fill(0x41980A);
+
+    minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
+}
+
+function switchMinimapVisibility() {
+    if(eventManager.hasThenClear("Minimap", InputEvents.KeyM)) {
+        minimap.container.visible = !minimap.container.visible;
+        updateMinimap();
+    }
+}
+
+
 function updateCamera() {
     camera.followIfOutOfDeadZone(player.x, player.y);
     const stageX = camera.toViewportPixelX(gridStore.border.pixelLeft);
     const stageY = camera.toViewportPixelY(gridStore.border.pixelTop);
-    stage.position.set(stageX, stageY);
+    gameObjects.position.set(stageX, stageY);
 }
 
 
@@ -587,8 +653,10 @@ function update(ticker) {
     updateAllSlimes(ticker.deltaMS);
     playerAttack();
 
-    if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk))
+    if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk)) {
         generateChunksFor(player.x, player.y);
+        updateMinimap();
+    }
 
     collisionManager.handleCollisions(allCollisionHandler);
 
@@ -597,6 +665,7 @@ function update(ticker) {
     updateAllFireballsView();
     updateAllExplosionsView();
     updateAllSlimesView();
+    switchMinimapVisibility();
     updateShader();
     //debugDrawAllPhysicsBodies();
     renderer.render(stage);
@@ -637,12 +706,13 @@ async function setup() {
     //Создаем контейнеры для спрайтов и отладочную графику для физики
     camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, Config.camera);
     stage = new Container();
+    gameObjects = new Container();
+    createMinimap(domContainer.clientWidth, domContainer.clientHeight, 0.5);
     allTileSpritesContainer = new Container();
     objectsSpriteContainer = new Container();
     debugPhysicsGraphics = new Graphics();
-    stage.addChild(allTileSpritesContainer);
-    stage.addChild(objectsSpriteContainer);
-    stage.addChild(debugPhysicsGraphics);
+    gameObjects.addChild(allTileSpritesContainer, objectsSpriteContainer, debugPhysicsGraphics);
+    stage.addChild(gameObjects, minimap.container);
 
     //Создаем игровые объекты вместе с их спрайтами и физическими телами
     createPlayer(Config.player);
@@ -651,7 +721,7 @@ async function setup() {
 
     //Подключаем шейдеры
     nightShader = createShader();
-    stage.filters = [nightShader];
+    gameObjects.filters = [nightShader];
 
     //Подписываемся на внешние события
     window.addEventListener('resize', () => {
