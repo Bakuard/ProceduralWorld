@@ -1,15 +1,15 @@
-import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics} from 'pixi.js';
-import {objectTypes} from "./objectTypes";
-import {SizeUnitsConverter} from "./sizeUnitsConverter";
-import {GridStore} from "./gridStore";
-import {MapGenerator} from "./mapGenerator";
-import {EventManager, InputEvents} from "./eventManager";
-import {Vector} from "./vector";
-import {Camera} from "./camera";
-import {Calendar, dayPhases} from "./calendar";
-import {UnorderedPool} from "./unorderedPool";
-import {Timer} from "./util";
-import {CollisionManager} from "./collisions";
+import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix} from 'pixi.js';
+import {objectTypes} from './objectTypes';
+import {SizeUnitsConverter} from './sizeUnitsConverter';
+import {GridStore} from './gridStore';
+import {MapGenerator} from './mapGenerator';
+import {EventManager, InputEvents} from './eventManager';
+import {Vector} from './vector';
+import {Camera} from './camera';
+import {Calendar, dayPhases} from './calendar';
+import {UnorderedPool} from './unorderedPool';
+import {Timer} from './util';
+import {CollisionManager} from './collisions';
 
 let Config;
 let sizeUnitsConverter;
@@ -52,7 +52,6 @@ async function loadTextures() {
     await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
     await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
     await Assets.load({ alias: objectTypes.slime, src: 'img/slime.json' });
-    //await Assets.load({ alias: });
 }
 
 async function loadShaders() {
@@ -585,55 +584,87 @@ function generateChunksFor(pixelX, pixelY) {
 
 
 function createMinimap(viewportWidth, viewportHeight, scale) {
-    eventManager.registerInbox("Minimap", InputEvents.KeyM);
+    eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.MouseWheel);
 
-    const sizeInPixel = Math.min(viewportWidth, viewportHeight) * scale;
     minimap = {
         container: new Container(),
         tiles: new Graphics(),
         objects: new Graphics(),
-        sizeInPixel,
-        left: (viewportWidth - sizeInPixel) / 2,
-        top: (viewportHeight - sizeInPixel) / 2
+        viewportWidth,
+        viewportHeight,
+        scale
     };
+
     minimap.container.addChild(minimap.tiles, minimap.objects);
-    minimap.container.position.set(minimap.left, minimap.top);
     minimap.container.visible = false;
+
+    resizeMinimap(viewportWidth, viewportHeight);
+}
+
+function resizeMinimap(viewportWidth, viewportHeight) {
+    minimap.viewportWidth = viewportWidth;
+    minimap.viewportHeight = viewportHeight;
+    minimap.sizeInPixel = Math.min(viewportWidth, viewportHeight) * minimap.scale;
+    minimap.left = (viewportWidth - minimap.sizeInPixel) / 2;
+    minimap.top = (viewportHeight - minimap.sizeInPixel) / 2;
+    minimap.container.position.set(minimap.left, minimap.top);
+    minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
 }
 
 function updateMinimap() {
     if(!minimap.container.visible) return;
 
     minimap.tiles.clear();
-    allPools[objectTypes.sandTile].forEachUsed(tile => {
-        const viewX = gridStore.localPixelXInGrid(tile.x);
-        const viewY = gridStore.localPixelYInGrid(tile.y);
-        minimap.tiles.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
-    });
-    minimap.tiles.fill(0xFFFF00);
 
-    allPools[objectTypes.waterTile].forEachUsed(tile => {
-        const viewX = gridStore.localPixelXInGrid(tile.x);
-        const viewY = gridStore.localPixelYInGrid(tile.y);
-        minimap.tiles.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
-    });
-    minimap.tiles.fill(0x000080);
+    drawTilesOnMinimap(objectTypes.sandTile, 0xFFFF00);
+    drawTilesOnMinimap(objectTypes.waterTile, 0x000080);
+    drawTilesOnMinimap(objectTypes.grassTile, 0x41980A);
 
-    allPools[objectTypes.grassTile].forEachUsed(tile => {
-        const viewX = gridStore.localPixelXInGrid(tile.x);
-        const viewY = gridStore.localPixelYInGrid(tile.y);
-        minimap.tiles.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
-    });
-    minimap.tiles.fill(0x41980A);
+    drawObjectsOnMinimap(objectTypes.littleOak);
+    drawObjectsOnMinimap(objectTypes.heightOak);
+    drawObjectsOnMinimap(objectTypes.bigOak);
+    drawObjectsOnMinimap(objectTypes.deadLittleOak);
+    drawObjectsOnMinimap(objectTypes.deadHeightOak);
+    drawObjectsOnMinimap(objectTypes.deadBigOak);
 
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
 }
 
+function drawTilesOnMinimap(tileType, color) {
+    allPools[tileType].forEachUsed(tile => {
+        const viewX = gridStore.localPixelXInGrid(tile.x);
+        const viewY = gridStore.localPixelYInGrid(tile.y);
+        minimap.tiles.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
+    });
+    minimap.tiles.fill(color);
+}
+
+function drawObjectsOnMinimap(objType) {
+    const texture = Assets.get(objType);
+    allPools[objType].forEachUsed(tree => {
+        const viewX = gridStore.localPixelXInGrid(tree.x) - texture.width / 2;
+        const viewY = gridStore.localPixelYInGrid(tree.y) - texture.height;
+        minimap.tiles.rect(viewX, viewY, texture.width, texture.height);
+    });
+    minimap.tiles.fill(texture);
+}
+
 function switchMinimapVisibility() {
-    if(eventManager.hasThenClear("Minimap", InputEvents.KeyM)) {
+    if(eventManager.hasThenClear('Minimap', InputEvents.KeyM)) {
         minimap.container.visible = !minimap.container.visible;
         updateMinimap();
     }
+}
+
+function scaleMinimap() {
+    if(!minimap.container.visible) return;
+
+    const event = eventManager.getThenClear('Minimap', InputEvents.MouseWheel);
+    if(!event) return;
+
+    minimap.scale += event.deltaY > 0 ? -0.1 : 0.1;
+    minimap.scale = Math.clamp(minimap.scale, 0.1, 1.5);
+    resizeMinimap(minimap.viewportWidth, minimap.viewportHeight);
 }
 
 
@@ -665,8 +696,9 @@ function update(ticker) {
     updateAllFireballsView();
     updateAllExplosionsView();
     updateAllSlimesView();
-    switchMinimapVisibility();
     updateShader();
+    switchMinimapVisibility();
+    scaleMinimap();
     //debugDrawAllPhysicsBodies();
     renderer.render(stage);
 }
@@ -677,7 +709,7 @@ async function setup() {
     await loadShaders();
     await loadConfig();
 
-    //Инициализируем основные хранилища данных
+    //Инициализируем основные хранилища данных и модель
     sizeUnitsConverter = new SizeUnitsConverter(Config.sizeUnitsConverter);
     mapGenerator = new MapGenerator(sizeUnitsConverter, Config.mapGenerator);
     gridStore = new GridStore(sizeUnitsConverter, Config.grid);
@@ -690,7 +722,7 @@ async function setup() {
     );
     spawnSlimeTimer = Timer.ofSeconds(Config.slime.spawnRateInSec);
 
-    //Создаем и настраиваем обработку коллизий
+    //Подготавливаем обработку коллизий
     collisionManager = new CollisionManager();
 
     //Создаем Renderer
@@ -727,15 +759,19 @@ async function setup() {
     window.addEventListener('resize', () => {
         camera.resize(domContainer.clientWidth, domContainer.clientHeight);
         renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
+        resizeMinimap(domContainer.clientWidth, domContainer.clientHeight);
     });
     document.addEventListener('keydown', event => {
-        eventManager.pushEvent(event.code, true);
+        eventManager.pushEvent(event.code, event);
     });
     document.addEventListener('keyup', event => {
         eventManager.clearEventForAll(event.code);
     });
     document.addEventListener('click', event => {
         eventManager.pushEvent(InputEvents.MouseClick, event);
+    });
+    document.addEventListener('wheel', (event) => {
+        eventManager.pushEvent(InputEvents.MouseWheel, event);
     });
 
     //Инициализируем и запускаем game loop

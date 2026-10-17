@@ -5,7 +5,8 @@ export const InputEvents = Object.freeze({
     KeyD: "KeyD",
     KeyE: "KeyE",
     KeyM: "KeyM",
-    MouseClick: "MouseClick"
+    MouseClick: "MouseClick",
+    MouseWheel: "MouseWheel"
 });
 
 export class EventManager {
