@@ -35,6 +35,10 @@ export class UnorderedPool {
     forEachUsed(callback) {
         this.usedItems.forEach(callback);
     }
+
+    copyUsedItemsTo(targetArray) {
+        targetArray.push(...this.usedItems.innerArray);
+    }
 }
 
 export class DenseArray {

@@ -20,26 +20,34 @@ Math.clamp = function(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
 
-export class Timer {
+export class IntervalTimer {
     static ofSeconds(seconds) {
-        return new Timer(seconds * 1000);
+        return new IntervalTimer(seconds * 1000);
     }
 
-    constructor(totalMS) {
-        this.totalMS = totalMS;
-        this.currentTimeMS = 0;
+    static ofMillis(millis) {
+        return new IntervalTimer(millis);
+    }
+
+    constructor(durationMs) {
+        this.durationMs = durationMs;
+        this.elapsedMs = 0;
     }
 
     tick(deltaTimeMS) {
-        this.currentTimeMS += deltaTimeMS;
-        if (this.currentTimeMS >= this.totalMS) {
-            this.currentTimeMS = this.currentTimeMS - this.totalMS;
+        this.elapsedMs += deltaTimeMS;
+        if (this.elapsedMs >= this.durationMs) {
+            this.elapsedMs = this.elapsedMs - this.durationMs;
             return true;
         }
         return false;
     }
 
-    getTotalSeconds() {
-        return this.totalMS / 1000;
+    getElapsedSeconds() {
+        return this.durationMs / 1000;
+    }
+
+    getDurationMs() {
+        return this.durationMs;
     }
 }

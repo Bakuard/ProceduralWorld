@@ -8,7 +8,7 @@ import {Vector} from './vector';
 import {Camera} from './camera';
 import {Calendar, dayPhases} from './calendar';
 import {UnorderedPool} from './unorderedPool';
-import {Timer} from './util';
+import {IntervalTimer} from './util';
 import {CollisionManager} from './collisions';
 
 let Config;
@@ -480,7 +480,7 @@ function createTileSprite(tileType) {
     return tileSprite;
 }
 
-function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTileYInChunk, tileType) {
+function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTileYInChunk, tileType, chunk) {
     const tile = allPools[tileType].acquire(() => ({
         type: tileType,
         sprite: createTileSprite(tileType)
@@ -490,7 +490,9 @@ function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTil
     const topTilePixel = sizeUnitsConverter.topPixelOfTile(localTileYInChunk);
     const leftTilePixel = sizeUnitsConverter.leftPixelOfTile(localTileXInChunk);
     tile.sprite.position.set(leftTilePixel, topTilePixel);
-    return tile;
+
+    chunk.tileSpritesContainer.addChild(tile.sprite);
+    chunk.getTileContainerByLocalCoords(localTileXInChunk, localTileYInChunk).tile = tile;
 }
 
 function createTreeSprite(treeMeta) {
@@ -499,18 +501,20 @@ function createTreeSprite(treeMeta) {
     return treeSprite;
 }
 
-function createTree(treeMeta) {
+function createTree(treeMeta, chunk) {
     const tree = allPools[treeMeta.treeType].acquire(() => ({
         type: treeMeta.treeType,
-        x: treeMeta.globalPixelX,
-        y: treeMeta.globalPixelY,
         sprite: createTreeSprite(treeMeta)
     }));
+    tree.x = treeMeta.globalPixelX;
+    tree.y = treeMeta.globalPixelY;
     const treeSpriteX = gridStore.localPixelXInGrid(tree.x);
     const treeSpriteY = gridStore.localPixelYInGrid(tree.y);
     tree.sprite.position.set(treeSpriteX, treeSpriteY);
     tree.sprite.zIndex = tree.y;
-    return tree;
+
+    chunk.addToChunk(tree, tree.type);
+    objectsSpriteContainer.addChild(tree.sprite);
 }
 
 function generateChunksFor(pixelX, pixelY) {
@@ -556,22 +560,17 @@ function generateChunksFor(pixelX, pixelY) {
             mapGenerator.generate(tileGlobalX, tileGlobalY);
 
             const tileType = mapGenerator.getTileType();
-            const tile = createTile(
+            createTile(
                 sizeUnitsConverter.leftPixelOfTile(tileGlobalX),
                 sizeUnitsConverter.topPixelOfTile(tileGlobalY),
                 localTileXInChunk,
                 localTileYInChunk,
-                tileType)
-            ;
-            chunk.tileSpritesContainer.addChild(tile.sprite);
-            chunk.getTileContainerByLocalCoords(localTileXInChunk, localTileYInChunk).tile = tile;
+                tileType,
+                chunk
+            );
 
             const treeMeta = mapGenerator.getTree();
-            if (treeMeta) {
-                const tree = createTree(treeMeta);
-                chunk.addToChunk(tree, tree.type);
-                objectsSpriteContainer.addChild(tree.sprite);
-            }
+            if (treeMeta) createTree(treeMeta, chunk);
 
             if(tileType === objectTypes.grassTile) ++countGrassTiles;
         });
@@ -588,14 +587,13 @@ function createMinimap(viewportWidth, viewportHeight, scale) {
 
     minimap = {
         container: new Container(),
-        tiles: new Graphics(),
-        objects: new Graphics(),
+        staticObjects: new Graphics(),
         viewportWidth,
         viewportHeight,
         scale
     };
 
-    minimap.container.addChild(minimap.tiles, minimap.objects);
+    minimap.container.addChild(minimap.staticObjects);
     minimap.container.visible = false;
 
     resizeMinimap(viewportWidth, viewportHeight);
@@ -614,18 +612,20 @@ function resizeMinimap(viewportWidth, viewportHeight) {
 function updateMinimap() {
     if(!minimap.container.visible) return;
 
-    minimap.tiles.clear();
+    minimap.staticObjects.clear();
 
     drawTilesOnMinimap(objectTypes.sandTile, 0xFFFF00);
     drawTilesOnMinimap(objectTypes.waterTile, 0x000080);
     drawTilesOnMinimap(objectTypes.grassTile, 0x41980A);
 
-    drawObjectsOnMinimap(objectTypes.littleOak);
-    drawObjectsOnMinimap(objectTypes.heightOak);
-    drawObjectsOnMinimap(objectTypes.bigOak);
-    drawObjectsOnMinimap(objectTypes.deadLittleOak);
-    drawObjectsOnMinimap(objectTypes.deadHeightOak);
-    drawObjectsOnMinimap(objectTypes.deadBigOak);
+    drawObjectsOnMinimap(
+        objectTypes.littleOak,
+        objectTypes.heightOak,
+        objectTypes.bigOak,
+        objectTypes.deadLittleOak,
+        objectTypes.deadHeightOak,
+        objectTypes.deadBigOak
+    );
 
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
 }
@@ -634,19 +634,26 @@ function drawTilesOnMinimap(tileType, color) {
     allPools[tileType].forEachUsed(tile => {
         const viewX = gridStore.localPixelXInGrid(tile.x);
         const viewY = gridStore.localPixelYInGrid(tile.y);
-        minimap.tiles.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
+        minimap.staticObjects.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
     });
-    minimap.tiles.fill(color);
+    minimap.staticObjects.fill(color);
 }
 
-function drawObjectsOnMinimap(objType) {
-    const texture = Assets.get(objType);
-    allPools[objType].forEachUsed(tree => {
-        const viewX = gridStore.localPixelXInGrid(tree.x) - texture.width / 2;
-        const viewY = gridStore.localPixelYInGrid(tree.y) - texture.height;
-        minimap.tiles.rect(viewX, viewY, texture.width, texture.height);
-    });
-    minimap.tiles.fill(texture);
+function drawObjectsOnMinimap(...objTypes) {
+    const allObjects = [];
+    objTypes.forEach(objType => allPools[objType].copyUsedItemsTo(allObjects));
+    allObjects.sort((a, b) => a.y - b.y);
+
+    const matrixByObjType = {};
+    for(let obj of allObjects) {
+        const texture = Assets.get(obj.type);
+        const { frame, source } = texture;
+        const matrix = matrixByObjType[obj.type] ??= new Matrix(frame.width / source.width, 0, 0, frame.height / source.height, frame.x / source.width, frame.y / source.height).invert();
+
+        const viewX = gridStore.localPixelXInGrid(obj.x) - texture.width * obj.sprite.anchor.x;
+        const viewY = gridStore.localPixelYInGrid(obj.y) - texture.height * obj.sprite.anchor.y;
+        minimap.staticObjects.rect(viewX, viewY, texture.width, texture.height).fill({ texture, matrix });
+    }
 }
 
 function switchMinimapVisibility() {
@@ -663,7 +670,7 @@ function scaleMinimap() {
     if(!event) return;
 
     minimap.scale += event.deltaY > 0 ? -0.1 : 0.1;
-    minimap.scale = Math.clamp(minimap.scale, 0.1, 1.5);
+    minimap.scale = Math.clamp(minimap.scale, 0.3, 1.5);
     resizeMinimap(minimap.viewportWidth, minimap.viewportHeight);
 }
 
@@ -677,6 +684,7 @@ function updateCamera() {
 
 
 function update(ticker) {
+    //Обновляем модель
     calendar.updateCurrentTime(ticker.deltaMS);
     movePlayer(ticker.deltaMS);
     updateAllFireballs(ticker.deltaMS);
@@ -684,22 +692,32 @@ function update(ticker) {
     updateAllSlimes(ticker.deltaMS);
     playerAttack();
 
+    //Подгружаем и выгружаем часть карты при необходимости
     if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk)) {
         generateChunksFor(player.x, player.y);
         updateMinimap();
     }
 
+    //Поиск коллизий
     collisionManager.handleCollisions(allCollisionHandler);
 
+    //Отрисовываем игровые объекты
     updateCamera();
     updatePlayerView();
     updateAllFireballsView();
     updateAllExplosionsView();
     updateAllSlimesView();
+
+    //Обновляем шейдеры
     updateShader();
+
+    //Перерисовываем миникарту по необходимости
     switchMinimapVisibility();
     scaleMinimap();
+
+    //Отрисовываем границы физических тел для дебага физики
     //debugDrawAllPhysicsBodies();
+
     renderer.render(stage);
 }
 
@@ -720,7 +738,7 @@ async function setup() {
             .filter(objType => objType !== objectTypes.player)
             .map(objType => [objType, new UnorderedPool()])
     );
-    spawnSlimeTimer = Timer.ofSeconds(Config.slime.spawnRateInSec);
+    spawnSlimeTimer = IntervalTimer.ofSeconds(Config.slime.spawnRateInSec);
 
     //Подготавливаем обработку коллизий
     collisionManager = new CollisionManager();
