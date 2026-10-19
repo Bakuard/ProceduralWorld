@@ -1,6 +1,5 @@
-#ifdef GL_ES
+#version 300 es
 precision mediump float;
-#endif
 
 const vec3 MORNING_TINT = vec3(1.1, 0.8, 0.9); //оттенок рассвета
 const vec3 EVENING_TINT = vec3(1.2, 0.75, 0.6); //оттенок заката
@@ -11,8 +10,9 @@ const int AFTERNOON_DAY_PHASE = 2;
 const int EVENING_DAY_PHASE = 3;
 const int NIGHT_DAY_PHASE = 4;
 
-varying vec2 outTexCoord;
-uniform sampler2D uMainSampler;
+in vec2 vTextureCoord;
+out vec4 fragColor;
+uniform sampler2D uTexture;
 uniform float uIntensity;
 uniform int uDayPhase;
 
@@ -36,7 +36,7 @@ vec4 changeColor(vec4 originalColor, vec4 targetColor, float intensity) {
 }
 
 void main(void) {
-	vec4 color = texture2D(uMainSampler, outTexCoord);
+	vec4 color = texture(uTexture, vTextureCoord);
 
 	if(uDayPhase == MORNING_DAY_PHASE) {
 		color = changeColor(nightColor(color), morningColor(color), uIntensity);
@@ -48,5 +48,5 @@ void main(void) {
 		color = changeColor(eveningColor(color), nightColor(color), uIntensity);
 	}
 
-	gl_FragColor = color;
+	fragColor = color;
 }

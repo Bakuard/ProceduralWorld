@@ -2,7 +2,7 @@ import {objectTypes} from "./objectTypes.js";
 import './util.js';
 
 export function MapGenerator(sizeUnitsConverter, mapGeneratorConfig) {
-    this.seed = mapGeneratorConfig.seed;
+    this.seed = mapGeneratorConfig.seed ?? Math.randomIntegerInRange(0, 1_000_000);
     this.octaves = mapGeneratorConfig.octaves;
     this.persistence = mapGeneratorConfig.persistence;
     this.frequency = mapGeneratorConfig.frequency;
@@ -75,7 +75,7 @@ function generateTree(mapGenerator, tileX, tileY) {
     const pixelX = mapGenerator.sizeUnitsConverter.centerPixelXOfTile(tileX) + offsetVector.x;
     const pixelY = mapGenerator.sizeUnitsConverter.centerPixelYOfTile(tileY) + offsetVector.y;
 
-    return { pixelX: pixelX, pixelY: pixelY, treeType: chooseTreeType(noiseForTree) };
+    return { globalPixelX: pixelX, globalPixelY: pixelY, treeType: chooseTreeType(noiseForTree) };
 }
 
 function generateTileType(height) {

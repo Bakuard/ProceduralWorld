@@ -5,6 +5,12 @@ export const dayPhases = Object.freeze({
     night: 'night'
 });
 
+const dayPhasesNumber = Object.freeze({
+    morning: 0,
+    afternoon: 1,
+    evening: 2,
+    night: 3
+});
 
 export function Calendar(calendarConfig) {
     this.morningInMs = calendarConfig.morningInSec * 1000;
@@ -13,10 +19,10 @@ export function Calendar(calendarConfig) {
     this.nightInMs = calendarConfig.nightInSec * 1000;
 
     this.totalElapsedTimeInMs = 0;
-    this.setCurrentTime(0);
+    this.updateCurrentTime(0);
 }
 
-Calendar.prototype.setCurrentTime = function(deltaTimeInMs) {
+Calendar.prototype.updateCurrentTime = function(deltaTimeInMs) {
     this.totalElapsedTimeInMs += deltaTimeInMs;
     this.msSinceDayStart = this.totalElapsedTimeInMs % getTotalDayDurationInMs(this);
     this.totalDays = Math.floor(this.totalElapsedTimeInMs / getTotalDayDurationInMs(this));
@@ -47,6 +53,11 @@ Calendar.prototype.isNight = function() {
     return this.currentPhase === dayPhases.night;
 };
 
+Calendar.prototype.isCurrentPhaseBetween = function(phaseStart, phaseEnd) {
+    return dayPhasesNumber[phaseStart] <= dayPhasesNumber[this.currentPhase]
+        && dayPhasesNumber[this.currentPhase] <= dayPhasesNumber[phaseEnd];
+};
+
 Calendar.prototype.getCurrentDayPhase = function() {
     return this.currentPhase;
 };
@@ -72,6 +83,10 @@ Calendar.prototype.getCurrentPhaseProgress = function() {
 Calendar.prototype.getTotalDays = function() {
     return this.totalDays;
 };
+
+Calendar.prototype.getTotalMS = function() {
+    return this.totalElapsedTimeInMs;
+}
 
 
 function getFirstPartOfDayInMs(calendar) {

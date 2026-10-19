@@ -1,634 +1,840 @@
-import {SizeUnitsConverter} from './sizeUnitsConverter.js';
-import {objectTypes} from './objectTypes.js';
-import {MapGenerator} from './mapGenerator.js';
-import {GridContainer} from './gridContainer.js';
-import {Calendar, dayPhases} from './calendar.js';
-import Phaser from 'phaser';
+import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix} from 'pixi.js';
+import {objectTypes} from './objectTypes';
+import {SizeUnitsConverter} from './sizeUnitsConverter';
+import {GridStore} from './gridStore';
+import {MapGenerator} from './mapGenerator';
+import {EventManager, InputEvents} from './eventManager';
+import {Vector} from './vector';
+import {Camera} from './camera';
+import {Calendar, dayPhases} from './calendar';
+import {UnorderedPool} from './unorderedPool';
+import {IntervalTimer} from './util';
+import {CollisionManager} from './collisions';
 
-const minimap = {};
+let Config;
 let sizeUnitsConverter;
+let gridStore;
 let mapGenerator;
-let player;
-let userInput;
-let world;
-let slimeSpawnTimer;
-let nightPipeline;
+let eventManager;
 let calendar;
+let player;
+let allPools;
 const slimeStates = Object.freeze({
+    idle: 'idle',
     roam: 'roam',
     chase: 'chase',
     attack: 'attack'
 });
+let spawnSlimeTimer;
 
-function preloadImageFromAtlas(scene, atlasName, frameName, imageName) {
-    if(!scene.textures.exists(atlasName))
-        scene.load.atlas(atlasName, atlasName + '.png', atlasName + '.json');
+let collisionManager;
 
-    scene.load.on('complete', () => {
-        const frame = scene.textures.getFrame(atlasName, frameName);
-        scene.textures.addSpriteSheetFromAtlas(imageName, {
-            atlas: atlasName,
-            frame: frameName,
-            frameWidth: frame.width,
-            frameHeight: frame.height
-        });
+let minimap;
+
+let renderer;
+let stage;
+let ticker;
+let camera;
+let allTileSpritesContainer;
+let objectsSpriteContainer;
+let debugPhysicsGraphics;
+let gameObjects;
+
+let nightShaderCode;
+let nightShader;
+
+async function loadTextures() {
+    await Assets.load({ alias: objectTypes.waterTile, src: 'img/water_tile.jpg' });
+    await Assets.load({ alias: objectTypes.sandTile, src: 'img/sand_tile.jpg' });
+    await Assets.load({ alias: objectTypes.grassTile, src: 'img/grass_tile.jpg' });
+    await Assets.load('img/trees.json');
+    await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
+    await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
+    await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
+    await Assets.load({ alias: objectTypes.slime, src: 'img/slime.json' });
+}
+
+async function loadShaders() {
+    const response = await fetch('shaders/night.glsl');
+    if (!response.ok) throw `Fail to load shader source: ${response.statusText}`;
+    nightShaderCode = await response.text();
+}
+
+async function loadConfig() {
+    const response = await fetch('config/config.json');
+    if (!response.ok) throw `Fail to load config.json: ${response.statusText}`;
+    Config = await response.json();
+}
+
+
+function createShader() {
+    return Filter.from({
+        gl: {
+            fragment: nightShaderCode,
+            vertex: defaultFilterVert
+        },
+        resources: {
+            timeUniforms: {
+                uIntensity: { value: 0.0, type: 'f32' },
+                uDayPhase: { value: 1, type: 'i32' }
+            },
+        },
     });
 }
 
-
-function preparePlayerAnimation(scene) {
-    scene.anims.create({
-        key: 'player_stay',
-        frames: scene.anims.generateFrameNames('character', { start: 0, end: 1 }),
-        frameRate: 4,
-        repeat: -1
-    });
-    scene.anims.create({
-        key: 'player_walk',
-        frames: scene.anims.generateFrameNames('character', { start: 4, end: 7 }),
-        frameRate: 7,
-        repeat: -1
-    });
-}
-
-function createPlayer(scene, x, y, width, height, speed, fireRateInMillis, bulletTimeInMillis, damage, bulletSpeed, maxHealth) {
-    const player = scene.physics.add.sprite(x, y, 'character', '0')
-        .setBodySize(width, height)
-        .setOrigin(0.5, 1)
-        .setDepth(y)
-        .play('player_stay')
-        .refreshBody();
-    scene.physics.add.collider(player, world.physicsGroups[objectTypes.waterTile]);
-    player.speed = speed;
-    player.type = objectTypes.player;
-    player.fireRateInMillis = fireRateInMillis;
-    player.bulletTimeInMillis = bulletTimeInMillis;
-    player.damage = damage;
-    player.bulletSpeed = bulletSpeed;
-    player.lastFireTime = 0;
-    player.maxHealth = maxHealth;
-    player.currentHealth = maxHealth;
-    return player;
-}
-
-function movePlayer() {
-    player.body.velocity.x = userInput.right.isDown - userInput.left.isDown;
-    player.body.velocity.y = userInput.down.isDown - userInput.up.isDown;
-    if(player.body.velocity.y !== 0 && player.body.velocity.x !== 0) {
-        player.body.velocity.x *= 0.707106; //sin 45 degree
-        player.body.velocity.y *= 0.707106; //cos 45 degree
-    }
-    player.body.velocity.scale(player.speed);
-
-    if(player.body.velocity.equals(Phaser.Math.Vector2.ZERO))
-        player.anims.play('player_stay', true);
-    else {
-        player.anims.play('player_walk', true);
-        player.setDepth(player.y);
-    }
-
-    if(player.body.velocity.x !== 0)
-        player.setFlipX(userInput.left.isDown);
-}
-
-function playerFire(scene, time) {
-    if(scene.input.activePointer.leftButtonDown() && time >= player.lastFireTime + player.fireRateInMillis) {
-        const aimX = scene.input.activePointer.worldX;
-        const aimY = scene.input.activePointer.worldY;
-        const bulletX = player.x + Math.sign(aimX - player.x) * player.width / 2;
-        const bulletY = aimY > player.y ? player.y : player.y - player.height / 3;
-        createFireball(scene, bulletX, bulletY, aimX, aimY, player.bulletSpeed, player.bulletTimeInMillis, player.damage);
-        player.lastFireTime = time;
-    }
-}
-
-function playerDeath(scene) {
-    scene.scene.restart();
-}
-
-
-function prepareSlimeAnimation(scene) {
-    scene.anims.create({
-        key: 'slime_stay',
-        frames: scene.anims.generateFrameNames('slime', { start: 11, end: 12 }),
-        frameRate: 3,
-        repeat: -1
-    });
-    scene.anims.create({
-        key: 'slime_walk',
-        frames: scene.anims.generateFrameNames('slime', { start: 0, end: 10 }),
-        frameRate: 8,
-        repeat: -1
-    });
-}
-
-function createSlime(scene, width, height, speed, roamingRadius, maxHealth, alertRadiusInPixel, damage, chunk) {
-    const x = Phaser.Math.Between(chunk.pixelLeft + width/2, chunk.pixelRight - width/2);
-    const y = Phaser.Math.Between(chunk.pixelTop + height, chunk.pixelBottom);
-    const slime = world.getFromPool(objectTypes.slime, x, y, 'slime', '11', chunk)
-        .setDisplaySize(width, height)
-        .setOrigin(0.5, 1)
-        .setDepth(y)
-        .play('slime_stay')
-        .refreshBody();
-    slime.colliders ??= [scene.physics.add.collider(slime, world.physicsGroups[objectTypes.waterTile])];
-    slime.type = objectTypes.slime;
-    slime.speed = speed;
-    slime.spawnPointX = x;
-    slime.spawnPointY = y;
-    slime.aimX = x;
-    slime.aimY = y;
-    slime.movement = new Phaser.Math.Vector2(0, 0);
-    slime.roamingRadius = roamingRadius;
-    slime.maxHealth = maxHealth;
-    slime.currentHealth = maxHealth;
-    slime.alertRadiusInChunkPixel = alertRadiusInPixel;
-    slime.damage = damage;
-    slime.state = slimeStates.roam;
-    slime.on('animationupdate', () => {
-        if(slime.state === slimeStates.roam || slime.state === slimeStates.chase) {
-            const frameIndex = slime.anims.currentFrame.index;
-            if(Math.inRange(frameIndex, 0, 4) || Math.inRange(frameIndex, 10, 11))
-                slime.setVelocity(0, 0);
-            else
-                slime.setVelocityX(slime.movement.x).setVelocityY(slime.movement.y);
-        } else if(slime.state === slimeStates.attack) {
-            const animationKey = slime.anims.currentFrame.textureFrame;
-            if(animationKey === '11') {
-                player.currentHealth -= slime.damage;
-                if(player.currentHealth <= 0)
-                    playerDeath(scene);
-            }
-        }
-    });
-}
-
-function spawnSlimes(scene, slimeSpawnCondition, width, height, speed, roamingRadius, maxHealth, alertRadiusInPixel, damage) {
-    for(let chunk of world.grid.chunks)
-        if(chunk.hasSlimeSpawner && chunk.countByTypeInChunk(objectTypes.slime) < slimeSpawnCondition.maxSlimes)
-            createSlime(scene, width, height, speed, roamingRadius, maxHealth, alertRadiusInPixel, damage, chunk);
-}
-
-function moveSlimes(time) {
-    world.grid.forEachObjWithType(objectTypes.slime, slime => {
-        if(slime.state === slimeStates.roam) {
-            if(Phaser.Geom.Rectangle.Contains(slime.getBounds(), slime.aimX, slime.aimY)) {
-                slime.anims.play('slime_walk', true);
-
-                slime.aimX = Phaser.Math.Between(slime.spawnPointX - slime.roamingRadius, slime.spawnPointX + slime.roamingRadius);
-                slime.aimY = Phaser.Math.Between(slime.spawnPointY - slime.roamingRadius, slime.spawnPointY + slime.roamingRadius);
-                slime.aimX = Phaser.Math.Clamp(slime.aimX, world.grid.border.pixelLeft, world.grid.border.pixelRight);
-                slime.aimY = Phaser.Math.Clamp(slime.aimY, world.grid.border.pixelTop, world.grid.border.pixelBottom);
-
-                slime.movement.x = slime.aimX - slime.x;
-                slime.movement.y = slime.aimY - slime.y;
-                slime.movement.normalize().scale(slime.speed);
-            }
-        } else if(slime.state === slimeStates.chase) {
-            slime.anims.play('slime_walk', true);
-
-            slime.aimX = player.x;
-            slime.aimY = player.y;
-            if(Phaser.Geom.Rectangle.Contains(slime.getBounds(), slime.aimX, slime.aimY)) {
-                slime.movement.set(0, 0);
-                slime.setVelocity(0, 0);
-                slime.state = slimeStates.attack;
-            } else {
-                slime.movement.x = slime.aimX - slime.x;
-                slime.movement.y = slime.aimY - slime.y;
-                slime.movement.normalize().scale(slime.speed);
-                slime.lastChasingCoordsUpdateTime = time;
-            }
-        } else if(slime.state === slimeStates.attack) {
-            slime.anims.play('slime_stay', true);
-
-            slime.aimX = player.x;
-            slime.aimY = player.y;
-            if(!Phaser.Geom.Rectangle.Contains(slime.getBounds(), slime.aimX, slime.aimY))
-                slime.state = slimeStates.chase;
-        }
-        slime.setDepth(slime.y);
-    });
-}
-
-
-function prepareFireballAnimation(scene) {
-    scene.anims.create({
-        key: 'fireball_fly',
-        frames: scene.anims.generateFrameNames('fireball', { start: 0, end: 4 }),
-        frameRate: 12,
-        repeat: -1
-    });
-}
-
-function createFireball(scene, x, y, aimX, aimY, speed, lifeTimeInMillis, damage) {
-    const fireball = world.getFromPool(objectTypes.fireball, x, y)
-        .setOffset(20, 5)
-        .setDepth(y + 30)
-        .refreshBody();
-    fireball.body.velocity.set(aimX - x, aimY - y).normalize().scale(speed);
-    fireball.rotation = Phaser.Math.Angle.Between(0, 0, fireball.body.velocity.x, fireball.body.velocity.y);
-    fireball.lifeTimeInMillis = lifeTimeInMillis;
-    fireball.damage = damage;
-    fireball.colliders ??= [scene.physics.add.overlap(fireball, world.physicsGroups[objectTypes.slime], onFireballCollision, null, scene)];
-    fireball.anims.play('fireball_fly', true);
-    fireball.type = objectTypes.fireball;
-}
-
-function moveFireballs(deltaTime) {
-    world.grid.forEachObjWithType(objectTypes.fireball, fireball => {
-        if(!fireball.active) return;
-
-        fireball.lifeTimeInMillis -= deltaTime;
-        fireball.setDepth(fireball.y + 30);
-        if(fireball.lifeTimeInMillis <= 0)
-            world.disposeToPoolAndRemoveFromGrid(fireball);
-    });
-}
-
-function onFireballCollision(fireball, obstacle) {
-    world.disposeToPoolAndRemoveFromGrid(fireball);
-    createExplosion(this, obstacle.x, obstacle.y);
-
-    if(obstacle.type === objectTypes.slime) {
-        obstacle.currentHealth -= fireball.damage;
-        if(obstacle.currentHealth <= 0) {
-            world.disposeToPoolAndRemoveFromGrid(obstacle);
-        } else {
-            world.grid.forEachObjectInArea(objectTypes.slime,
-                obstacle.x - obstacle.alertRadiusInChunkPixel,
-                obstacle.y - obstacle.alertRadiusInChunkPixel,
-                obstacle.x + obstacle.alertRadiusInChunkPixel,
-                obstacle.y + obstacle.alertRadiusInChunkPixel,
-                slime => slime.state = slimeStates.chase);
-        }
-    }
-}
-
-
-function prepareExplosionAnimation(scene) {
-    scene.anims.create({
-        key: 'explosion',
-        frames: scene.anims.generateFrameNames('explosion', { start: 0, end: 14 }),
-        frameRate: 15,
-        repeat: 0
-    });
-}
-
-function createExplosion(scene, x, y) {
-    const explosion = world.getFromPool(objectTypes.explosion, x, y)
-        .setDepth(y)
-        .setOrigin(0.5, 1);
-    explosion.anims.play('explosion', true);
-    explosion.type = objectTypes.explosion;
-    explosion.on('animationcomplete', (animation, frame) => world.disposeToPoolAndRemoveFromGrid(explosion));
-}
-
-
-function createTile(tileNumberX, tileNumberY, tileType) {
-    const topPerPixel = sizeUnitsConverter.topPixelOfTile(tileNumberY);
-    const leftPerPixel = sizeUnitsConverter.leftPixelOfTile(tileNumberX);
-    const tile = world.getFromPool(tileType, leftPerPixel, topPerPixel, tileType)
-        .setDisplaySize(sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight)
-        .setSize(sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight)
-        .setOrigin(0, 0)
-        .setDepth(Number.NEGATIVE_INFINITY)
-        .refreshBody();
-    tile.type = tileType;
-    return tile;
-}
-
-function createTree(treeMeta) {
-    const treeObject = world.getFromPool(treeMeta.treeType, treeMeta.pixelX, treeMeta.pixelY, treeMeta.treeType)
-        .setOrigin(0.5, 1)
-        .setDepth(treeMeta.pixelY)
-        .refreshBody();
-    treeObject.type = treeMeta.treeType;
-    return treeObject;
-}
-
-function World(scene, distanceToBorderPerChunk, slimeSpawnCondition) {
-    this.distanceToBorderForLoading = distanceToBorderPerChunk * sizeUnitsConverter.chunkWidthInPixels();
-    this.grid = new GridContainer(sizeUnitsConverter, { chunkLeft: 0, chunkTop: 0 });
-    this.physicsGroups = {};
-    this.slimeSpawnCondition = slimeSpawnCondition;
-    this.createPhysicsGroups(scene);
-}
-World.prototype.checkDistanceToBorder = function(pixelX, pixelY) {
-    return this.grid.checkDistanceToBorder(pixelX, pixelY, this.distanceToBorderForLoading);
-};
-World.prototype.generateChunksFor = function(pixelX, pixelY) {
-    const result = this.grid.shiftCenterToPixel(pixelX, pixelY);
-
-    for(const chunk of result.destroyedChunks)
-        chunk.forEachObj(obj => this.disposeToPool(obj));
-
-    for(const chunk of result.createdChunks) {
-        //terrain generation
-        chunk.forEachTile((tileX, tileY) => {
-            mapGenerator.generate(tileX, tileY);
-            const tileType = mapGenerator.getTileType();
-            createTile(tileX, tileY, tileType);
-
-            const treeMeta = mapGenerator.getTree();
-            if(treeMeta && this.grid.isPixelInMap(treeMeta.pixelX, treeMeta.pixelY)) createTree(treeMeta);
-        });
-
-        //Calculate bioms percent
-        chunk.biomsPercent = {};
-        const tilesNumberInOneChunk = sizeUnitsConverter.chunkAreaInTiles();
-        chunk.biomsPercent[objectTypes.sandTile] = chunk.countByTypeInChunk(objectTypes.sandTile) / tilesNumberInOneChunk;
-        chunk.biomsPercent[objectTypes.waterTile] = chunk.countByTypeInChunk(objectTypes.waterTile) / tilesNumberInOneChunk;
-        chunk.biomsPercent[objectTypes.grassTile] = chunk.countByTypeInChunk(objectTypes.grassTile) / tilesNumberInOneChunk;
-
-        chunk.hasSlimeSpawner = chunk.biomsPercent[objectTypes.grassTile] >= this.slimeSpawnCondition.grassTilesPercent
-            && mapGenerator.noise(chunk.chunkX, chunk.chunkY) <= this.slimeSpawnCondition.probability;
-    }
-};
-World.prototype.createPhysicsGroups = function(scene) {
-    this.physicsGroups[objectTypes.waterTile] = scene.physics.add.staticGroup();
-    this.physicsGroups[objectTypes.sandTile] = scene.physics.add.staticGroup();
-    this.physicsGroups[objectTypes.grassTile] = scene.physics.add.staticGroup();
-    this.physicsGroups[objectTypes.littleOak] = scene.physics.add.staticGroup();
-    this.physicsGroups[objectTypes.bigOak] = scene.physics.add.staticGroup();
-    this.physicsGroups[objectTypes.heightOak] = scene.physics.add.staticGroup();
-    this.physicsGroups[objectTypes.deadLittleOak] = scene.physics.add.staticGroup();
-    this.physicsGroups[objectTypes.deadBigOak] = scene.physics.add.staticGroup();
-    this.physicsGroups[objectTypes.deadHeightOak] = scene.physics.add.staticGroup();
-    this.physicsGroups[objectTypes.player] = scene.physics.add.group();
-    this.physicsGroups[objectTypes.slime] = scene.physics.add.group();
-    this.physicsGroups[objectTypes.fireball] = scene.physics.add.group();
-    this.physicsGroups[objectTypes.explosion] = scene.physics.add.staticGroup();
-};
-World.prototype.getFromPool = function(objectType, pixelX, pixelY, animationKey, animationFrame, chunk) {
-    const obj = this.physicsGroups[objectType].get(pixelX, pixelY, animationKey, animationFrame)
-        .setActive(true)
-        .setVisible(true);
-    obj.body.enable = true;
-    obj.colliders?.forEach(collider => collider.active = true);
-    obj.chunk = chunk ?? this.grid.getChunkByPixel(obj.x, obj.y);
-    obj.chunk.addToChunk(obj, objectType);
-    return obj;
-};
-World.prototype.disposeToPool = function(obj) {
-    obj.setActive(false).setVisible(false).resetPipeline();
-    obj.body.enable = false;
-    obj.setDepth(0);
-    obj.colliders?.forEach(collider => collider.active = false);
-};
-World.prototype.disposeToPoolAndRemoveFromGrid = function(obj) {
-    this.disposeToPool(obj);
-    obj.chunk.removeFromChunk(obj, obj.type);
-}
-
-
-function switchMinimap() {
-    if(Phaser.Input.Keyboard.JustDown(userInput.switchMinimap)) {
-        minimap.camera.setVisible(!minimap.camera.visible);
-        updateMinimap();
-    }
-}
-
-function updateMinimap() {
-    if(!minimap.camera.visible) return;
-
-    minimap.graphic.clear();
-
-    const allMapObjectsByType = world.grid.getAllObjectsGroupedByType();
-
-    minimap.graphic.fillStyle(0x4287f5);
-    for(let obj of allMapObjectsByType[objectTypes.waterTile])
-        minimap.graphic.fillRect(obj.x, obj.y, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
-
-    minimap.graphic.fillStyle(0xffc800);
-    for(let obj of allMapObjectsByType[objectTypes.sandTile])
-        minimap.graphic.fillRect(obj.x, obj.y, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
-
-    minimap.graphic.fillStyle(0x83c400);
-    for(let obj of allMapObjectsByType[objectTypes.grassTile])
-        minimap.graphic.fillRect(obj.x, obj.y, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
-
-    minimap.graphic.depth = world.grid.border.pixelTop;
-
-    minimap.camera.setScroll(world.grid.border.pixelLeft, world.grid.border.pixelTop);
-    minimap.camera.setBounds(world.grid.border.pixelLeft, world.grid.border.pixelTop, sizeUnitsConverter.worldWidthInPixels(), sizeUnitsConverter.worldHeightInPixels());
-}
-
-function updateIgnorableObjectsByMinimap() {
-    if(minimap.camera.visible) {
-        const ignoringObjects = [player];
-        world.grid.fillArrayWithType(objectTypes.slime, ignoringObjects);
-        world.grid.fillArrayWithType(objectTypes.waterTile, ignoringObjects);
-        world.grid.fillArrayWithType(objectTypes.sandTile, ignoringObjects);
-        world.grid.fillArrayWithType(objectTypes.grassTile, ignoringObjects);
-        world.grid.fillArrayWithType(objectTypes.fireball, ignoringObjects);
-        minimap.camera.ignore(ignoringObjects);
-    }
-}
-
-function createMinimap(scene, scale) {
-    minimap.maxScale = 1;
-    minimap.minScale = scale;
-    minimap.scale = Math.min(scale, minimap.maxScale);
-    minimap.minimapWidthPerPixel = sizeUnitsConverter.worldWidthInPixels() * minimap.scale;
-    minimap.minimapHeightPerPixel = sizeUnitsConverter.worldHeightInPixels() * minimap.scale;
-    minimap.screenXPerPixel = (config.width - minimap.minimapWidthPerPixel) / 2;
-    minimap.screenYPerPixel = (config.height - minimap.minimapHeightPerPixel) / 2;
-
-    minimap.camera = scene.cameras.add(minimap.screenXPerPixel, minimap.screenYPerPixel, minimap.minimapWidthPerPixel, minimap.minimapHeightPerPixel);
-    minimap.camera.setBackgroundColor(0x000000);
-    minimap.camera.setZoom(minimap.scale);
-    minimap.camera.visible = false;
-
-    minimap.graphic = scene.add.graphics();
-
-    scene.cameras.main.ignore(minimap.graphic);
-
-    //minimap zoom
-    scene.input.on('wheel', event => {
-        if(minimap.camera.visible
-            && event.position.x >= minimap.camera.x
-            && event.position.x <= minimap.camera.x + minimap.camera.width
-            && event.position.y >= minimap.camera.y
-            && event.position.y <= minimap.camera.y + minimap.camera.height) {
-            const delta = event.deltaY > 0 ? -0.1 : 0.1;
-            minimap.scale = Phaser.Math.Clamp(minimap.scale + delta, minimap.minScale, minimap.maxScale);
-            minimap.camera.setZoom(minimap.scale);
-        }
-    });
-
-    //minimap drag-to-scroll
-    let isDragging = false;
-    let dragStart = new Phaser.Math.Vector2();
-
-    scene.input.on('pointerdown', pointer => {
-        if(pointer.leftButtonDown()) {
-            isDragging = true;
-            dragStart.set(pointer.x, pointer.y);
-        }
-    });
-
-    scene.input.on('pointerup', () => {
-        isDragging = false;
-    });
-
-    scene.input.on('pointermove', pointer => {
-        if(!isDragging) return;
-
-        minimap.camera.scrollX -= (pointer.x - dragStart.x) / minimap.camera.zoom;
-        minimap.camera.scrollY -= (pointer.y - dragStart.y) / minimap.camera.zoom;
-
-        dragStart.set(pointer.x, pointer.y);
-    });
-}
-
-
-function prepareAmbientLightPipeline(scene, morningPhaseTransitionFraction, afternoonPhaseTransitionFraction, eveningPhaseTransitionFraction, nightPhaseTransitionFraction, currentDayPhase, currentDayPhaseProgress) {
-    nightPipeline = new Phaser.Renderer.WebGL.Pipelines.PostFXPipeline({
-        game: scene.game,
-        renderTarget: true,
-        fragShader: scene.cache.shader.get('night').fragmentSrc
-    });
-
-    updateAmbientLightPipeline(currentDayPhase, currentDayPhaseProgress);
-    nightPipeline.morningPhaseTransitionFraction = morningPhaseTransitionFraction;
-    nightPipeline.afternoonPhaseTransitionFraction = afternoonPhaseTransitionFraction;
-    nightPipeline.eveningPhaseTransitionFraction = eveningPhaseTransitionFraction;
-    nightPipeline.nightPhaseTransitionFraction = nightPhaseTransitionFraction;
-
-    nightPipeline.onPreRender = function() {
-        this.set1i('uDayPhase', this.dayPhase);
-        this.set1f('uIntensity', this.intensity);
-    };
-    scene.renderer.pipelines.addPostPipeline('night', function NightPipeline() { return nightPipeline; });
-    scene.cameras.main.setPostPipeline('night');
-}
-
-function updateAmbientLightPipeline(currentDayPhase, currentDayPhaseProgress) {
-    switch(currentDayPhase) {
+function updateShader() {
+    const currentDayPhaseProgress = calendar.getCurrentPhaseProgress();
+    const uniforms = nightShader.resources.timeUniforms.uniforms;
+    switch(calendar.getCurrentDayPhase()) {
         case dayPhases.morning:
-            nightPipeline.dayPhase = 1;
-            nightPipeline.intensity = Math.min(1, currentDayPhaseProgress / nightPipeline.morningPhaseTransitionFraction);
+            uniforms.uDayPhase = 1;
+            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.morningPhaseTransitionFraction);
             break;
         case dayPhases.afternoon:
-            nightPipeline.dayPhase = 2;
-            nightPipeline.intensity = Math.min(1, currentDayPhaseProgress / nightPipeline.afternoonPhaseTransitionFraction);
+            uniforms.uDayPhase =2;
+            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.afternoonPhaseTransitionFraction);
             break;
         case dayPhases.evening:
-            nightPipeline.dayPhase = 3;
-            nightPipeline.intensity = Math.min(1, currentDayPhaseProgress / nightPipeline.eveningPhaseTransitionFraction);
+            uniforms.uDayPhase =3;
+            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.eveningPhaseTransitionFraction);
             break;
         case dayPhases.night:
-            nightPipeline.dayPhase = 4;
-            nightPipeline.intensity = Math.min(1, currentDayPhaseProgress / nightPipeline.nightPhaseTransitionFraction);
+            uniforms.uDayPhase =4;
+            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.nightPhaseTransitionFraction);
             break;
     }
 }
 
 
-//Sorting objects by depth in Phaser sometimes ignores certain objects. A manual call to depthSort() is required.
-function fixRenderingOrder(scene) {
-    scene.children.sortChildrenFlag = true;
-    scene.children.depthSort();
-}
+function debugDrawAllPhysicsBodies() {
+    debugPhysicsGraphics.clear().setStrokeStyle({ width: 2, color: 0x00ff00 });
 
-function preload() {
-    this.load.setBaseURL('./');
-    this.load.image(objectTypes.waterTile, 'water_tile.jpg');
-    this.load.image(objectTypes.sandTile, 'sand_tile.jpg');
-    this.load.image(objectTypes.grassTile, 'grass_tile.jpg');
-    this.load.atlas('character', 'character.png', 'character.json');
-    this.load.atlas('slime', 'slime.png', 'slime.json');
-    this.load.atlas('fireball', 'fireball.png', 'fireball.json');
-    this.load.atlas('explosion', 'explosion.png', 'explosion.json');
-    preloadImageFromAtlas(this, 'trees', '0', objectTypes.littleOak);
-    preloadImageFromAtlas(this, 'trees', '1', objectTypes.bigOak);
-    preloadImageFromAtlas(this, 'trees', '2', objectTypes.heightOak);
-    preloadImageFromAtlas(this, 'trees', '3', objectTypes.deadLittleOak);
-    preloadImageFromAtlas(this, 'trees', '4', objectTypes.deadBigOak);
-    preloadImageFromAtlas(this, 'trees', '5', objectTypes.deadHeightOak);
+    collisionManager.forEachBody(body => {
+        const width = body.bounds.max.x - body.bounds.min.x;
+        const height = body.bounds.max.y - body.bounds.min.y;
 
-    this.load.glsl('night', 'shaders/night.glsl');
-}
-
-function create() {
-    sizeUnitsConverter = new SizeUnitsConverter({ tileWidth: 60, tileHeight: 60, chunkSizeInTile: 10, worldWidthInChunk: 5, worldHeightInChunk:5 });
-    mapGenerator = new MapGenerator(sizeUnitsConverter, { seed: Math.randomIntegerInRange(0, 1_000_000), octaves: 16, persistence: 0.5, frequency: 0.01, frequencyMod: 2, distanceBetweenTreesInTile: 2, treeRandomOffsetInPixel: 30});
-
-    calendar = new Calendar({ morningInSec: 5, afternoonInSec: 5, eveningInSec: 5, nightInSec: 5 });
-
-    prepareSlimeAnimation(this);
-    preparePlayerAnimation(this);
-    prepareFireballAnimation(this);
-    prepareExplosionAnimation(this);
-    prepareAmbientLightPipeline(this, 0.2, 0.2, 0.2, 0.2, calendar.getCurrentDayPhase(), calendar.getCurrentPhaseProgress());
-
-    const slimeSpawnCondition = { grassTilesPercent: 0.75, probability: 0.05, maxSlimes: 3 };
-    world = new World(this, 2, slimeSpawnCondition);
-
-    player = createPlayer(this, 0, 0, 50, 60, 200, 500, 1500, 10, 350, 20);
-    this.cameras.main.startFollow(player);
-
-    world.generateChunksFor(player.x, player.y);
-
-    createMinimap(this, 0.2);
-
-    userInput = this.input.keyboard.addKeys({
-        left: Phaser.Input.Keyboard.KeyCodes.A,
-        right: Phaser.Input.Keyboard.KeyCodes.D,
-        up: Phaser.Input.Keyboard.KeyCodes.W,
-        down: Phaser.Input.Keyboard.KeyCodes.S,
-        switchMinimap: Phaser.Input.Keyboard.KeyCodes.M
-    });
-
-    this.events.on('postupdate', () => playerFire(this, this.time.now));
-
-    slimeSpawnTimer = this.time.addEvent({
-        delay: 3000,
-        callback: () => spawnSlimes(this, slimeSpawnCondition, 54, 45, 50, 300, 20, 600, 5),
-        callbackScope: this,
-        loop: true
+        if(body.circleRadius > 0) {
+            const centerX = body.bounds.min.x + width / 2;
+            const centerY = body.bounds.min.y + height / 2;
+            const x = gridStore.localPixelXInGrid(centerX);
+            const y = gridStore.localPixelYInGrid(centerY);
+            debugPhysicsGraphics.circle(x, y, body.circleRadius).stroke();
+        } else {
+            const x = gridStore.localPixelXInGrid(body.bounds.min.x);
+            const y = gridStore.localPixelYInGrid(body.bounds.min.y);
+            debugPhysicsGraphics.rect(x, y, width, height).stroke();
+        }
     });
 }
 
-function update(time, delta) {
-    calendar.setCurrentTime(delta);
-    movePlayer();
-    moveSlimes(time);
-    moveFireballs(delta);
-    switchMinimap();
-    updateIgnorableObjectsByMinimap();
-
-    if(world.checkDistanceToBorder(player.x, player.y)) {
-        world.generateChunksFor(player.x, player.y);
-        updateMinimap();
+function allCollisionHandler(objA, objB, bodyA, bodyB) {
+    if(objA.type === objectTypes.slime && objB.type === objectTypes.fireball) {
+        handleFireballAndSlimeCollision(objB, objA);
+    } else if(objA.type === objectTypes.fireball && objB.type === objectTypes.slime) {
+        handleFireballAndSlimeCollision(objA, objB);
     }
-
-    fixRenderingOrder(this);
-
-    updateAmbientLightPipeline(calendar.getCurrentDayPhase(), calendar.getCurrentPhaseProgress());
 }
 
-const config = {
-    type: Phaser.WEBGL,
-    width: document.documentElement.clientWidth,
-    height: document.documentElement.clientHeight,
-    scale: {
-        mode: Phaser.Scale.RESIZE,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        zoom: 1
-    },
-    scene: {
-        preload: preload,
-        create: create,
-        update: update
-    },
-    physics: {
-        default: 'arcade',
-        arcade: {
-            debug: false
+function handleFireballAndSlimeCollision(fireball, slime) {
+    removeFireball(fireball);
+    createExplosion(fireball.x, fireball.y);
+}
+
+
+function createPlayerSprite(startAnimationName) {
+    const playerSprite = new AnimatedSprite(Assets.get(objectTypes.player).animations[startAnimationName], false);
+    playerSprite.anchor.set(0.5, 1);
+    return playerSprite;
+}
+
+function createPlayer(playerConfig) {
+    player = {
+        type: objectTypes.player,
+        x: playerConfig.pixelX,
+        y: playerConfig.pixelY,
+        speed: playerConfig.speed,
+        fireRateInMillis: playerConfig.fireRateInMillis,
+        lastFireTime: 0,
+        velocity: new Vector(),
+        sprite: createPlayerSprite(playerConfig.startAnimation)
+    };
+    player.body = collisionManager.createRectCollider(playerConfig.pixelX, playerConfig.pixelY, Config.player.bodyWidth, Config.player.bodyHeight, 0.5, 1, player);
+
+    eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
+    objectsSpriteContainer.addChild(player.sprite);
+    setPlayerAnimation('idle');
+    collisionManager.registerBody(player.body);
+}
+
+function setPlayerAnimation(animationName) {
+    const spritesheet = Assets.get(objectTypes.player);
+    const texture = spritesheet.animations[animationName];
+    if(texture) {
+        const animationConfig = spritesheet.data.animationsConfig[animationName];
+        player.sprite.textures = texture;
+        player.sprite.animationSpeed = animationConfig.frameRate;
+        player.sprite.loop = animationConfig.loop;
+        player.sprite.gotoAndPlay(0);
+        player.animationName = animationName;
+    } else {
+        throw 'Invalid player animation name: ' + animationName;
+    }
+}
+
+function updatePlayerView() {
+    const playerSpriteX = gridStore.localPixelXInGrid(player.x);
+    const playerSpriteY = gridStore.localPixelYInGrid(player.y);
+    player.sprite.position.set(playerSpriteX, playerSpriteY);
+    player.sprite.zIndex = player.y;
+
+    if(player.velocity.isZero() && player.animationName !== 'idle') setPlayerAnimation('idle');
+    else if(!player.velocity.isZero() && player.animationName !== 'run') setPlayerAnimation('run');
+
+    if(player.velocity.x !== 0) player.sprite.scale.set(player.velocity.x >= 0 ? 1 : -1, 1);
+
+    player.sprite.update(ticker);
+}
+
+function movePlayer(deltaMS) {
+    player.velocity.x = eventManager.hasEvent('Player', InputEvents.KeyD) - eventManager.hasEvent('Player', InputEvents.KeyA);
+    player.velocity.y = eventManager.hasEvent('Player', InputEvents.KeyS) - eventManager.hasEvent('Player', InputEvents.KeyW);
+    if(player.velocity.y !== 0 && player.velocity.x !== 0) {
+        player.velocity.x *= 0.707106; //sin 45 degree
+        player.velocity.y *= 0.707106; //cos 45 degree
+    }
+    player.velocity.scaleBy(player.speed * (deltaMS / 1000));
+
+    player.x += player.velocity.x;
+    player.y += player.velocity.y;
+
+    collisionManager.setPosition(player.body, player.x, player.y);
+}
+
+function playerAttack() {
+    const mouseClick = eventManager.getThenClear('Player', InputEvents.MouseClick);
+    if(mouseClick && calendar.getTotalMS() > player.lastFireTime + player.fireRateInMillis) {
+        const aimX = camera.toGlobalPixelX(mouseClick.clientX);
+        const aimY = camera.toGlobalPixelY(mouseClick.clientY);
+        createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage);
+
+        player.lastFireTime = calendar.getTotalMS();
+    }
+}
+
+
+function createExplosionSprite() {
+    const spritesheet = Assets.get(objectTypes.explosion);
+    const explosionSprite = new AnimatedSprite(spritesheet.animations['explode'], false);
+    explosionSprite.animationSpeed = spritesheet.data.animationsConfig['explode'].frameRate;
+    explosionSprite.loop = spritesheet.data.animationsConfig['explode'].loop;
+    explosionSprite.anchor.set(0.5, 1);
+    explosionSprite.scale.set(Config.explosion.spriteScale);
+    return explosionSprite;
+}
+
+function createExplosion(globalPixelX, globalPixelY) {
+    const explosion = allPools[objectTypes.explosion].acquire(() => ({ type: objectTypes.explosion, sprite: createExplosionSprite()}));
+    const spriteX = gridStore.localPixelXInGrid(globalPixelX);
+    const spriteY = gridStore.localPixelYInGrid(globalPixelY);
+    explosion.sprite.position.set(spriteX, spriteY);
+    explosion.sprite.zIndex = globalPixelY;
+    explosion.sprite.gotoAndPlay(0);
+
+    objectsSpriteContainer.addChild(explosion.sprite);
+    explosion.sprite.onComplete = () => removeExplosion(explosion);
+}
+
+function removeExplosion(explosion) {
+    explosion.sprite.removeFromParent();
+    allPools[objectTypes.explosion].release(explosion);
+}
+
+function updateAllExplosionsView() {
+    allPools[objectTypes.explosion].forEachUsed(explosion => explosion.sprite.update(ticker));
+}
+
+
+function createFireballSprite() {
+    const spritesheet = Assets.get(objectTypes.fireball);
+    const fireballSprite = new AnimatedSprite(spritesheet.animations['fly'], false);
+    fireballSprite.animationSpeed = spritesheet.data.animationsConfig['fly'].frameRate;
+    fireballSprite.loop = spritesheet.data.animationsConfig['fly'].loop;
+    fireballSprite.play();
+    fireballSprite.anchor.set(1, 0.5);
+    fireballSprite.scale.set(Config.fireball.spriteScale);
+    return fireballSprite;
+}
+
+function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPixelY, lifeTimeInMillis, speed, damage) {
+    let fireball = allPools[objectTypes.fireball].acquire(() => {
+        const newFireball = {
+            type: objectTypes.fireball,
+            velocity: new Vector(),
+            sprite: createFireballSprite()
+        };
+        newFireball.body = collisionManager.createCircleCollider(globalPixelX, globalPixelY, Config.fireball.bodyRadius, 1, 0.5, newFireball);
+        return newFireball;
+    });
+    fireball.x = globalPixelX;
+    fireball.y = globalPixelY;
+    fireball.lifeTimeInMillis = lifeTimeInMillis;
+    fireball.speed = speed;
+    fireball.damage = damage;
+    fireball.velocity.set(globalAimPixelX - globalPixelX, globalAimPixelY - globalPixelY);
+    collisionManager.setPosition(fireball.body, globalPixelX, globalPixelY);
+
+    objectsSpriteContainer.addChild(fireball.sprite);
+    collisionManager.registerBody(fireball.body);
+}
+
+function removeFireball(fireball) {
+    fireball.sprite.removeFromParent();
+    allPools[objectTypes.fireball].release(fireball);
+    collisionManager.unregisterBody(fireball.body);
+}
+
+function updateAllFireballsView() {
+    allPools[objectTypes.fireball].forEachUsed(fireball => {
+        const fireballSpriteX = gridStore.localPixelXInGrid(fireball.x);
+        const fireballSpriteY = gridStore.localPixelYInGrid(fireball.y);
+        fireball.sprite.position.set(fireballSpriteX, fireballSpriteY);
+        fireball.sprite.zIndex = fireball.y + Config.fireball.zIndexOffset;
+        fireball.sprite.rotation = fireball.velocity.getAngleInRadian();
+
+        fireball.sprite.update(ticker);
+    });
+}
+
+function moveFireball(fireball, deltaMS) {
+    fireball.velocity.normalize().scaleBy(fireball.speed * (deltaMS / 1000));
+    fireball.x += fireball.velocity.x;
+    fireball.y += fireball.velocity.y;
+
+    collisionManager.setPositionAndAngle(fireball.body, fireball.x, fireball.y, fireball.velocity.getAngleInRadian());
+}
+
+function updateAllFireballs(deltaMS) {
+    allPools[objectTypes.fireball].forEachUsed(fireball => {
+        moveFireball(fireball, deltaMS);
+
+        fireball.lifeTimeInMillis -= deltaMS;
+        if(fireball.lifeTimeInMillis <= 0) {
+            removeFireball(fireball);
+            createExplosion(fireball.x, fireball.y);
+        }
+    });
+}
+
+
+function createSlimeSprite() {
+    const slimeSprite = new AnimatedSprite(Assets.get(objectTypes.slime).animations['slime_idle'], false);
+    slimeSprite.anchor.set(0.5, 1);
+    slimeSprite.scale.set(Config.slime.spriteScale);
+    return slimeSprite;
+}
+
+function createSlime(globalPixelX, globalPixelY, chunk) {
+    const slime = allPools[objectTypes.slime].acquire(() => {
+        const result = {
+            type: objectTypes.slime,
+            speed: Config.slime.speed,
+            velocity: new Vector(),
+            sprite: createSlimeSprite()
+        };
+        result.body = collisionManager.createRectCollider(globalPixelX, globalPixelY, Config.slime.bodyWidth, Config.slime.bodyHeight, 0.5, 1, result);
+        return result;
+    });
+    slime.x = globalPixelX;
+    slime.y = globalPixelY;
+    slime.spawnPointX = globalPixelX;
+    slime.spawnPointY = globalPixelY;
+    slime.aimX = globalPixelX;
+    slime.aimY = globalPixelY;
+    slime.state = slimeStates.idle;
+    slime.idleDurationInMS = Config.slime.idleDurationInSec * 1000;
+    slime.roamingDurationInMS = Config.slime.roamingDurationInSec * 1000;
+    slime.velocity.set(0, 0);
+    collisionManager.setPosition(slime.body, globalPixelX, globalPixelY);
+    setSlimeAnimation(slime, 'slime_idle');
+
+    chunk.addToChunk(slime, objectTypes.slime);
+    objectsSpriteContainer.addChild(slime.sprite);
+    collisionManager.registerBody(slime.body);
+}
+
+function removeSlime(slime) {
+    slime.sprite.removeFromParent();
+    collisionManager.unregisterBody(slime.body);
+    allPools[objectTypes.slime].release(slime);
+}
+
+function spawnSlimes(deltaMS) {
+    if(calendar.isCurrentPhaseBetween(Config.slime.spawnDayPhaseStart, Config.slime.spawnDayPhaseEnd) && spawnSlimeTimer.tick(deltaMS)) {
+        for(let chunk of gridStore.chunks) {
+            if(chunk.hasSlimeSpawner && gridStore.countByTypeInChunkRadius(objectTypes.slime, chunk.chunkX, chunk.chunkY, 2) < Config.slime.maxSlimesInArea) {
+                const x = Math.randomIntegerInRange(chunk.pixelLeft, chunk.pixelRight);
+                const y = Math.randomIntegerInRange(chunk.pixelTop, chunk.pixelBottom);
+                createSlime(x, y, chunk);
+            }
         }
     }
-};
+}
 
-const game = new Phaser.Game(config);
+function setSlimeAnimation(slime, animationName) {
+    const spritesheet = Assets.get(objectTypes.slime);
+    const texture = spritesheet.animations[animationName];
+    if(texture) {
+        const animationConfig = spritesheet.data.animationsConfig[animationName];
+        slime.sprite.textures = texture;
+        slime.sprite.animationSpeed = animationConfig.frameRate;
+        slime.sprite.loop = animationConfig.loop;
+        slime.sprite.gotoAndPlay(0);
+        slime.animationName = animationName;
+    } else {
+        throw 'Invalid slime animation name: ' + animationName;
+    }
+}
+
+function updateAllSlimesView() {
+    allPools[objectTypes.slime].forEachUsed(slime => {
+        const spriteX = gridStore.localPixelXInGrid(slime.x);
+        const spriteY = gridStore.localPixelYInGrid(slime.y);
+        slime.sprite.position.set(spriteX, spriteY);
+        slime.sprite.zIndex = slime.y;
+
+        slime.sprite.update(ticker);
+    });
+}
+
+function choseNextRandomAimIfNeeded(slime) {
+    const distanceX = Math.abs(slime.x - slime.aimX);
+    const distanceY = Math.abs(slime.y - slime.aimY);
+    if(distanceX <= 20 && distanceY <= 20) {
+        const nextAimX = Math.randomIntegerInRange(slime.spawnPointX - Config.slime.roamingRadiusInPixels, slime.spawnPointX + Config.slime.roamingRadiusInPixels);
+        const nextAimY = Math.randomIntegerInRange(slime.spawnPointY - Config.slime.roamingRadiusInPixels, slime.spawnPointY + Config.slime.roamingRadiusInPixels);
+        slime.aimX = Math.clamp(nextAimX, gridStore.border.pixelLeft, gridStore.border.pixelRight);
+        slime.aimY = Math.clamp(nextAimY, gridStore.border.pixelTop, gridStore.border.pixelBottom);
+
+        slime.velocity.set(slime.aimX - slime.x, slime.aimY - slime.y);
+    }
+}
+
+function changeChunk(slime, oldX, oldY, newX, newY) {
+    const currentChunk = gridStore.getChunkByPixel(oldX, oldY);
+    const nextChunk = gridStore.getChunkByPixel(newX, newY);
+
+    if (currentChunk === nextChunk) return;
+
+    currentChunk?.removeFromChunk(slime, objectTypes.slime);
+    nextChunk?.addToChunk(slime, objectTypes.slime);
+}
+
+function moveSlime(slime, deltaMS) {
+    const oldX = slime.x;
+    const oldY = slime.y;
+    slime.velocity.normalize().scaleBy(slime.speed * (deltaMS / 1000));
+    slime.x += slime.velocity.x;
+    slime.y += slime.velocity.y;
+    changeChunk(slime, oldX, oldY, slime.x, slime.y);
+
+    collisionManager.setPosition(slime.body, slime.x, slime.y);
+}
+
+function updateAllSlimes(deltaMS) {
+    allPools[objectTypes.slime].forEachUsed(slime => {
+        if(slime.state === slimeStates.idle) {
+            slime.idleDurationInMS -= deltaMS;
+            if(slime.idleDurationInMS <= 0) {
+                slime.state = slimeStates.roam;
+                slime.roamingDurationInMS = Config.slime.roamingDurationInSec * 1000;
+                setSlimeAnimation(slime, 'slime_run');
+            }
+        } else if(slime.state === slimeStates.roam) {
+            if(Math.inRange(slime.sprite.currentFrame, 6, 8)) {
+                moveSlime(slime, deltaMS);
+            } else {
+                choseNextRandomAimIfNeeded(slime);
+            }
+
+            slime.roamingDurationInMS -= deltaMS;
+            if(slime.roamingDurationInMS <= 0) {
+                slime.state = slimeStates.idle;
+                slime.idleDurationInMS = Config.slime.idleDurationInSec * 1000;
+                setSlimeAnimation(slime, 'slime_idle');
+            }
+        } else if(slime.state === slimeStates.chase) {
+
+        } else if(slime.state === slimeStates.attack) {
+
+        }
+
+        if(!gridStore.isPixelInMap(slime.x, slime.y))
+            removeSlime(slime);
+    });
+}
+
+
+function createTileSprite(tileType) {
+    const tileSprite = new Sprite(Assets.get(tileType));
+    tileSprite.setSize(sizeUnitsConverter.tileWidthInPixels(), sizeUnitsConverter.tileHeightInPixels());
+    return tileSprite;
+}
+
+function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTileYInChunk, tileType, chunk) {
+    const tile = allPools[tileType].acquire(() => ({
+        type: tileType,
+        sprite: createTileSprite(tileType)
+    }));
+    tile.x = leftPixelOfTile;
+    tile.y = topPixelOfTile;
+    const topTilePixel = sizeUnitsConverter.topPixelOfTile(localTileYInChunk);
+    const leftTilePixel = sizeUnitsConverter.leftPixelOfTile(localTileXInChunk);
+    tile.sprite.position.set(leftTilePixel, topTilePixel);
+
+    chunk.tileSpritesContainer.addChild(tile.sprite);
+    chunk.getTileContainerByLocalCoords(localTileXInChunk, localTileYInChunk).tile = tile;
+}
+
+function createTreeSprite(treeMeta) {
+    const treeSprite = new Sprite(Assets.get(treeMeta.treeType));
+    treeSprite.anchor.set(0.5, 1);
+    return treeSprite;
+}
+
+function createTree(treeMeta, chunk) {
+    const tree = allPools[treeMeta.treeType].acquire(() => ({
+        type: treeMeta.treeType,
+        sprite: createTreeSprite(treeMeta)
+    }));
+    tree.x = treeMeta.globalPixelX;
+    tree.y = treeMeta.globalPixelY;
+    const treeSpriteX = gridStore.localPixelXInGrid(tree.x);
+    const treeSpriteY = gridStore.localPixelYInGrid(tree.y);
+    tree.sprite.position.set(treeSpriteX, treeSpriteY);
+    tree.sprite.zIndex = tree.y;
+
+    chunk.addToChunk(tree, tree.type);
+    objectsSpriteContainer.addChild(tree.sprite);
+}
+
+function generateChunksFor(pixelX, pixelY) {
+    const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
+
+    for(let chunk of result.retainedChunks) {
+        const localLeftOfChunk = gridStore.localLeftPixelOfChunkInGrid(chunk.chunkX);
+        const localTopOfChunk = gridStore.localTopPixelOfChunkInGrid(chunk.chunkY);
+        chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
+
+        chunk.forEachObj((obj, objType) => {
+            const spriteLocalX = gridStore.localPixelXInGrid(obj.x);
+            const spriteLocalY = gridStore.localPixelYInGrid(obj.y);
+            obj.sprite.position.set(spriteLocalX, spriteLocalY);
+            obj.sprite.zIndex = obj.y;
+        });
+    }
+
+    for(let chunk of result.removedChunks) {
+        chunk.tileSpritesContainer.removeFromParent();
+        chunk.tileSpritesContainer.destroy({ children: false });
+
+        chunk.forEachObj((obj, objType) => {
+            obj.sprite.removeFromParent();
+            collisionManager.unregisterBody(obj.body);
+            allPools[obj.type].release(obj);
+        });
+        chunk.forEachTileContainer((globalTileX, globalTileY, localTileXInChunk, localTileYInChunk, tileContainer) => {
+            const tile = tileContainer.tile;
+            allPools[tile.type].release(tile);
+        });
+    }
+
+    for(let chunk of result.createdChunks) {
+        chunk.tileSpritesContainer = new Container();
+        chunk.tileSpritesContainer.cullable = true;
+        const localLeftOfChunk = gridStore.localLeftPixelOfChunkInGrid(chunk.chunkX);
+        const localTopOfChunk = gridStore.localTopPixelOfChunkInGrid(chunk.chunkY);
+        chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
+
+        let countGrassTiles = 0;
+        chunk.forEachTileCoords((tileGlobalX, tileGlobalY, localTileXInChunk, localTileYInChunk) => {
+            mapGenerator.generate(tileGlobalX, tileGlobalY);
+
+            const tileType = mapGenerator.getTileType();
+            createTile(
+                sizeUnitsConverter.leftPixelOfTile(tileGlobalX),
+                sizeUnitsConverter.topPixelOfTile(tileGlobalY),
+                localTileXInChunk,
+                localTileYInChunk,
+                tileType,
+                chunk
+            );
+
+            const treeMeta = mapGenerator.getTree();
+            if (treeMeta) createTree(treeMeta, chunk);
+
+            if(tileType === objectTypes.grassTile) ++countGrassTiles;
+        });
+        chunk.hasSlimeSpawner = (countGrassTiles / sizeUnitsConverter.chunkAreaInTiles() >= Config.slime.minGrassTilePercentForSpawn)
+            && mapGenerator.noise(chunk.chunkX, chunk.chunkY) <= Config.slime.spawnerProbabilityInChunk;
+
+        allTileSpritesContainer.addChild(chunk.tileSpritesContainer);
+    }
+}
+
+
+function createMinimap(viewportWidth, viewportHeight, minimapConfig) {
+    eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.MouseWheel, InputEvents.MouseDown, InputEvents.MouseUp, InputEvents.MouseMove);
+
+    minimap = {
+        container: new Container(),
+        staticObjects: new Graphics(),
+        viewportWidth,
+        viewportHeight,
+        scale: minimapConfig.defaultScale,
+        scroll: { isScrolling: false, scrollRecentX: 0, scrollRecentY: 0 }
+    };
+
+    minimap.container.addChild(minimap.staticObjects);
+    minimap.container.visible = false;
+
+    resizeMinimap(viewportWidth, viewportHeight);
+}
+
+function resizeMinimap(viewportWidth, viewportHeight) {
+    minimap.viewportWidth = viewportWidth;
+    minimap.viewportHeight = viewportHeight;
+    minimap.sizeInPixel = Math.min(viewportWidth, viewportHeight) * minimap.scale;
+    minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
+    alignMinimapToCenter();
+}
+
+function alignMinimapToCenter() {
+    minimap.left = (minimap.viewportWidth - minimap.sizeInPixel) / 2;
+    minimap.top = (minimap.viewportHeight - minimap.sizeInPixel) / 2;
+    minimap.container.position.set(minimap.left, minimap.top);
+}
+
+function repaintMinimap() {
+    if(!minimap.container.visible) return;
+
+    minimap.staticObjects.clear();
+
+    drawTilesOnMinimap(objectTypes.sandTile, 0xFFFF00);
+    drawTilesOnMinimap(objectTypes.waterTile, 0x000080);
+    drawTilesOnMinimap(objectTypes.grassTile, 0x41980A);
+
+    drawObjectsOnMinimap(
+        objectTypes.littleOak,
+        objectTypes.heightOak,
+        objectTypes.bigOak,
+        objectTypes.deadLittleOak,
+        objectTypes.deadHeightOak,
+        objectTypes.deadBigOak
+    );
+
+    minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
+    alignMinimapToCenter();
+}
+
+function drawTilesOnMinimap(tileType, color) {
+    allPools[tileType].forEachUsed(tile => {
+        const viewX = gridStore.localPixelXInGrid(tile.x);
+        const viewY = gridStore.localPixelYInGrid(tile.y);
+        minimap.staticObjects.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
+    });
+    minimap.staticObjects.fill(color);
+}
+
+function drawObjectsOnMinimap(...objTypes) {
+    const allObjects = [];
+    objTypes.forEach(objType => allPools[objType].copyUsedItemsTo(allObjects));
+    allObjects.sort((a, b) => a.y - b.y);
+
+    const matrixByObjType = {};
+    for(let obj of allObjects) {
+        const texture = Assets.get(obj.type);
+        const { frame, source } = texture;
+        const matrix = matrixByObjType[obj.type] ??= new Matrix(frame.width / source.width, 0, 0, frame.height / source.height, frame.x / source.width, frame.y / source.height).invert();
+
+        const viewX = gridStore.localPixelXInGrid(obj.x) - texture.width * obj.sprite.anchor.x;
+        const viewY = gridStore.localPixelYInGrid(obj.y) - texture.height * obj.sprite.anchor.y;
+        minimap.staticObjects.rect(viewX, viewY, texture.width, texture.height).fill({ texture, matrix });
+    }
+}
+
+function switchMinimapVisibility() {
+    if(eventManager.hasThenClear('Minimap', InputEvents.KeyM)) {
+        minimap.container.visible = !minimap.container.visible;
+        repaintMinimap();
+    }
+}
+
+function scaleMinimap() {
+    if(!minimap.container.visible) return;
+
+    const event = eventManager.getThenClear('Minimap', InputEvents.MouseWheel);
+    if(!event) return;
+
+    minimap.scale += event.deltaY > 0 ? -0.1 : 0.1;
+    minimap.scale = Math.clamp(minimap.scale, Config.minimap.minScale, Config.minimap.maxScale);
+    resizeMinimap(minimap.viewportWidth, minimap.viewportHeight);
+}
+
+function scrollMinimap() {
+    const mouseDownEvent = eventManager.getThenClear('Minimap', InputEvents.MouseDown);
+    if(mouseDownEvent) {
+        minimap.scroll.isScrolling = true;
+        minimap.scroll.scrollRecentX = mouseDownEvent.clientX;
+        minimap.scroll.scrollRecentY = mouseDownEvent.clientY;
+    }
+
+    const mouseMoveEvent = eventManager.getThenClear('Minimap', InputEvents.MouseMove);
+    if(mouseMoveEvent && minimap.scroll.isScrolling) {
+        minimap.left += mouseMoveEvent.clientX - minimap.scroll.scrollRecentX;
+        minimap.top += mouseMoveEvent.clientY - minimap.scroll.scrollRecentY;
+        minimap.container.position.set(minimap.left, minimap.top);
+        minimap.scroll.scrollRecentX = mouseMoveEvent.clientX;
+        minimap.scroll.scrollRecentY = mouseMoveEvent.clientY;
+    }
+
+    const mouseUpEvent = eventManager.getThenClear('Minimap', InputEvents.MouseUp);
+    if(mouseUpEvent) {
+        minimap.scroll.isScrolling = false;
+    }
+}
+
+
+function updateCamera() {
+    camera.followIfOutOfDeadZone(player.x, player.y);
+    const stageX = camera.toViewportPixelX(gridStore.border.pixelLeft);
+    const stageY = camera.toViewportPixelY(gridStore.border.pixelTop);
+    gameObjects.position.set(stageX, stageY);
+}
+
+
+function update(ticker) {
+    //Обновляем модель
+    calendar.updateCurrentTime(ticker.deltaMS);
+    movePlayer(ticker.deltaMS);
+    updateAllFireballs(ticker.deltaMS);
+    spawnSlimes(ticker.deltaMS);
+    updateAllSlimes(ticker.deltaMS);
+    playerAttack();
+
+    //Подгружаем и выгружаем часть карты при необходимости
+    if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk)) {
+        generateChunksFor(player.x, player.y);
+        repaintMinimap();
+    }
+
+    //Поиск коллизий
+    collisionManager.handleCollisions(allCollisionHandler);
+
+    //Отрисовываем игровые объекты
+    updateCamera();
+    updatePlayerView();
+    updateAllFireballsView();
+    updateAllExplosionsView();
+    updateAllSlimesView();
+
+    //Обновляем шейдеры
+    updateShader();
+
+    //Перерисовываем миникарту по необходимости
+    switchMinimapVisibility();
+    scaleMinimap();
+    scrollMinimap();
+
+    //Отрисовываем границы физических тел для дебага физики
+    //debugDrawAllPhysicsBodies();
+
+    renderer.render(stage);
+}
+
+async function setup() {
+    //Загружаем ресурсы
+    await loadTextures();
+    await loadShaders();
+    await loadConfig();
+
+    //Инициализируем основные хранилища данных и модель
+    sizeUnitsConverter = new SizeUnitsConverter(Config.sizeUnitsConverter);
+    mapGenerator = new MapGenerator(sizeUnitsConverter, Config.mapGenerator);
+    gridStore = new GridStore(sizeUnitsConverter, Config.grid);
+    eventManager = new EventManager();
+    calendar = new Calendar(Config.time);
+    allPools = Object.fromEntries(
+        Object.values(objectTypes)
+            .filter(objType => objType !== objectTypes.player)
+            .map(objType => [objType, new UnorderedPool()])
+    );
+    spawnSlimeTimer = IntervalTimer.ofSeconds(Config.slime.spawnRateInSec);
+
+    //Подготавливаем обработку коллизий
+    collisionManager = new CollisionManager();
+
+    //Создаем Renderer
+    const domContainer = document.querySelector('.canvasContainer');
+    renderer = new WebGLRenderer();
+    await renderer.init({
+        background: '#1099BB',
+        width: domContainer.clientWidth,
+        height: domContainer.clientHeight
+    });
+    domContainer.appendChild(renderer.canvas);
+
+    //Создаем контейнеры для спрайтов и отладочную графику для физики
+    camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, Config.camera);
+    stage = new Container();
+    gameObjects = new Container();
+    createMinimap(domContainer.clientWidth, domContainer.clientHeight, Config.minimap);
+    allTileSpritesContainer = new Container();
+    objectsSpriteContainer = new Container();
+    debugPhysicsGraphics = new Graphics();
+    gameObjects.addChild(allTileSpritesContainer, objectsSpriteContainer, debugPhysicsGraphics);
+    stage.addChild(gameObjects, minimap.container);
+
+    //Создаем игровые объекты вместе с их спрайтами и физическими телами
+    createPlayer(Config.player);
+    generateChunksFor(player.x, player.y);
+    camera.centerOn(player.x, player.y);
+
+    //Подключаем шейдеры
+    nightShader = createShader();
+    gameObjects.filters = [nightShader];
+
+    //Подписываемся на внешние события
+    window.addEventListener('resize', () => {
+        camera.resize(domContainer.clientWidth, domContainer.clientHeight);
+        renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
+        resizeMinimap(domContainer.clientWidth, domContainer.clientHeight);
+    });
+    document.addEventListener('keydown', event => {
+        eventManager.pushEvent(event.code, event);
+    });
+    document.addEventListener('keyup', event => {
+        eventManager.clearEventForAll(event.code);
+    });
+    document.addEventListener('click', event => {
+        if(!minimap.container.visible) eventManager.pushEvent(InputEvents.MouseClick, event);
+    });
+    document.addEventListener('wheel', event => {
+        eventManager.pushEvent(InputEvents.MouseWheel, event);
+    });
+    document.addEventListener('mousedown', event => {
+        eventManager.pushEvent(InputEvents.MouseDown, event);
+    });
+    document.addEventListener('mouseup', event => {
+        eventManager.pushEvent(InputEvents.MouseUp, event);
+    });
+    document.addEventListener('mousemove', event => {
+        eventManager.pushEvent(InputEvents.MouseMove, event);
+    });
+
+    //Инициализируем и запускаем game loop
+    ticker = new Ticker();
+    ticker.add((ticker) => update(ticker));
+    ticker.start();
+}
+
+setup();
