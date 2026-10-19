@@ -70,5 +70,10 @@
     "roamingRadiusInPixels": 300,
     "bodyWidth": 36,
     "bodyHeight": 30
+  },
+  "minimap": {
+    "minScale": 0.3,
+    "defaultScale": 0.5,
+    "maxScale": 1.5
   }
 }

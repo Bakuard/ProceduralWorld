@@ -582,7 +582,7 @@ function generateChunksFor(pixelX, pixelY) {
 }
 
 
-function createMinimap(viewportWidth, viewportHeight, scale) {
+function createMinimap(viewportWidth, viewportHeight, minimapConfig) {
     eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.MouseWheel, InputEvents.MouseDown, InputEvents.MouseUp, InputEvents.MouseMove);
 
     minimap = {
@@ -590,7 +590,7 @@ function createMinimap(viewportWidth, viewportHeight, scale) {
         staticObjects: new Graphics(),
         viewportWidth,
         viewportHeight,
-        scale,
+        scale: minimapConfig.defaultScale,
         scroll: { isScrolling: false, scrollRecentX: 0, scrollRecentY: 0 }
     };
 
@@ -676,7 +676,7 @@ function scaleMinimap() {
     if(!event) return;
 
     minimap.scale += event.deltaY > 0 ? -0.1 : 0.1;
-    minimap.scale = Math.clamp(minimap.scale, 0.3, 1.5);
+    minimap.scale = Math.clamp(minimap.scale, Config.minimap.minScale, Config.minimap.maxScale);
     resizeMinimap(minimap.viewportWidth, minimap.viewportHeight);
 }
 
@@ -787,7 +787,7 @@ async function setup() {
     camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, Config.camera);
     stage = new Container();
     gameObjects = new Container();
-    createMinimap(domContainer.clientWidth, domContainer.clientHeight, 0.5);
+    createMinimap(domContainer.clientWidth, domContainer.clientHeight, Config.minimap);
     allTileSpritesContainer = new Container();
     objectsSpriteContainer = new Container();
     debugPhysicsGraphics = new Graphics();
@@ -816,7 +816,7 @@ async function setup() {
         eventManager.clearEventForAll(event.code);
     });
     document.addEventListener('click', event => {
-        eventManager.pushEvent(InputEvents.MouseClick, event);
+        if(!minimap.container.visible) eventManager.pushEvent(InputEvents.MouseClick, event);
     });
     document.addEventListener('wheel', event => {
         eventManager.pushEvent(InputEvents.MouseWheel, event);
