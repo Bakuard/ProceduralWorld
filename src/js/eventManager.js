@@ -1,12 +1,15 @@
 export const InputEvents = Object.freeze({
-    KeyW: "KeyW",
-    KeyA: "KeyA",
-    KeyS: "KeyS",
-    KeyD: "KeyD",
-    KeyE: "KeyE",
-    KeyM: "KeyM",
-    MouseClick: "MouseClick",
-    MouseWheel: "MouseWheel"
+    KeyW: 'KeyW',
+    KeyA: 'KeyA',
+    KeyS: 'KeyS',
+    KeyD: 'KeyD',
+    KeyE: 'KeyE',
+    KeyM: 'KeyM',
+    MouseClick: 'MouseClick',
+    MouseWheel: 'MouseWheel',
+    MouseDown: 'MouseDown',
+    MouseUp: 'MouseUp',
+    MouseMove: 'MouseMove'
 });
 
 export class EventManager {

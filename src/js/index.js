@@ -583,14 +583,15 @@ function generateChunksFor(pixelX, pixelY) {
 
 
 function createMinimap(viewportWidth, viewportHeight, scale) {
-    eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.MouseWheel);
+    eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.MouseWheel, InputEvents.MouseDown, InputEvents.MouseUp, InputEvents.MouseMove);
 
     minimap = {
         container: new Container(),
         staticObjects: new Graphics(),
         viewportWidth,
         viewportHeight,
-        scale
+        scale,
+        scroll: { isScrolling: false, scrollRecentX: 0, scrollRecentY: 0 }
     };
 
     minimap.container.addChild(minimap.staticObjects);
@@ -603,13 +604,17 @@ function resizeMinimap(viewportWidth, viewportHeight) {
     minimap.viewportWidth = viewportWidth;
     minimap.viewportHeight = viewportHeight;
     minimap.sizeInPixel = Math.min(viewportWidth, viewportHeight) * minimap.scale;
-    minimap.left = (viewportWidth - minimap.sizeInPixel) / 2;
-    minimap.top = (viewportHeight - minimap.sizeInPixel) / 2;
-    minimap.container.position.set(minimap.left, minimap.top);
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
+    alignMinimapToCenter();
 }
 
-function updateMinimap() {
+function alignMinimapToCenter() {
+    minimap.left = (minimap.viewportWidth - minimap.sizeInPixel) / 2;
+    minimap.top = (minimap.viewportHeight - minimap.sizeInPixel) / 2;
+    minimap.container.position.set(minimap.left, minimap.top);
+}
+
+function repaintMinimap() {
     if(!minimap.container.visible) return;
 
     minimap.staticObjects.clear();
@@ -628,6 +633,7 @@ function updateMinimap() {
     );
 
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
+    alignMinimapToCenter();
 }
 
 function drawTilesOnMinimap(tileType, color) {
@@ -659,7 +665,7 @@ function drawObjectsOnMinimap(...objTypes) {
 function switchMinimapVisibility() {
     if(eventManager.hasThenClear('Minimap', InputEvents.KeyM)) {
         minimap.container.visible = !minimap.container.visible;
-        updateMinimap();
+        repaintMinimap();
     }
 }
 
@@ -672,6 +678,29 @@ function scaleMinimap() {
     minimap.scale += event.deltaY > 0 ? -0.1 : 0.1;
     minimap.scale = Math.clamp(minimap.scale, 0.3, 1.5);
     resizeMinimap(minimap.viewportWidth, minimap.viewportHeight);
+}
+
+function scrollMinimap() {
+    const mouseDownEvent = eventManager.getThenClear('Minimap', InputEvents.MouseDown);
+    if(mouseDownEvent) {
+        minimap.scroll.isScrolling = true;
+        minimap.scroll.scrollRecentX = mouseDownEvent.clientX;
+        minimap.scroll.scrollRecentY = mouseDownEvent.clientY;
+    }
+
+    const mouseMoveEvent = eventManager.getThenClear('Minimap', InputEvents.MouseMove);
+    if(mouseMoveEvent && minimap.scroll.isScrolling) {
+        minimap.left += mouseMoveEvent.clientX - minimap.scroll.scrollRecentX;
+        minimap.top += mouseMoveEvent.clientY - minimap.scroll.scrollRecentY;
+        minimap.container.position.set(minimap.left, minimap.top);
+        minimap.scroll.scrollRecentX = mouseMoveEvent.clientX;
+        minimap.scroll.scrollRecentY = mouseMoveEvent.clientY;
+    }
+
+    const mouseUpEvent = eventManager.getThenClear('Minimap', InputEvents.MouseUp);
+    if(mouseUpEvent) {
+        minimap.scroll.isScrolling = false;
+    }
 }
 
 
@@ -695,7 +724,7 @@ function update(ticker) {
     //Подгружаем и выгружаем часть карты при необходимости
     if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk)) {
         generateChunksFor(player.x, player.y);
-        updateMinimap();
+        repaintMinimap();
     }
 
     //Поиск коллизий
@@ -714,6 +743,7 @@ function update(ticker) {
     //Перерисовываем миникарту по необходимости
     switchMinimapVisibility();
     scaleMinimap();
+    scrollMinimap();
 
     //Отрисовываем границы физических тел для дебага физики
     //debugDrawAllPhysicsBodies();
@@ -788,8 +818,17 @@ async function setup() {
     document.addEventListener('click', event => {
         eventManager.pushEvent(InputEvents.MouseClick, event);
     });
-    document.addEventListener('wheel', (event) => {
+    document.addEventListener('wheel', event => {
         eventManager.pushEvent(InputEvents.MouseWheel, event);
+    });
+    document.addEventListener('mousedown', event => {
+        eventManager.pushEvent(InputEvents.MouseDown, event);
+    });
+    document.addEventListener('mouseup', event => {
+        eventManager.pushEvent(InputEvents.MouseUp, event);
+    });
+    document.addEventListener('mousemove', event => {
+        eventManager.pushEvent(InputEvents.MouseMove, event);
     });
 
     //Инициализируем и запускаем game loop
