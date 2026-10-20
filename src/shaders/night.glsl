@@ -39,13 +39,13 @@ void main(void) {
 	vec4 color = texture(uTexture, vTextureCoord);
 
 	if(uDayPhase == MORNING_DAY_PHASE) {
-		color = changeColor(nightColor(color), morningColor(color), uIntensity);
-	} else if(uDayPhase == AFTERNOON_DAY_PHASE) {
 		color = changeColor(morningColor(color), color, uIntensity);
-	} else if(uDayPhase == EVENING_DAY_PHASE) {
+	} else if(uDayPhase == AFTERNOON_DAY_PHASE) {
 		color = changeColor(color, eveningColor(color), uIntensity);
-	} else if(uDayPhase == NIGHT_DAY_PHASE) {
+	} else if(uDayPhase == EVENING_DAY_PHASE) {
 		color = changeColor(eveningColor(color), nightColor(color), uIntensity);
+	} else if(uDayPhase == NIGHT_DAY_PHASE) {
+		color = changeColor(nightColor(color), morningColor(color), uIntensity);
 	}
 
 	fragColor = color;
