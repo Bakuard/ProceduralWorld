@@ -85,24 +85,33 @@ function createShader() {
 function updateShader() {
     const currentDayPhaseProgress = calendar.getCurrentPhaseProgress();
     const uniforms = nightShader.resources.timeUniforms.uniforms;
+    let transitionFraction = 0;
     switch(calendar.getCurrentDayPhase()) {
         case dayPhases.morning:
             uniforms.uDayPhase = 1;
-            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.morningPhaseTransitionFraction);
+            transitionFraction = Config.time.morningPhaseTransitionFraction;
             break;
         case dayPhases.afternoon:
-            uniforms.uDayPhase =2;
-            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.afternoonPhaseTransitionFraction);
+            uniforms.uDayPhase = 2;
+            transitionFraction = Config.time.afternoonPhaseTransitionFraction;
             break;
         case dayPhases.evening:
-            uniforms.uDayPhase =3;
-            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.eveningPhaseTransitionFraction);
+            uniforms.uDayPhase = 3;
+            transitionFraction = Config.time.eveningPhaseTransitionFraction;
             break;
         case dayPhases.night:
-            uniforms.uDayPhase =4;
-            uniforms.uIntensity = Math.min(1, currentDayPhaseProgress / Config.time.nightPhaseTransitionFraction);
+            uniforms.uDayPhase = 4;
+            transitionFraction = Config.time.nightPhaseTransitionFraction;
             break;
     }
+    uniforms.uIntensity =  Math.max(0, (currentDayPhaseProgress - (1 - transitionFraction)) / transitionFraction);
+}
+
+
+function setPositionInObjectsSpriteContainer(sprite, x, y) {
+    const spriteX = gridStore.localPixelXInGrid(x);
+    const spriteY = gridStore.localPixelYInGrid(y);
+    sprite.position.set(spriteX, spriteY);
 }
 
 
@@ -182,9 +191,7 @@ function setPlayerAnimation(animationName) {
 }
 
 function updatePlayerView() {
-    const playerSpriteX = gridStore.localPixelXInGrid(player.x);
-    const playerSpriteY = gridStore.localPixelYInGrid(player.y);
-    player.sprite.position.set(playerSpriteX, playerSpriteY);
+    setPositionInObjectsSpriteContainer(player.sprite, player.x, player.y);
     player.sprite.zIndex = player.y;
 
     if(player.velocity.isZero() && player.animationName !== 'idle') setPlayerAnimation('idle');
@@ -234,9 +241,7 @@ function createExplosionSprite() {
 
 function createExplosion(globalPixelX, globalPixelY) {
     const explosion = allPools[objectTypes.explosion].acquire(() => ({ type: objectTypes.explosion, sprite: createExplosionSprite()}));
-    const spriteX = gridStore.localPixelXInGrid(globalPixelX);
-    const spriteY = gridStore.localPixelYInGrid(globalPixelY);
-    explosion.sprite.position.set(spriteX, spriteY);
+    setPositionInObjectsSpriteContainer(explosion.sprite, globalPixelX, globalPixelY);
     explosion.sprite.zIndex = globalPixelY;
     explosion.sprite.gotoAndPlay(0);
 
@@ -295,9 +300,7 @@ function removeFireball(fireball) {
 
 function updateAllFireballsView() {
     allPools[objectTypes.fireball].forEachUsed(fireball => {
-        const fireballSpriteX = gridStore.localPixelXInGrid(fireball.x);
-        const fireballSpriteY = gridStore.localPixelYInGrid(fireball.y);
-        fireball.sprite.position.set(fireballSpriteX, fireballSpriteY);
+        setPositionInObjectsSpriteContainer(fireball.sprite, fireball.x, fireball.y);
         fireball.sprite.zIndex = fireball.y + Config.fireball.zIndexOffset;
         fireball.sprite.rotation = fireball.velocity.getAngleInRadian();
 
@@ -397,9 +400,7 @@ function setSlimeAnimation(slime, animationName) {
 
 function updateAllSlimesView() {
     allPools[objectTypes.slime].forEachUsed(slime => {
-        const spriteX = gridStore.localPixelXInGrid(slime.x);
-        const spriteY = gridStore.localPixelYInGrid(slime.y);
-        slime.sprite.position.set(spriteX, spriteY);
+        setPositionInObjectsSpriteContainer(slime.sprite, slime.x, slime.y);
         slime.sprite.zIndex = slime.y;
 
         slime.sprite.update(ticker);
@@ -508,9 +509,7 @@ function createTree(treeMeta, chunk) {
     }));
     tree.x = treeMeta.globalPixelX;
     tree.y = treeMeta.globalPixelY;
-    const treeSpriteX = gridStore.localPixelXInGrid(tree.x);
-    const treeSpriteY = gridStore.localPixelYInGrid(tree.y);
-    tree.sprite.position.set(treeSpriteX, treeSpriteY);
+    setPositionInObjectsSpriteContainer(tree.sprite, tree.x, tree.y);
     tree.sprite.zIndex = tree.y;
 
     chunk.addToChunk(tree, tree.type);
@@ -633,7 +632,6 @@ function repaintMinimap() {
     );
 
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
-    alignMinimapToCenter();
 }
 
 function drawTilesOnMinimap(tileType, color) {
@@ -666,6 +664,7 @@ function switchMinimapVisibility() {
     if(eventManager.hasThenClear('Minimap', InputEvents.KeyM)) {
         minimap.container.visible = !minimap.container.visible;
         repaintMinimap();
+        alignMinimapToCenter();
     }
 }
 

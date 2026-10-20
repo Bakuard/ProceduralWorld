@@ -7,7 +7,9 @@
     "morningInSec": 5,
     "afternoonInSec": 5,
     "eveningInSec": 5,
-    "nightInSec": 5
+    "nightInSec": 5,
+    "startPhase": "afternoon",
+    "startPhaseProgress": 0
   },
   "sizeUnitsConverter": {
     "tileWidth": 60,

@@ -18,7 +18,7 @@ export function Calendar(calendarConfig) {
     this.eveningInMs = calendarConfig.eveningInSec * 1000;
     this.nightInMs = calendarConfig.nightInSec * 1000;
 
-    this.totalElapsedTimeInMs = 0;
+    this.totalElapsedTimeInMs = getElapsedMsBeforeDayPhase(this, calendarConfig.startPhase) + 1 + getDayPhaseDuration(this, this.currentPhase) * calendarConfig.startPhaseProgress;
     this.updateCurrentTime(0);
 }
 
@@ -29,9 +29,9 @@ Calendar.prototype.updateCurrentTime = function(deltaTimeInMs) {
 
     if(this.msSinceDayStart <= this.morningInMs)
         this.currentPhase = dayPhases.morning;
-    else if(this.msSinceDayStart <= getFirstPartOfDayInMs(this))
+    else if(this.msSinceDayStart <= getElapsedMsBeforeDayPhase(this, dayPhases.evening))
         this.currentPhase = dayPhases.afternoon;
-    else if(this.msSinceDayStart <= getDaylightHoursInMs(this))
+    else if(this.msSinceDayStart <= getElapsedMsBeforeDayPhase(this, dayPhases.night))
         this.currentPhase = dayPhases.evening;
     else
         this.currentPhase = dayPhases.night;
@@ -67,17 +67,11 @@ Calendar.prototype.getMsSinceDayStart = function() {
 };
 
 Calendar.prototype.getMsSincePhaseStart = function() {
-    if(this.isMorning()) return this.msSinceDayStart;
-    else if(this.isAfternoon()) return this.msSinceDayStart - this.morningInMs;
-    else if(this.isEvening()) return this.msSinceDayStart - getFirstPartOfDayInMs(this);
-    else return this.msSinceDayStart - getDaylightHoursInMs(this);
+    return this.msSinceDayStart - getElapsedMsBeforeDayPhase(this, this.currentPhase);
 };
 
 Calendar.prototype.getCurrentPhaseProgress = function() {
-    if(this.isMorning()) return this.getMsSincePhaseStart() / this.morningInMs;
-    else if(this.isAfternoon()) return this.getMsSincePhaseStart() / this.afternoonInMs;
-    else if(this.isEvening()) return this.getMsSincePhaseStart() / this.eveningInMs;
-    else return this.getMsSincePhaseStart() / this.nightInMs;
+    return this.getMsSincePhaseStart() / getDayPhaseDuration(this, this.currentPhase);
 };
 
 Calendar.prototype.getTotalDays = function() {
@@ -89,14 +83,20 @@ Calendar.prototype.getTotalMS = function() {
 }
 
 
-function getFirstPartOfDayInMs(calendar) {
-    return calendar.morningInMs + calendar.afternoonInMs;
-}
-
-function getDaylightHoursInMs(calendar) {
-    return calendar.morningInMs + calendar.afternoonInMs + calendar.eveningInMs;
-}
-
 function getTotalDayDurationInMs(calendar) {
     return calendar.morningInMs + calendar.afternoonInMs + calendar.eveningInMs + calendar.nightInMs;
+}
+
+function getElapsedMsBeforeDayPhase(calendar, dayPhase) {
+    if (dayPhase === dayPhases.morning) return 0;
+    else if (dayPhase === dayPhases.afternoon) return calendar.morningInMs;
+    else if (dayPhase === dayPhases.evening) return calendar.morningInMs + calendar.afternoonInMs;
+    else return calendar.morningInMs + calendar.afternoonInMs + calendar.eveningInMs;
+}
+
+function getDayPhaseDuration(calendar, dayPhase) {
+    if(dayPhase === dayPhases.morning) return calendar.morningInMs;
+    else if(dayPhase === dayPhases.afternoon) return calendar.afternoonInMs;
+    else if(dayPhase === dayPhases.evening) return calendar.eveningInMs;
+    else return calendar.nightInMs;
 }
