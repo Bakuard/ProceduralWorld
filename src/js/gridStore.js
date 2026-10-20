@@ -1,63 +1,64 @@
 import {objectTypes} from "./objectTypes.js";
 import './util.js';
 
-export function GridContainer(sizeUnitsConverter, chunkLeft, chunkTop) {
+export function GridStore(sizeUnitsConverter, gridContainerConfig) {
     this.sizeUnitsConverter = sizeUnitsConverter;
-    this.border = createBorder(sizeUnitsConverter, chunkLeft, chunkTop);
+    this.border = createBorder(sizeUnitsConverter, gridContainerConfig.chunkLeft, gridContainerConfig.chunkTop);
     this.chunks = [];
-};
+}
 
-GridContainer.prototype.getChunkByPixel = function(pixelX, pixelY) {
+GridStore.prototype.getChunkByPixel = function(pixelX, pixelY) {
     const chunkX = this.sizeUnitsConverter.chunkXFromPixelX(pixelX);
     const chunkY = this.sizeUnitsConverter.chunkYFromPixelY(pixelY)
     return getChunk(this, chunkX, chunkY);
 };
 
-GridContainer.prototype.shiftCenterToPixel = function(pixelX, pixelY) {
+GridStore.prototype.shiftCenterToPixel = function(pixelX, pixelY) {
     const chunkX = this.sizeUnitsConverter.chunkXFromPixelX(pixelX);
     const chunkY = this.sizeUnitsConverter.chunkYFromPixelY(pixelY)
     return shiftCenterToChunk(this, chunkX, chunkY);
 };
 
-GridContainer.prototype.isChunkInMap = function(chunkX, chunkY) {
+GridStore.prototype.isChunkInMap = function(chunkX, chunkY) {
     return chunkY >= this.border.chunkTop
         && chunkY < this.border.chunkBottom
         && chunkX >= this.border.chunkLeft
         && chunkX < this.border.chunkRight;
 };
 
-GridContainer.prototype.isPixelInMap = function(pixelX, pixelY) {
+GridStore.prototype.isPixelInMap = function(pixelX, pixelY) {
     return pixelX >= this.border.pixelLeft
         && pixelX < this.border.pixelRight
         && pixelY >= this.border.pixelTop
         && pixelY < this.border.pixelBottom;
 };
 
-GridContainer.prototype.checkDistanceToBorder = function(pixelX, pixelY, allowedDistanceInPixels) {
-    return pixelX - this.border.pixelLeft < allowedDistanceInPixels
-        || this.border.pixelRight - pixelX < allowedDistanceInPixels
-        || pixelY - this.border.pixelTop < allowedDistanceInPixels
-        || this.border.pixelBottom - pixelY < allowedDistanceInPixels;
+GridStore.prototype.checkDistanceToBorder = function(pixelX, pixelY, distanceInChunks) {
+    const distanceInPixels = distanceInChunks * this.sizeUnitsConverter.chunkWidthInPixels();
+    return pixelX - this.border.pixelLeft < distanceInPixels
+        || this.border.pixelRight - pixelX < distanceInPixels
+        || pixelY - this.border.pixelTop < distanceInPixels
+        || this.border.pixelBottom - pixelY < distanceInPixels;
 };
 
-GridContainer.prototype.forEachObjWithType = function(objType, callback) {
+GridStore.prototype.forEachObjWithType = function(objType, callback) {
     for(const chunk of this.chunks)
         forEachObjOfChunkWithType(chunk, objType, callback);
 };
 
-GridContainer.prototype.fillArrayWithType = function(objType, array) {
+GridStore.prototype.fillArrayWithType = function(objType, array) {
     this.forEachObjWithType(objType, obj => array.push(obj));
     return array;
 };
 
-GridContainer.prototype.getAllObjectsGroupedByType = function() {
+GridStore.prototype.getAllObjectsGroupedByType = function() {
     const result = {};
     for(const objType of Object.values(objectTypes))
         result[objType] = this.fillArrayWithType(objType, []);
     return result;
 };
 
-GridContainer.prototype.forEachObjectInArea = function(objType, pixelLeft, pixelTop, pixelRight, pixelBottom, callback) {
+GridStore.prototype.forEachObjectInArea = function(objType, pixelLeft, pixelTop, pixelRight, pixelBottom, callback) {
     const filter = obj => obj.x >= pixelLeft && obj.x <= pixelRight && obj.y >= pixelTop && obj.y <= pixelBottom && callback(obj);
 
     const chunkLeft = this.sizeUnitsConverter.chunkXFromPixelX(pixelLeft);
@@ -71,6 +72,34 @@ GridContainer.prototype.forEachObjectInArea = function(objType, pixelLeft, pixel
         }
 };
 
+GridStore.prototype.countByTypeInChunkRadius = function(objType, centerChunkX, centerChunkY, radiusInChunk) {
+    let count = 0;
+    for(let x = centerChunkX - radiusInChunk; x <= centerChunkX + radiusInChunk; x++) {
+        for(let y = centerChunkY - radiusInChunk; y <= centerChunkY + radiusInChunk; y++) {
+            count += getChunk(this, x, y)?.countByTypeInChunk(objType) ?? 0;
+        }
+    }
+    return count;
+};
+
+GridStore.prototype.localPixelXInGrid = function(pixelX) {
+    return pixelX - this.border.pixelLeft;
+}
+
+GridStore.prototype.localPixelYInGrid = function(pixelY) {
+    return pixelY - this.border.pixelTop;
+}
+
+GridStore.prototype.localLeftPixelOfChunkInGrid = function(chunkX) {
+    const globalLeftPixelOfChunk = this.sizeUnitsConverter.leftPixelOfChunk(chunkX);
+    return this.localPixelXInGrid(globalLeftPixelOfChunk);
+}
+
+GridStore.prototype.localTopPixelOfChunkInGrid = function(chunkY) {
+    const globalTopPixelOfChunk = this.sizeUnitsConverter.topPixelOfChunk(chunkY);
+    return this.localPixelYInGrid(globalTopPixelOfChunk);
+}
+
 function createBorder(sizeUnitsConverter, chunkLeft, chunkTop) {
     const border = {};
     border.chunkTop = chunkTop;
@@ -82,7 +111,7 @@ function createBorder(sizeUnitsConverter, chunkLeft, chunkTop) {
     border.pixelBottom = sizeUnitsConverter.topPixelOfChunk(border.chunkBottom);
     border.pixelRight = sizeUnitsConverter.leftPixelOfChunk(border.chunkRight);
     return border;
-};
+}
 
 function getChunk(grid, chunkX, chunkY) {
     if(!grid.isChunkInMap(chunkX, chunkY)) return null;
@@ -90,13 +119,13 @@ function getChunk(grid, chunkX, chunkY) {
     const localChunkX = chunkX - grid.border.chunkLeft;
     const localChunkY = chunkY - grid.border.chunkTop;
     return grid.chunks[localChunkX + localChunkY * grid.sizeUnitsConverter.worldWidthInChunk];
-};
+}
 
 function shiftCenterToChunk(grid, chunkX, chunkY) {
     const newChunkLeft = chunkX - Math.floor(grid.sizeUnitsConverter.worldWidthInChunk / 2);
     const newChunkTop = chunkY - Math.floor(grid.sizeUnitsConverter.worldHeightInChunk / 2);
 
-    const newChunks = [], createdChunks = [], destroyedChunks = [];
+    const allChunks = [], createdChunks = [], removedChunks = [], retainedChunks = [];
 
     for(let y = 0; y < grid.sizeUnitsConverter.worldHeightInChunk; y++) {
         for(let x = 0; x < grid.sizeUnitsConverter.worldWidthInChunk; x++) {
@@ -104,8 +133,10 @@ function shiftCenterToChunk(grid, chunkX, chunkY) {
             if(!chunk) {
                 chunk = new Chunk(grid.sizeUnitsConverter, x + newChunkLeft, y + newChunkTop);
                 createdChunks.push(chunk);
+            } else {
+                retainedChunks.push(chunk);
             }
-            newChunks.push(chunk);
+            allChunks.push(chunk);
         }
     }
 
@@ -114,12 +145,12 @@ function shiftCenterToChunk(grid, chunkX, chunkY) {
 
     for(const chunk of grid.chunks)
         if(!grid.isChunkInMap(chunk.chunkX, chunk.chunkY))
-            destroyedChunks.push(chunk);
+            removedChunks.push(chunk);
 
-    grid.chunks = newChunks;
+    grid.chunks = allChunks;
 
-    return { newBorder: grid.border, oldBorder: oldBorder, createdChunks: createdChunks, destroyedChunks: destroyedChunks };
-};
+    return { newBorder: grid.border, oldBorder: oldBorder, createdChunks: createdChunks, removedChunks: removedChunks, retainedChunks: retainedChunks };
+}
 
 
 function Chunk(sizeUnitsConverter, chunkLeft, chunkTop) {
@@ -128,10 +159,11 @@ function Chunk(sizeUnitsConverter, chunkLeft, chunkTop) {
     this.chunkX = chunkLeft;
     this.pixelTop = sizeUnitsConverter.topPixelOfChunk(chunkTop);
     this.pixelLeft = sizeUnitsConverter.leftPixelOfChunk(chunkLeft);
-    this.pixelBottom = sizeUnitsConverter.topPixelOfChunk(chunkTop) + sizeUnitsConverter.chunkHeightInPixels();
-    this.pixelRight = sizeUnitsConverter.leftPixelOfChunk(chunkLeft) + sizeUnitsConverter.chunkWidthInPixels();
+    this.pixelBottom = sizeUnitsConverter.bottomPixelOfChunk(chunkTop);
+    this.pixelRight = sizeUnitsConverter.rightPixelOfChunk(chunkLeft);
     this.objectsByType = {};
-};
+    this.tiles = [];
+}
 
 Chunk.prototype.addToChunk = function(obj, objType) {
     this.objectsByType[objType] ??= [];
@@ -146,12 +178,25 @@ Chunk.prototype.countByTypeInChunk = function(objType) {
     return this.objectsByType[objType]?.length ?? 0;
 };
 
-Chunk.prototype.forEachTile = function(callback) {
+Chunk.prototype.getTileContainerByLocalCoords = function(localTileX, localTileY) {
+    const index = localTileX + localTileY * this.sizeUnitsConverter.chunkAreaInTiles();
+    this.tiles[index] ??= {};
+    return this.tiles[index];
+};
+
+Chunk.prototype.forEachTileContainer = function(callback) {
+    this.forEachTileCoords((globalTileX, globalTileY, localTileX, localTileY) => {
+        const tileContainer = this.getTileContainerByLocalCoords(localTileX, localTileY);
+        callback(globalTileX, globalTileY, localTileX, localTileY, tileContainer);
+    });
+};
+
+Chunk.prototype.forEachTileCoords = function(callback) {
     const tileLeft = this.sizeUnitsConverter.leftTileOfChunk(this.chunkX);
     const tileTop = this.sizeUnitsConverter.topTileOfChunk(this.chunkY);
     for(let y = 0; y < this.sizeUnitsConverter.chunkSizeInTile; y++)
         for (let x = 0; x < this.sizeUnitsConverter.chunkSizeInTile; x++)
-            callback(tileLeft + x, tileTop + y);
+            callback(tileLeft + x, tileTop + y, x, y);
 };
 
 Chunk.prototype.forEachObj = function(callback) {
@@ -161,5 +206,5 @@ Chunk.prototype.forEachObj = function(callback) {
 
 function forEachObjOfChunkWithType(chunk, objType, callback) {
     const objects = chunk.objectsByType[objType] ??= [];
-    for(let i = objects.length - 1; i >= 0; --i) callback(objects[i]);
-};
+    for(let i = objects.length - 1; i >= 0; --i) callback(objects[i], objType);
+}

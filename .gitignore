@@ -5,3 +5,4 @@
 *.ini
 /logs/**
 /build/**
+out/
