@@ -4,11 +4,11 @@
     "afternoonPhaseTransitionFraction": 0.2,
     "eveningPhaseTransitionFraction": 0.2,
     "nightPhaseTransitionFraction": 0.2,
-    "morningInSec": 5,
-    "afternoonInSec": 20,
-    "eveningInSec": 5,
-    "nightInSec": 20,
-    "startPhase": "night",
+    "morningInSec": 20,
+    "afternoonInSec": 60,
+    "eveningInSec": 20,
+    "nightInSec": 60,
+    "startPhase": "afternoon",
     "startPhaseProgress": 0
   },
   "sizeUnitsConverter": {
@@ -50,8 +50,8 @@
   "fireball": {
     "zIndexOffset": 40,
     "spriteScale": 0.8,
-    "lifeTimeInMillis": 1500,
-    "speed": 300,
+    "lifeTimeInMillis": 1000,
+    "speed": 350,
     "damage": 10,
     "bodyRadius": 10,
     "lightPoint": {

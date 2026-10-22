@@ -18,8 +18,14 @@ const gradient = ctx.createRadialGradient(
 
 // 3. Настраиваем цвета и прозрачность (RGBA)
 // RGB всегда белый (255, 255, 255), меняется только альфа-канал (а) от 1 до 0
-gradient.addColorStop(0.0, 'rgba(255, 255, 255, 0.8)'); // Центр: непрозрачность
-gradient.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)'); // Край: полностью прозрачный
+//gradient.addColorStop(0.0, 'rgba(255, 255, 255, 0.8)'); // Центр: непрозрачность
+//gradient.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)'); // Край: полностью прозрачный
+const steps = 32;
+for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const a = 0.8 * (1 - t * t) ** 2;
+    gradient.addColorStop(t, `rgba(255, 255, 255, ${a})`);
+}
 
 // 4. Заливаем холст созданным градиентом
 ctx.fillStyle = gradient;

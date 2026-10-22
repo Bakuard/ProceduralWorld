@@ -83,7 +83,7 @@ function preparePointLighting(viewportWidth, viewportHeight, resolution) {
 function createLightPointSprite(radius, color) {
     const light = new Sprite(Assets.get('point_light_texture'));
     light.anchor.set(0.5, 0.5);
-    light.blendMode = 'add';
+    light.blendMode = 'screen';
     light.width = radius * 2;
     light.height = radius * 2;
     light.tint = color;
@@ -91,6 +91,8 @@ function createLightPointSprite(radius, color) {
 }
 
 function renderPointLightingToTexture() {
+    if(calendar.isAfternoon() && calendar.isCurrentPhaseProgressBetween(0, 1 - Config.time.afternoonPhaseTransitionFraction)) return;
+
     renderer.render({
         container: lightPointContainer,
         target: lightPointTexture,
