@@ -1,4 +1,4 @@
-import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix} from 'pixi.js';
+import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix, RenderTexture} from 'pixi.js';
 import {objectTypes} from './objectTypes';
 import {SizeUnitsConverter} from './sizeUnitsConverter';
 import {GridStore} from './gridStore';
@@ -42,6 +42,8 @@ let gameObjects;
 
 let nightShaderCode;
 let nightShader;
+let lightPointTexture;
+let lightPointContainer;
 
 async function loadTextures() {
     await Assets.load({ alias: objectTypes.waterTile, src: 'img/water_tile.jpg' });
@@ -52,6 +54,7 @@ async function loadTextures() {
     await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
     await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
     await Assets.load({ alias: objectTypes.slime, src: 'img/slime.json' });
+    await Assets.load({ alias: 'point_light_texture', src: 'img/point_light_texture.png' });
 }
 
 async function loadShaders() {
@@ -67,6 +70,36 @@ async function loadConfig() {
 }
 
 
+function preparePointLighting(viewportWidth, viewportHeight, resolution) {
+    lightPointContainer = new Container();
+    lightPointTexture = RenderTexture.create({
+        width: viewportWidth,
+        height: viewportHeight,
+        resolution: resolution,
+        scaleMode: 'linear'
+    });
+}
+
+function createLightPointSprite(radius, color) {
+    const light = new Sprite(Assets.get('point_light_texture'));
+    light.anchor.set(0.5, 0.5);
+    light.blendMode = 'screen';
+    light.width = radius * 2;
+    light.height = radius * 2;
+    light.tint = color;
+    return light;
+}
+
+function renderPointLightingToTexture() {
+    if(calendar.isAfternoon() && calendar.isCurrentPhaseProgressBetween(0, 1 - Config.time.afternoonPhaseTransitionFraction)) return;
+
+    renderer.render({
+        container: lightPointContainer,
+        target: lightPointTexture,
+        clear: true
+    });
+}
+
 function createShader() {
     return Filter.from({
         gl: {
@@ -78,37 +111,44 @@ function createShader() {
                 uIntensity: { value: 0.0, type: 'f32' },
                 uDayPhase: { value: 1, type: 'i32' }
             },
+            uLightPointTexture: lightPointTexture.source
         },
     });
 }
 
 function updateShader() {
     const currentDayPhaseProgress = calendar.getCurrentPhaseProgress();
-    const uniforms = nightShader.resources.timeUniforms.uniforms;
+    const timeUniforms = nightShader.resources.timeUniforms.uniforms;
     let transitionFraction = 0;
     switch(calendar.getCurrentDayPhase()) {
         case dayPhases.morning:
-            uniforms.uDayPhase = 1;
+            timeUniforms.uDayPhase = 1;
             transitionFraction = Config.time.morningPhaseTransitionFraction;
             break;
         case dayPhases.afternoon:
-            uniforms.uDayPhase = 2;
+            timeUniforms.uDayPhase = 2;
             transitionFraction = Config.time.afternoonPhaseTransitionFraction;
             break;
         case dayPhases.evening:
-            uniforms.uDayPhase = 3;
+            timeUniforms.uDayPhase = 3;
             transitionFraction = Config.time.eveningPhaseTransitionFraction;
             break;
         case dayPhases.night:
-            uniforms.uDayPhase = 4;
+            timeUniforms.uDayPhase = 4;
             transitionFraction = Config.time.nightPhaseTransitionFraction;
             break;
     }
-    uniforms.uIntensity =  Math.max(0, (currentDayPhaseProgress - (1 - transitionFraction)) / transitionFraction);
+    timeUniforms.uIntensity =  Math.max(0, (currentDayPhaseProgress - (1 - transitionFraction)) / transitionFraction);
+}
+
+function setLightPointPosition(lightPointSprite, x, y) {
+    const spriteX = camera.toViewportPixelX(x);
+    const spriteY = camera.toViewportPixelY(y);
+    lightPointSprite.position.set(spriteX, spriteY);
 }
 
 
-function setPositionInObjectsSpriteContainer(sprite, x, y) {
+function setSpritePositionInObjectsContainer(sprite, x, y) {
     const spriteX = gridStore.localPixelXInGrid(x);
     const spriteY = gridStore.localPixelYInGrid(y);
     sprite.position.set(spriteX, spriteY);
@@ -191,7 +231,7 @@ function setPlayerAnimation(animationName) {
 }
 
 function updatePlayerView() {
-    setPositionInObjectsSpriteContainer(player.sprite, player.x, player.y);
+    setSpritePositionInObjectsContainer(player.sprite, player.x, player.y);
     player.sprite.zIndex = player.y;
 
     if(player.velocity.isZero() && player.animationName !== 'idle') setPlayerAnimation('idle');
@@ -240,22 +280,35 @@ function createExplosionSprite() {
 }
 
 function createExplosion(globalPixelX, globalPixelY) {
-    const explosion = allPools[objectTypes.explosion].acquire(() => ({ type: objectTypes.explosion, sprite: createExplosionSprite()}));
-    setPositionInObjectsSpriteContainer(explosion.sprite, globalPixelX, globalPixelY);
+    const explosion = allPools[objectTypes.explosion].acquire(() => (
+        {
+            type: objectTypes.explosion,
+            sprite: createExplosionSprite(),
+            lightPoint: createLightPointSprite(Config.explosion.lightPoint.radius, Config.explosion.lightPoint.color)
+        }
+    ));
+    explosion.x = globalPixelX;
+    explosion.y = globalPixelY;
+    setSpritePositionInObjectsContainer(explosion.sprite, globalPixelX, globalPixelY);
     explosion.sprite.zIndex = globalPixelY;
     explosion.sprite.gotoAndPlay(0);
 
     objectsSpriteContainer.addChild(explosion.sprite);
+    lightPointContainer.addChild(explosion.lightPoint);
     explosion.sprite.onComplete = () => removeExplosion(explosion);
 }
 
 function removeExplosion(explosion) {
     explosion.sprite.removeFromParent();
+    explosion.lightPoint.removeFromParent();
     allPools[objectTypes.explosion].release(explosion);
 }
 
 function updateAllExplosionsView() {
-    allPools[objectTypes.explosion].forEachUsed(explosion => explosion.sprite.update(ticker));
+    allPools[objectTypes.explosion].forEachUsed(explosion => {
+        setLightPointPosition(explosion.lightPoint, explosion.x, explosion.y);
+        explosion.sprite.update(ticker);
+    });
 }
 
 
@@ -275,7 +328,8 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
         const newFireball = {
             type: objectTypes.fireball,
             velocity: new Vector(),
-            sprite: createFireballSprite()
+            sprite: createFireballSprite(),
+            lightPoint: createLightPointSprite(Config.fireball.lightPoint.radius, Config.fireball.lightPoint.color)
         };
         newFireball.body = collisionManager.createCircleCollider(globalPixelX, globalPixelY, Config.fireball.bodyRadius, 1, 0.5, newFireball);
         return newFireball;
@@ -289,18 +343,21 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
     collisionManager.setPosition(fireball.body, globalPixelX, globalPixelY);
 
     objectsSpriteContainer.addChild(fireball.sprite);
+    lightPointContainer.addChild(fireball.lightPoint);
     collisionManager.registerBody(fireball.body);
 }
 
 function removeFireball(fireball) {
     fireball.sprite.removeFromParent();
+    fireball.lightPoint.removeFromParent();
     allPools[objectTypes.fireball].release(fireball);
     collisionManager.unregisterBody(fireball.body);
 }
 
 function updateAllFireballsView() {
     allPools[objectTypes.fireball].forEachUsed(fireball => {
-        setPositionInObjectsSpriteContainer(fireball.sprite, fireball.x, fireball.y);
+        setSpritePositionInObjectsContainer(fireball.sprite, fireball.x, fireball.y);
+        setLightPointPosition(fireball.lightPoint, fireball.x, fireball.y);
         fireball.sprite.zIndex = fireball.y + Config.fireball.zIndexOffset;
         fireball.sprite.rotation = fireball.velocity.getAngleInRadian();
 
@@ -400,7 +457,7 @@ function setSlimeAnimation(slime, animationName) {
 
 function updateAllSlimesView() {
     allPools[objectTypes.slime].forEachUsed(slime => {
-        setPositionInObjectsSpriteContainer(slime.sprite, slime.x, slime.y);
+        setSpritePositionInObjectsContainer(slime.sprite, slime.x, slime.y);
         slime.sprite.zIndex = slime.y;
 
         slime.sprite.update(ticker);
@@ -509,7 +566,7 @@ function createTree(treeMeta, chunk) {
     }));
     tree.x = treeMeta.globalPixelX;
     tree.y = treeMeta.globalPixelY;
-    setPositionInObjectsSpriteContainer(tree.sprite, tree.x, tree.y);
+    setSpritePositionInObjectsContainer(tree.sprite, tree.x, tree.y);
     tree.sprite.zIndex = tree.y;
 
     chunk.addToChunk(tree, tree.type);
@@ -737,6 +794,7 @@ function update(ticker) {
     updateAllSlimesView();
 
     //Обновляем шейдеры
+    renderPointLightingToTexture();
     updateShader();
 
     //Перерисовываем миникарту по необходимости
@@ -799,6 +857,7 @@ async function setup() {
     camera.centerOn(player.x, player.y);
 
     //Подключаем шейдеры
+    preparePointLighting(domContainer.clientWidth, domContainer.clientHeight, 0.5);
     nightShader = createShader();
     gameObjects.filters = [nightShader];
 

@@ -15,6 +15,7 @@ out vec4 fragColor;
 uniform sampler2D uTexture;
 uniform float uIntensity;
 uniform int uDayPhase;
+uniform sampler2D uLightPointTexture;
 
 vec4 nightColor(vec4 color) {
     vec3 nightColor = color.rgb * NIGHT_TINT;
@@ -35,18 +36,24 @@ vec4 changeColor(vec4 originalColor, vec4 targetColor, float intensity) {
     return originalColor;
 }
 
+vec4 applyLocalLight(vec4 globalLight, vec4 originalColor) {
+	vec4 localLight = texture(uLightPointTexture, vTextureCoord);
+	return vec4(mix(globalLight.rgb, originalColor.rgb, localLight.rgb), originalColor.a);
+}
+
 void main(void) {
-	vec4 color = texture(uTexture, vTextureCoord);
+	vec4 original = texture(uTexture, vTextureCoord);
+	vec4 globalLight = original;
 
 	if(uDayPhase == MORNING_DAY_PHASE) {
-		color = changeColor(morningColor(color), color, uIntensity);
+		globalLight = changeColor(morningColor(original), original, uIntensity);
 	} else if(uDayPhase == AFTERNOON_DAY_PHASE) {
-		color = changeColor(color, eveningColor(color), uIntensity);
+		globalLight = changeColor(original, eveningColor(original), uIntensity);
 	} else if(uDayPhase == EVENING_DAY_PHASE) {
-		color = changeColor(eveningColor(color), nightColor(color), uIntensity);
+		globalLight = changeColor(eveningColor(original), nightColor(original), uIntensity);
 	} else if(uDayPhase == NIGHT_DAY_PHASE) {
-		color = changeColor(nightColor(color), morningColor(color), uIntensity);
+		globalLight = changeColor(nightColor(original), morningColor(original), uIntensity);
 	}
 
-	fragColor = color;
+	fragColor = applyLocalLight(globalLight, original);
 }
