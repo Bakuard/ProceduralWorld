@@ -58,11 +58,6 @@ Calendar.prototype.isCurrentPhaseBetween = function(phaseStart, phaseEnd) {
         && dayPhasesNumber[this.currentPhase] <= dayPhasesNumber[phaseEnd];
 };
 
-Calendar.prototype.isCurrentPhaseProgressBetween = function(phaseProgressStart, phaseProgressEnd) {
-    const currentPhaseProgress = this.getCurrentPhaseProgress();
-    return currentPhaseProgress >= phaseProgressStart && currentPhaseProgress <= phaseProgressEnd;
-};
-
 Calendar.prototype.getCurrentDayPhase = function() {
     return this.currentPhase;
 };

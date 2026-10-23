@@ -80,6 +80,10 @@ function preparePointLighting(viewportWidth, viewportHeight, resolution) {
     });
 }
 
+function resizePointLightingToTexture(viewportWidth, viewportHeight, resolution) {
+    lightPointTexture.resize(viewportWidth, viewportHeight, resolution);
+}
+
 function createLightPointSprite(radius, color) {
     const light = new Sprite(Assets.get('point_light_texture'));
     light.anchor.set(0.5, 0.5);
@@ -91,7 +95,7 @@ function createLightPointSprite(radius, color) {
 }
 
 function renderPointLightingToTexture() {
-    if(calendar.isAfternoon() && calendar.isCurrentPhaseProgressBetween(0, 1 - Config.time.afternoonPhaseTransitionFraction)) return;
+    if(calendar.isAfternoon()) return;
 
     renderer.render({
         container: lightPointContainer,
@@ -866,6 +870,7 @@ async function setup() {
         camera.resize(domContainer.clientWidth, domContainer.clientHeight);
         renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
         resizeMinimap(domContainer.clientWidth, domContainer.clientHeight);
+        resizePointLightingToTexture(domContainer.clientWidth, domContainer.clientHeight, 0.5);
     });
     document.addEventListener('keydown', event => {
         eventManager.pushEvent(event.code, event);

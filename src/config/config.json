@@ -1,14 +1,14 @@
 {
   "time": {
-    "morningPhaseTransitionFraction": 0.2,
+    "morningPhaseTransitionFraction": 0.4,
     "afternoonPhaseTransitionFraction": 0.2,
-    "eveningPhaseTransitionFraction": 0.2,
+    "eveningPhaseTransitionFraction": 0.4,
     "nightPhaseTransitionFraction": 0.2,
     "morningInSec": 20,
     "afternoonInSec": 60,
     "eveningInSec": 20,
     "nightInSec": 60,
-    "startPhase": "afternoon",
+    "startPhase": "night",
     "startPhaseProgress": 0
   },
   "sizeUnitsConverter": {
@@ -55,15 +55,15 @@
     "damage": 10,
     "bodyRadius": 10,
     "lightPoint": {
-      "radius": 100,
-      "color": "#F49953"
+      "radius": 200,
+      "color": "#E41F24"
     }
   },
   "explosion": {
     "spriteScale": 1.2,
     "lightPoint": {
-      "radius": 100,
-      "color": "#F49953"
+      "radius": 200,
+      "color": "#E41F24"
     }
   },
   "slime": {
