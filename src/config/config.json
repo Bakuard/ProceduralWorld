@@ -8,7 +8,7 @@
     "afternoonInSec": 60,
     "eveningInSec": 20,
     "nightInSec": 60,
-    "startPhase": "night",
+    "startPhase": "afternoon",
     "startPhaseProgress": 0
   },
   "sizeUnitsConverter": {
@@ -71,7 +71,7 @@
     "maxSlimesInArea": 5,
     "minGrassTilePercentForSpawn": 0.75,
     "spawnerProbabilityInChunk": 0.05,
-    "spawnRateInSec": 1,
+    "spawnRateInSec": 5,
     "spawnDayPhaseStart": "morning",
     "spawnDayPhaseEnd": "afternoon",
     "speed": 100,

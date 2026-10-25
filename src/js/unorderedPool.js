@@ -49,7 +49,7 @@ export class DenseArray {
 
     addLast(item) {
         if(item && !this.contain(item)) {
-            this.#setItemIndex(item, this.innerArray.length);
+            setItemIndex(this, item, this.innerArray.length);
             this.innerArray.push(item);
             return true;
         }
@@ -58,9 +58,9 @@ export class DenseArray {
 
     quickRemove(item) {
         if(item && this.contain(item)) {
-            const itemIndex = this.#getItemIndex(item);
+            const itemIndex = getItemIndex(this, item);
             const lastItem = this.innerArray.at(-1);
-            this.#setItemIndex(lastItem, itemIndex);
+            setItemIndex(this, lastItem, itemIndex);
             this.innerArray[itemIndex] = lastItem;
             this.innerArray.pop();
             return true;
@@ -83,15 +83,14 @@ export class DenseArray {
     }
 
     contain(item) {
-        return this.innerArray[this.#getItemIndex(item)] === item;
+        return this.innerArray[getItemIndex(this, item)] === item;
     }
+}
 
+function getItemIndex(denseArray, item) {
+    return item[denseArray.indexInArray];
+}
 
-    #getItemIndex(item) {
-        return item[this.indexInArray];
-    }
-
-    #setItemIndex(item, index) {
-        item[this.indexInArray] = index;
-    }
+function setItemIndex(denseArray, item, index) {
+    item[denseArray.indexInArray] = index;
 }

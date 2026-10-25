@@ -1,35 +1,36 @@
 import {objectTypes} from "./objectTypes.js";
 import './util.js';
 
-export function MapGenerator(sizeUnitsConverter, mapGeneratorConfig) {
-    this.seed = mapGeneratorConfig.seed ?? Math.randomIntegerInRange(0, 1_000_000);
-    this.octaves = mapGeneratorConfig.octaves;
-    this.persistence = mapGeneratorConfig.persistence;
-    this.frequency = mapGeneratorConfig.frequency;
-    this.frequencyMod = mapGeneratorConfig.frequencyMod;
-    this.treeCellSizePerTile = mapGeneratorConfig.distanceBetweenTreesInTile;
-    this.offsetVectors = createOffsetVectors(8, mapGeneratorConfig.treeRandomOffsetInPixel);
-    this.sizeUnitsConverter = sizeUnitsConverter;
+export class MapGenerator {
+    constructor(sizeUnitsConverter, mapGeneratorConfig) {
+        this.seed = mapGeneratorConfig.seed ?? Math.randomIntegerInRange(0, 1_000_000);
+        this.octaves = mapGeneratorConfig.octaves;
+        this.persistence = mapGeneratorConfig.persistence;
+        this.frequency = mapGeneratorConfig.frequency;
+        this.frequencyMod = mapGeneratorConfig.frequencyMod;
+        this.treeCellSizePerTile = mapGeneratorConfig.distanceBetweenTreesInTile;
+        this.offsetVectors = createOffsetVectors(8, mapGeneratorConfig.treeRandomOffsetInPixel);
+        this.sizeUnitsConverter = sizeUnitsConverter;
+    }
+
+    generate(tileX, tileY) {
+        this.height = multipleOctavesNoise(tileX, tileY, this.seed, this.octaves, this.persistence, this.frequency, this.frequencyMod);
+        this.tileType = generateTileType(this.height);
+        this.tree = generateTree(this, tileX, tileY);
+    }
+
+    getTileType() {
+        return this.tileType;
+    }
+
+    getTree() {
+        return this.tree;
+    }
+
+    noise(x, y) {
+        return noise(x, y, this.seed);
+    }
 }
-
-MapGenerator.prototype.generate = function(tileX, tileY) {
-    this.height = multipleOctavesNoise(tileX, tileY, this.seed, this.octaves, this.persistence, this.frequency, this.frequencyMod);
-    this.tileType = generateTileType(this.height);
-    this.tree = generateTree(this, tileX, tileY);
-};
-
-MapGenerator.prototype.getTileType = function() {
-    return this.tileType;
-};
-
-MapGenerator.prototype.getTree = function() {
-    return this.tree;
-};
-
-MapGenerator.prototype.noise = function(x, y) {
-    return noise(x, y, this.seed);
-}
-
 
 function chooseTreeType(noiseForTree) {
     if(noiseForTree < 0.6) {
