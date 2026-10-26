@@ -45,7 +45,12 @@
     "startAnimation": "idle",
     "fireRateInMillis": 500,
     "bodyWidth": 40,
-    "bodyHeight": 70
+    "bodyHeight": 70,
+    "energy": {
+      "defaultMaxEnergy": 10,
+      "runningEnergyLossPerSec": 1,
+      "runningEnergyLossAmount": 1
+    }
   },
   "fireball": {
     "zIndexOffset": 40,
