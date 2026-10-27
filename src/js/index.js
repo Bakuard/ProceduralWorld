@@ -8,7 +8,7 @@ import {Vector} from './vector';
 import {Camera} from './camera';
 import {Calendar, dayPhases} from './calendar';
 import {UnorderedPool} from './unorderedPool';
-import {IntervalTimer} from './util';
+import {IntervalTimer, TimestampIntervalTimer} from './timers';
 import {CollisionManager} from './collisions';
 import {LightManager} from "./lighting";
 
@@ -114,7 +114,8 @@ function createEnergyBar(playerConfig) {
     return {
         currentEnergyLimit: playerConfig.energy.defaultMaxEnergy,
         currentEnergy: playerConfig.energy.defaultMaxEnergy,
-        runDrainTimer: IntervalTimer.ofSeconds(playerConfig.energy.runningEnergyLossPerSec)
+        runDrainTimer: IntervalTimer.ofSeconds(playerConfig.energy.runningEnergyLossPerSec),
+        recoveryTimer: IntervalTimer.ofSeconds(playerConfig.energy.recoverEnergyRatePerSec)
     };
 }
 
@@ -124,8 +125,7 @@ function createPlayer(playerConfig) {
         x: playerConfig.pixelX,
         y: playerConfig.pixelY,
         speed: playerConfig.speed,
-        fireRateInMillis: playerConfig.fireRateInMillis,
-        lastFireTime: 0,
+        fireTimer: TimestampIntervalTimer.ofMillis(playerConfig.fireRateInMillis),
         velocity: new Vector(),
         sprite: createPlayerSprite(playerConfig.startAnimation),
         energy: createEnergyBar(playerConfig)
@@ -180,6 +180,7 @@ function consumeEnergyWhileMoving(deltaMS) {
 
     if(player.energy.runDrainTimer.tick(deltaMS)) {
         player.energy.currentEnergy -= Config.player.energy.runningEnergyLossAmount;
+        console.log("consume while moving:", player.energy.currentEnergy)
     }
     return true;
 }
@@ -187,21 +188,43 @@ function consumeEnergyWhileMoving(deltaMS) {
 function movePlayer(deltaMS) {
     calculatePlayerVelocity(deltaMS);
 
-    if(!player.velocity.isZero() && !consumeEnergyWhileMoving(deltaMS)) player.velocity.set(0, 0);
+    if(player.velocity.isZero()) return;
+
+    if(!consumeEnergyWhileMoving(deltaMS)) {
+        player.velocity.set(0, 0);
+        return;
+    }
+    player.energy.recoveryTimer.resetElapsed();
 
     player.x += player.velocity.x;
     player.y += player.velocity.y;
     collisionManager.setPosition(player.body, player.x, player.y);
 }
 
+function consumeEnergyWhileAttack() {
+    if(player.energy.currentEnergy >= Config.player.energy.attackEnergyLossAmount) {
+        player.energy.currentEnergy -= Config.player.energy.attackEnergyLossAmount;
+        return true;
+    }
+    return false;
+}
+
 function playerAttack() {
     const mouseClick = eventManager.pullEvent('Player', InputEvents.MouseClick);
-    if(mouseClick && calendar.getTotalMS() > player.lastFireTime + player.fireRateInMillis) {
+    if(mouseClick && player.fireTimer.check(calendar.getTotalMS()) && consumeEnergyWhileAttack()) {
         const aimX = camera.toGlobalPixelX(mouseClick.clientX);
         const aimY = camera.toGlobalPixelY(mouseClick.clientY);
         createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage);
+        player.fireTimer.reset(calendar.getTotalMS());
+        player.energy.recoveryTimer.resetElapsed();
+        console.log("consume while attack:", player.energy.currentEnergy);
+    }
+}
 
-        player.lastFireTime = calendar.getTotalMS();
+function recoverEnergy(deltaMS) {
+    if(player.energy.recoveryTimer.tick(deltaMS)) {
+        player.energy.currentEnergy = Math.min(player.energy.currentEnergy + Config.player.energy.recoveryEnergyAmount, player.energy.currentEnergyLimit);
+        console.log("recover:", player.energy.currentEnergy);
     }
 }
 
@@ -209,6 +232,7 @@ function updatePlayer(deltaMS) {
     calculatePlayerVelocity(deltaMS);
     movePlayer(deltaMS);
     playerAttack();
+    recoverEnergy(deltaMS);
 }
 
 

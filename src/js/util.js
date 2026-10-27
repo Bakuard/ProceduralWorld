@@ -19,35 +19,3 @@ Math.randomIntegerInRange = function(min, max) {
 Math.clamp = function(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
-
-export class IntervalTimer {
-    static ofSeconds(seconds) {
-        return new IntervalTimer(seconds * 1000);
-    }
-
-    static ofMillis(millis) {
-        return new IntervalTimer(millis);
-    }
-
-    constructor(durationMs) {
-        this.durationMs = durationMs;
-        this.elapsedMs = 0;
-    }
-
-    tick(deltaTimeMS) {
-        this.elapsedMs += deltaTimeMS;
-        if (this.elapsedMs >= this.durationMs) {
-            this.elapsedMs = this.elapsedMs - this.durationMs;
-            return true;
-        }
-        return false;
-    }
-
-    getElapsedSeconds() {
-        return this.durationMs / 1000;
-    }
-
-    getDurationMs() {
-        return this.durationMs;
-    }
-}
