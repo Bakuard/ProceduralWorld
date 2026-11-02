@@ -11,6 +11,7 @@ import {UnorderedPool} from './unorderedPool';
 import {IntervalTimer, TimestampIntervalTimer} from './timers';
 import {CollisionManager} from './collisions';
 import {LightManager} from "./lighting";
+import {UIManager} from "./ui";
 
 let Config;
 let sizeUnitsConverter;
@@ -42,6 +43,8 @@ let debugPhysicsGraphics;
 let gameObjects;
 
 let lightManager;
+
+let uiManager;
 
 async function loadTextures() {
     await Assets.load({ alias: objectTypes.waterTile, src: 'img/water_tile.jpg' });
@@ -178,9 +181,10 @@ function calculatePlayerVelocity(deltaMS) {
 function consumeEnergyWhileMoving(deltaMS) {
     if(player.energy.currentEnergy < Config.player.energy.runningEnergyLossAmount) return false;
 
+    player.energy.recoveryTimer.resetElapsed();
+
     if(player.energy.runDrainTimer.tick(deltaMS)) {
         player.energy.currentEnergy -= Config.player.energy.runningEnergyLossAmount;
-        console.log("consume while moving:", player.energy.currentEnergy)
     }
     return true;
 }
@@ -194,7 +198,6 @@ function movePlayer(deltaMS) {
         player.velocity.set(0, 0);
         return;
     }
-    player.energy.recoveryTimer.resetElapsed();
 
     player.x += player.velocity.x;
     player.y += player.velocity.y;
@@ -203,6 +206,7 @@ function movePlayer(deltaMS) {
 
 function consumeEnergyWhileAttack() {
     if(player.energy.currentEnergy >= Config.player.energy.attackEnergyLossAmount) {
+        player.energy.recoveryTimer.resetElapsed();
         player.energy.currentEnergy -= Config.player.energy.attackEnergyLossAmount;
         return true;
     }
@@ -216,15 +220,12 @@ function playerAttack() {
         const aimY = camera.toGlobalPixelY(mouseClick.clientY);
         createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage);
         player.fireTimer.reset(calendar.getTotalMS());
-        player.energy.recoveryTimer.resetElapsed();
-        console.log("consume while attack:", player.energy.currentEnergy);
     }
 }
 
 function recoverEnergy(deltaMS) {
     if(player.energy.recoveryTimer.tick(deltaMS)) {
         player.energy.currentEnergy = Math.min(player.energy.currentEnergy + Config.player.energy.recoveryEnergyAmount, player.energy.currentEnergyLimit);
-        console.log("recover:", player.energy.currentEnergy);
     }
 }
 
@@ -745,6 +746,11 @@ function updateCamera() {
 }
 
 
+function updateUI() {
+    uiManager.setEnergy(player.energy.currentEnergy, player.energy.currentEnergyLimit);
+}
+
+
 function update(ticker) {
     //Обновляем модель
     calendar.updateCurrentTime(ticker.deltaMS);
@@ -762,7 +768,7 @@ function update(ticker) {
     //Поиск коллизий
     collisionManager.handleCollisions(allCollisionHandler);
 
-    //Отрисовываем игровые объекты
+    //Обновляем внешний вид игровых объектов
     updateCamera();
     updatePlayerView();
     updateAllFireballsView();
@@ -773,13 +779,17 @@ function update(ticker) {
     lightManager.renderPointLightingToTexture(calendar, renderer);
     lightManager.updateGlobalLightShader(calendar);
 
-    //Перерисовываем миникарту по необходимости
+    //Обновляем внешний вид миникарту по необходимости
     updateMinimapView(allPools, gridStore, sizeUnitsConverter, eventManager);
 
-    //Отрисовываем границы физических тел для дебага физики
+    //Обновляем внешний вид границ физических тел для дебага физики
     //debugDrawAllPhysicsBodies();
 
+    //Отрисовываем игровой мир
     renderer.render(stage);
+
+    //Отрисовываем UI
+    updateUI();
 }
 
 async function setup() {
@@ -805,7 +815,7 @@ async function setup() {
     collisionManager = new CollisionManager();
 
     //Создаем Renderer
-    const domContainer = document.querySelector('.canvasContainer');
+    const domContainer = document.querySelector('.game-canvas-container');
     renderer = new WebGLRenderer();
     await renderer.init({
         background: '#1099BB',
@@ -862,6 +872,9 @@ async function setup() {
     document.addEventListener('mousemove', event => {
         eventManager.pushEvent(InputEvents.MouseMove, event);
     });
+
+    //Подготавливаем управление UI
+    uiManager = new UIManager();
 
     //Инициализируем и запускаем game loop
     ticker = new Ticker();

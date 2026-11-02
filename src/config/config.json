@@ -49,10 +49,10 @@
     "energy": {
       "defaultMaxEnergy": 10,
       "runningEnergyLossPerSec": 1,
-      "runningEnergyLossAmount": 1,
+      "runningEnergyLossAmount": 0.5,
       "attackEnergyLossAmount": 2,
-      "recoverEnergyRatePerSec": 1,
-      "recoveryEnergyAmount": 1
+      "recoverEnergyRatePerSec": 0.025,
+      "recoveryEnergyAmount": 0.05
     }
   },
   "fireball": {

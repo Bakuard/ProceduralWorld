@@ -59,7 +59,7 @@ export class Calendar {
             && dayPhasesNumber[this.currentPhase] <= dayPhasesNumber[phaseEnd];
     }
 
-    getCurrentDayPhase() {
+    getCurrentPhase() {
         return this.currentPhase;
     }
 
@@ -73,6 +73,10 @@ export class Calendar {
 
     getTotalMS() {
         return this.totalElapsedTimeInMs;
+    }
+
+    getDaysSince(startDay) {
+        return this.totalDays - startDay;
     }
 }
 

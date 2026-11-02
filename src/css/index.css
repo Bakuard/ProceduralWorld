@@ -3,10 +3,52 @@ body, canvas, main {
     padding: 0;
 }
 
+
+.game {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
+
+
+.game-canvas-container {
+    width: 100%;
+    height: 100%;
+}
+
 canvas {
     display: block;
 }
 
-.canvasContainer {
-    height: 100vh;
+
+.game-ui {
+    display: grid;
+    grid-template-columns: 1fr 23% 1fr;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 14px;
+}
+
+.energy-bar {
+    width: 100%;
+    height: 24px;
+    background-color: #1A4147;
+    border: 2px solid #1A4147;
+    border-radius: 6px;
+    overflow: hidden;
+    justify-self: center;
+    align-self: end;
+    grid-column: 2 / 3;
+}
+
+.energy-bar-available-energy {
+    width: 100%;
+    height: 100%;
+    background-color: #56C300;
+    transform: scaleX(1);
+    transform-origin: left center;
 }

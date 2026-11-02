@@ -93,7 +93,7 @@ export class LightManager {
         const currentDayPhaseProgress = calendar.getCurrentPhaseProgress();
         const timeUniforms = this.nightShader.resources.timeUniforms.uniforms;
         let transitionFraction = 0;
-        switch(calendar.getCurrentDayPhase()) {
+        switch(calendar.getCurrentPhase()) {
             case dayPhases.morning:
                 timeUniforms.uDayPhase = 1;
                 transitionFraction = this.morningPhaseTransitionFraction;
