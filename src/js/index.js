@@ -117,8 +117,7 @@ function createEnergyBar(playerConfig) {
     return {
         currentEnergyLimit: playerConfig.energy.defaultMaxEnergy,
         currentEnergy: playerConfig.energy.defaultMaxEnergy,
-        runDrainTimer: IntervalTimer.ofSeconds(playerConfig.energy.runningEnergyLossPerSec),
-        recoveryTimer: IntervalTimer.ofSeconds(playerConfig.energy.recoverEnergyRatePerSec)
+        recoveryTimerPauseInMs: 0
     };
 }
 
@@ -179,13 +178,11 @@ function calculatePlayerVelocity(deltaMS) {
 }
 
 function consumeEnergyWhileMoving(deltaMS) {
-    if(player.energy.currentEnergy < Config.player.energy.runningEnergyLossAmount) return false;
+    const energyLossAmount = Config.player.energy.runningEnergyLossPerSec * (deltaMS / 1000);
+    if(player.energy.currentEnergy < energyLossAmount) return false;
 
-    player.energy.recoveryTimer.resetElapsed();
-
-    if(player.energy.runDrainTimer.tick(deltaMS)) {
-        player.energy.currentEnergy -= Config.player.energy.runningEnergyLossAmount;
-    }
+    player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
+    player.energy.currentEnergy -= energyLossAmount;
     return true;
 }
 
@@ -206,7 +203,7 @@ function movePlayer(deltaMS) {
 
 function consumeEnergyWhileAttack() {
     if(player.energy.currentEnergy >= Config.player.energy.attackEnergyLossAmount) {
-        player.energy.recoveryTimer.resetElapsed();
+        player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
         player.energy.currentEnergy -= Config.player.energy.attackEnergyLossAmount;
         return true;
     }
@@ -215,18 +212,19 @@ function consumeEnergyWhileAttack() {
 
 function playerAttack() {
     const mouseClick = eventManager.pullEvent('Player', InputEvents.MouseClick);
-    if(mouseClick && player.fireTimer.check(calendar.getTotalMS()) && consumeEnergyWhileAttack()) {
+    if(mouseClick && player.fireTimer.checkThenReset(calendar.getTotalMS()) && consumeEnergyWhileAttack()) {
         const aimX = camera.toGlobalPixelX(mouseClick.clientX);
         const aimY = camera.toGlobalPixelY(mouseClick.clientY);
         createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage);
-        player.fireTimer.reset(calendar.getTotalMS());
     }
 }
 
 function recoverEnergy(deltaMS) {
-    if(player.energy.recoveryTimer.tick(deltaMS)) {
-        player.energy.currentEnergy = Math.min(player.energy.currentEnergy + Config.player.energy.recoveryEnergyAmount, player.energy.currentEnergyLimit);
+    if(player.energy.recoveryTimerPauseInMs === 0 && player.energy.currentEnergy < player.energy.currentEnergyLimit) {
+        const updatedEnergyAmount = player.energy.currentEnergy + Config.player.energy.recoverEnergyRatePerSec * (deltaMS / 1000);
+        player.energy.currentEnergy = Math.min(updatedEnergyAmount, player.energy.currentEnergyLimit);
     }
+    player.energy.recoveryTimerPauseInMs = Math.max(0, player.energy.recoveryTimerPauseInMs - deltaMS);
 }
 
 function updatePlayer(deltaMS) {

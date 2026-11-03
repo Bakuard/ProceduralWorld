@@ -48,11 +48,10 @@
     "bodyHeight": 70,
     "energy": {
       "defaultMaxEnergy": 10,
-      "runningEnergyLossPerSec": 1,
-      "runningEnergyLossAmount": 0.5,
-      "attackEnergyLossAmount": 2,
-      "recoverEnergyRatePerSec": 0.025,
-      "recoveryEnergyAmount": 0.05
+      "runningEnergyLossPerSec": 0.5,
+      "recoverEnergyRatePerSec": 2,
+      "recoverEnergyPauseInSec": 0.25,
+      "attackEnergyLossAmount": 2
     }
   },
   "fireball": {
