@@ -1,115 +1,117 @@
-export function SizeUnitsConverter(sizeUnitsConverterConfig) {
-    this.tileWidth = sizeUnitsConverterConfig.tileWidth;
-    this.tileHeight = sizeUnitsConverterConfig.tileHeight;
-    this.chunkSizeInTile = sizeUnitsConverterConfig.chunkSizeInTile;
-    this.worldWidthInChunk = sizeUnitsConverterConfig.worldWidthInChunk;
-    this.worldHeightInChunk = sizeUnitsConverterConfig.worldHeightInChunk;
-};
+export class SizeUnitsConverter {
+    constructor(sizeUnitsConverterConfig) {
+        this.tileWidth = sizeUnitsConverterConfig.tileWidth;
+        this.tileHeight = sizeUnitsConverterConfig.tileHeight;
+        this.chunkSizeInTile = sizeUnitsConverterConfig.chunkSizeInTile;
+        this.worldWidthInChunk = sizeUnitsConverterConfig.worldWidthInChunk;
+        this.worldHeightInChunk = sizeUnitsConverterConfig.worldHeightInChunk;
+    }
 
-SizeUnitsConverter.prototype.worldWidthInPixels = function() {
-    return this.chunkWidthInPixels() * this.worldWidthInChunk;
-};
+    worldWidthInPixels() {
+        return this.chunkWidthInPixels() * this.worldWidthInChunk;
+    }
 
-SizeUnitsConverter.prototype.worldHeightInPixels = function() {
-    return this.chunkHeightInPixels() * this.worldHeightInChunk;
-};
+    worldHeightInPixels() {
+        return this.chunkHeightInPixels() * this.worldHeightInChunk;
+    }
 
-SizeUnitsConverter.prototype.chunkWidthInPixels = function() {
-    return this.chunkSizeInTile * this.tileWidth;
-};
+    chunkWidthInPixels() {
+        return this.chunkSizeInTile * this.tileWidth;
+    }
 
-SizeUnitsConverter.prototype.chunkHeightInPixels = function() {
-    return this.chunkSizeInTile * this.tileHeight;
-};
+    chunkHeightInPixels() {
+        return this.chunkSizeInTile * this.tileHeight;
+    }
 
-SizeUnitsConverter.prototype.tileWidthInPixels = function() {
-    return this.tileWidth;
-}
+    tileWidthInPixels() {
+        return this.tileWidth;
+    }
 
-SizeUnitsConverter.prototype.tileHeightInPixels = function() {
-    return this.tileHeight;
-}
+    tileHeightInPixels() {
+        return this.tileHeight;
+    }
 
-SizeUnitsConverter.prototype.chunkXFromPixelX = function(pixelX) {
-    return Math.floor(pixelX / this.chunkWidthInPixels());
-};
+    chunkXFromPixelX(pixelX) {
+        return Math.floor(pixelX / this.chunkWidthInPixels());
+    }
 
-SizeUnitsConverter.prototype.chunkYFromPixelY = function(pixelY) {
-    return Math.floor(pixelY / this.chunkHeightInPixels());
-};
+    chunkYFromPixelY(pixelY) {
+        return Math.floor(pixelY / this.chunkHeightInPixels());
+    }
 
-SizeUnitsConverter.prototype.chunkAreaInTiles = function() {
-    return this.chunkSizeInTile * this.chunkSizeInTile;
-};
+    chunkAreaInTiles() {
+        return this.chunkSizeInTile * this.chunkSizeInTile;
+    }
 
-SizeUnitsConverter.prototype.worldAreaInChunks = function() {
-    return this.worldWidthInChunk * this.worldHeightInChunk;
-};
+    worldAreaInChunks() {
+        return this.worldWidthInChunk * this.worldHeightInChunk;
+    }
 
-SizeUnitsConverter.prototype.tileXFromPixelX = function(pixelX) {
-    return Math.floor(pixelX / this.tileWidth);
-};
+    tileXFromPixelX(pixelX) {
+        return Math.floor(pixelX / this.tileWidth);
+    }
 
-SizeUnitsConverter.prototype.tileYFromPixelY = function(pixelY) {
-    return Math.floor(pixelY / this.tileHeight);
-};
+    tileYFromPixelY(pixelY) {
+        return Math.floor(pixelY / this.tileHeight);
+    }
 
-SizeUnitsConverter.prototype.leftTileOfChunk = function(chunkX) {
-    return chunkX * this.chunkSizeInTile;
-};
+    leftTileOfChunk(chunkX) {
+        return chunkX * this.chunkSizeInTile;
+    }
 
-SizeUnitsConverter.prototype.topTileOfChunk = function(chunkY) {
-    return chunkY * this.chunkSizeInTile;
-};
+    topTileOfChunk(chunkY) {
+        return chunkY * this.chunkSizeInTile;
+    }
 
-SizeUnitsConverter.prototype.leftPixelOfChunk = function(chunkX) {
-    return chunkX * this.chunkWidthInPixels();
-};
+    leftPixelOfChunk(chunkX) {
+        return chunkX * this.chunkWidthInPixels();
+    }
 
-SizeUnitsConverter.prototype.topPixelOfChunk = function(chunkY) {
-    return chunkY * this.chunkHeightInPixels();
-};
+    topPixelOfChunk(chunkY) {
+        return chunkY * this.chunkHeightInPixels();
+    }
 
-SizeUnitsConverter.prototype.rightPixelOfChunk = function(chunkX) {
-    return this.leftPixelOfChunk(chunkX) + this.chunkWidthInPixels();
-};
+    rightPixelOfChunk(chunkX) {
+        return this.leftPixelOfChunk(chunkX) + this.chunkWidthInPixels();
+    }
 
-SizeUnitsConverter.prototype.bottomPixelOfChunk = function(chunkX) {
-    return this.topPixelOfChunk(chunkX) + this.chunkHeightInPixels();
-};
+    bottomPixelOfChunk(chunkX) {
+        return this.topPixelOfChunk(chunkX) + this.chunkHeightInPixels();
+    }
 
-SizeUnitsConverter.prototype.localPixelXInContainingChunk = function(pixelX) {
-    const chunkX = this.chunkXFromPixelX(pixelX);
-    return pixelX - this.leftPixelOfChunk(chunkX);
-}
+    localPixelXInContainingChunk(pixelX) {
+        const chunkX = this.chunkXFromPixelX(pixelX);
+        return pixelX - this.leftPixelOfChunk(chunkX);
+    }
 
-SizeUnitsConverter.prototype.localPixelYInContainingChunk = function(pixelY) {
-    const chunkY = this.chunkYFromPixelY(pixelY);
-    return pixelY - this.topPixelOfChunk(chunkY);
-}
+    localPixelYInContainingChunk(pixelY) {
+        const chunkY = this.chunkYFromPixelY(pixelY);
+        return pixelY - this.topPixelOfChunk(chunkY);
+    }
 
-SizeUnitsConverter.prototype.leftPixelOfTile = function(tileX) {
-    return tileX * this.tileWidth;
-};
+    leftPixelOfTile(tileX) {
+        return tileX * this.tileWidth;
+    }
 
-SizeUnitsConverter.prototype.topPixelOfTile = function(tileY) {
-    return tileY * this.tileHeight;
-};
+    topPixelOfTile(tileY) {
+        return tileY * this.tileHeight;
+    }
 
-SizeUnitsConverter.prototype.centerPixelXOfTile = function(tileX) {
-    return tileX * this.tileWidth + this.tileWidth / 2;
-};
+    centerPixelXOfTile(tileX) {
+        return tileX * this.tileWidth + this.tileWidth / 2;
+    }
 
-SizeUnitsConverter.prototype.centerPixelYOfTile = function(tileY) {
-    return tileY * this.tileHeight + this.tileHeight / 2;
-};
+    centerPixelYOfTile(tileY) {
+        return tileY * this.tileHeight + this.tileHeight / 2;
+    }
 
-SizeUnitsConverter.prototype.localPixelXInContainingTile = function(pixelX) {
-    const tileX = this.tileXFromPixelX(pixelX);
-    return pixelX - this.leftPixelOfTile(tileX);
-}
+    localPixelXInContainingTile(pixelX) {
+        const tileX = this.tileXFromPixelX(pixelX);
+        return pixelX - this.leftPixelOfTile(tileX);
+    }
 
-SizeUnitsConverter.prototype.localPixelYInContainingTile = function(pixelY) {
-    const tileY = this.tileYFromPixelY(pixelY);
-    return pixelY - this.topPixelOfTile(tileY);
+    localPixelYInContainingTile(pixelY) {
+        const tileY = this.tileYFromPixelY(pixelY);
+        return pixelY - this.topPixelOfTile(tileY);
+    }
 }

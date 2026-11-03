@@ -34,21 +34,7 @@ export class EventManager {
         return inputBoxes && inputBoxes[eventBoxName] != null;
     }
 
-    hasThenClear(eventBoxName, eventName) {
-        const inputBoxes = this.eventToInputBoxes[eventName];
-        if (!inputBoxes) return false;
-
-        const result = inputBoxes[eventBoxName] != null;
-        inputBoxes[eventBoxName] = null;
-        return result;
-    }
-
-    getEvent(eventBoxName, eventName) {
-        const inputBoxes = this.eventToInputBoxes[eventName];
-        return inputBoxes && inputBoxes[eventBoxName];
-    }
-
-    getThenClear(eventBoxName, eventName) {
+    pullEvent(eventBoxName, eventName) {
         const inputBoxes = this.eventToInputBoxes[eventName];
         if (!inputBoxes) return null;
 

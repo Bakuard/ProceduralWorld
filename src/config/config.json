@@ -1,8 +1,8 @@
 {
   "time": {
-    "morningPhaseTransitionFraction": 0.2,
+    "morningPhaseTransitionFraction": 0.4,
     "afternoonPhaseTransitionFraction": 0.2,
-    "eveningPhaseTransitionFraction": 0.2,
+    "eveningPhaseTransitionFraction": 0.4,
     "nightPhaseTransitionFraction": 0.2,
     "morningInSec": 20,
     "afternoonInSec": 60,
@@ -45,7 +45,14 @@
     "startAnimation": "idle",
     "fireRateInMillis": 500,
     "bodyWidth": 40,
-    "bodyHeight": 70
+    "bodyHeight": 70,
+    "energy": {
+      "defaultMaxEnergy": 10,
+      "runningEnergyLossPerSec": 0.5,
+      "recoverEnergyRatePerSec": 2,
+      "recoverEnergyPauseInSec": 0.25,
+      "attackEnergyLossAmount": 2
+    }
   },
   "fireball": {
     "zIndexOffset": 40,
@@ -55,15 +62,15 @@
     "damage": 10,
     "bodyRadius": 10,
     "lightPoint": {
-      "radius": 100,
-      "color": "#F49953"
+      "radius": 200,
+      "color": "#E41F24"
     }
   },
   "explosion": {
     "spriteScale": 1.2,
     "lightPoint": {
-      "radius": 100,
-      "color": "#F49953"
+      "radius": 200,
+      "color": "#E41F24"
     }
   },
   "slime": {
@@ -71,7 +78,7 @@
     "maxSlimesInArea": 5,
     "minGrassTilePercentForSpawn": 0.75,
     "spawnerProbabilityInChunk": 0.05,
-    "spawnRateInSec": 1,
+    "spawnRateInSec": 5,
     "spawnDayPhaseStart": "morning",
     "spawnDayPhaseEnd": "afternoon",
     "speed": 100,
