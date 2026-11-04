@@ -1,4 +1,3 @@
-import {objectTypes} from "./objectTypes.js";
 import './util.js';
 
 export class GridStore {
@@ -35,14 +34,13 @@ export class GridStore {
             || this.border.pixelBottom - pixelY < distanceInPixels;
     }
 
-    countByTypeInChunkRadius(objType, centerChunkX, centerChunkY, radiusInChunk) {
-        let count = 0;
+    forEachChunkInChunkRadius(centerChunkX, centerChunkY, radiusInChunk, callback) {
         for(let x = centerChunkX - radiusInChunk; x <= centerChunkX + radiusInChunk; x++) {
             for(let y = centerChunkY - radiusInChunk; y <= centerChunkY + radiusInChunk; y++) {
-                count += getChunk(this, x, y)?.countByTypeInChunk(objType) ?? 0;
+                const chunk = getChunk(this, x, y);
+                if(chunk) callback(chunk);
             }
         }
-        return count;
     }
 
     localPixelXInGrid(pixelX) {
@@ -125,14 +123,14 @@ function isChunkInMap(grid, chunkX, chunkY) {
 
 
 export class Chunk {
-    constructor(sizeUnitsConverter, chunkLeft, chunkTop) {
+    constructor(sizeUnitsConverter, chunkX, chunkY) {
         this.sizeUnitsConverter = sizeUnitsConverter;
-        this.chunkY = chunkTop;
-        this.chunkX = chunkLeft;
-        this.pixelTop = sizeUnitsConverter.topPixelOfChunk(chunkTop);
-        this.pixelLeft = sizeUnitsConverter.leftPixelOfChunk(chunkLeft);
-        this.pixelBottom = sizeUnitsConverter.bottomPixelOfChunk(chunkTop);
-        this.pixelRight = sizeUnitsConverter.rightPixelOfChunk(chunkLeft);
+        this.chunkY = chunkY;
+        this.chunkX = chunkX;
+        this.pixelTop = sizeUnitsConverter.topPixelOfChunk(chunkY);
+        this.pixelLeft = sizeUnitsConverter.leftPixelOfChunk(chunkX);
+        this.pixelBottom = sizeUnitsConverter.bottomPixelOfChunk(chunkY);
+        this.pixelRight = sizeUnitsConverter.rightPixelOfChunk(chunkX);
         this.objectsByType = {};
         this.tiles = [];
     }
@@ -151,7 +149,7 @@ export class Chunk {
     }
 
     getTileContainerByLocalCoords(localTileX, localTileY) {
-        const index = localTileX + localTileY * this.sizeUnitsConverter.chunkAreaInTiles();
+        const index = localTileX + localTileY * this.sizeUnitsConverter.chunkSizeInTile;
         this.tiles[index] ??= {};
         return this.tiles[index];
     }
@@ -172,12 +170,12 @@ export class Chunk {
     }
 
     forEachObj(callback) {
-        for(const objType of Object.values(objectTypes))
-            forEachObjOfChunkWithType(this, objType, callback);
+        for(const objType of Object.keys(this.objectsByType))
+            this.forEachObjWithType(objType, callback);
     }
-}
 
-function forEachObjOfChunkWithType(chunk, objType, callback) {
-    const objects = chunk.objectsByType[objType] ??= [];
-    for(let i = objects.length - 1; i >= 0; --i) callback(objects[i], objType);
+    forEachObjWithType(objType, callback) {
+        const objects = this.objectsByType[objType] ??= [];
+        for(let i = objects.length - 1; i >= 0; --i) callback(objects[i], objType);
+    }
 }

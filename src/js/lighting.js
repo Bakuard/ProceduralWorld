@@ -30,46 +30,6 @@ export class LightManager {
         });
     }
 
-    createLightPointSprite(radius, color) {
-        const light = new Sprite(Assets.get(LightManager.pointLightTexture));
-        light.anchor.set(0.5, 0.5);
-        light.blendMode = 'screen';
-        light.width = radius * 2;
-        light.height = radius * 2;
-        light.tint = color;
-        return light;
-    }
-
-    registerLightPointSprite(lightPointSprite) {
-        this.lightPointContainer.addChild(lightPointSprite);
-    }
-
-    unregisterLightPointSprite(lightPointSprite) {
-        lightPointSprite.removeFromParent();
-    }
-
-    setLightPointPosition(lightPointSprite, x, y, camera) {
-        const spriteX = camera.toViewportPixelX(x);
-        const spriteY = camera.toViewportPixelY(y);
-        lightPointSprite.position.set(spriteX, spriteY);
-    }
-
-
-    resizePointLightingToTexture(viewportWidth, viewportHeight) {
-        this.lightPointTexture.resize(viewportWidth, viewportHeight, this.resolution);
-    }
-
-    renderPointLightingToTexture(calendar, renderer) {
-        if(calendar.isAfternoon()) return;
-
-        renderer.render({
-            container: this.lightPointContainer,
-            target: this.lightPointTexture,
-            clear: true
-        });
-    }
-
-
     prepareGlobalLightShader(targetContainer) {
         this.nightShader = Filter.from({
             gl: {
@@ -89,7 +49,52 @@ export class LightManager {
         targetContainer.filters = [...existingFilters, this.nightShader];
     }
 
-    updateGlobalLightShader(calendar) {
+
+    createLightPointSprite(radius, color) {
+        const light = new Sprite(Assets.get(LightManager.pointLightTexture));
+        light.anchor.set(0.5, 0.5);
+        light.blendMode = 'screen';
+        light.width = radius * 2;
+        light.height = radius * 2;
+        light.tint = color;
+        return light;
+    }
+
+    registerLightPointSprite(lightPointSprite) {
+        if(lightPointSprite) this.lightPointContainer.addChild(lightPointSprite);
+    }
+
+    unregisterLightPointSprite(lightPointSprite) {
+        if(lightPointSprite) lightPointSprite.removeFromParent();
+    }
+
+    setLightPointPosition(lightPointSprite, x, y, camera) {
+        const spriteX = camera.toViewportPixelX(x);
+        const spriteY = camera.toViewportPixelY(y);
+        lightPointSprite.position.set(spriteX, spriteY);
+    }
+
+    resizePointLightingTexture(viewportWidth, viewportHeight) {
+        this.lightPointTexture.resize(viewportWidth, viewportHeight, this.resolution);
+    }
+
+    updateLighting(calendar, renderer) {
+        this.#renderPointLightingToTexture(calendar, renderer);
+        this.#updateGlobalLightShader(calendar);
+    }
+
+
+    #renderPointLightingToTexture(calendar, renderer) {
+        if(calendar.isAfternoon()) return;
+
+        renderer.render({
+            container: this.lightPointContainer,
+            target: this.lightPointTexture,
+            clear: true
+        });
+    }
+
+    #updateGlobalLightShader(calendar) {
         const currentDayPhaseProgress = calendar.getCurrentPhaseProgress();
         const timeUniforms = this.nightShader.resources.timeUniforms.uniforms;
         let transitionFraction = 0;
@@ -111,6 +116,6 @@ export class LightManager {
                 transitionFraction = this.nightPhaseTransitionFraction;
                 break;
         }
-        timeUniforms.uIntensity =  Math.max(0, (currentDayPhaseProgress - (1 - transitionFraction)) / transitionFraction);
+        timeUniforms.uIntensity = Math.max(0, (currentDayPhaseProgress - (1 - transitionFraction)) / transitionFraction);
     }
 }
