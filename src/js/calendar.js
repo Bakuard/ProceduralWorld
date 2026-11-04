@@ -19,7 +19,8 @@ export class Calendar {
         this.eveningInMs = calendarConfig.eveningInSec * 1000;
         this.nightInMs = calendarConfig.nightInSec * 1000;
 
-        this.totalElapsedTimeInMs = getElapsedMsBeforeDayPhase(this, calendarConfig.startPhase) + 1 + getDayPhaseDuration(this, this.currentPhase) * calendarConfig.startPhaseProgress;
+        this.totalElapsedTimeInMs = getElapsedMsBeforeDayPhase(this, calendarConfig.startPhase) + 1
+            + getDayPhaseDuration(this, calendarConfig.startPhase) * calendarConfig.startPhaseProgress;
         this.updateCurrentTime(0);
     }
 

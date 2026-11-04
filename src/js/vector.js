@@ -29,6 +29,10 @@ export class Vector {
         return this;
     }
 
+    dot(vector) {
+        return this.x * vector.x + this.y * vector.y;
+    }
+
     normalize() {
         if(this.isZero()) return this;
 

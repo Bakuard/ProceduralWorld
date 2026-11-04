@@ -75,8 +75,8 @@ export class SizeUnitsConverter {
         return this.leftPixelOfChunk(chunkX) + this.chunkWidthInPixels();
     }
 
-    bottomPixelOfChunk(chunkX) {
-        return this.topPixelOfChunk(chunkX) + this.chunkHeightInPixels();
+    bottomPixelOfChunk(chunkY) {
+        return this.topPixelOfChunk(chunkY) + this.chunkHeightInPixels();
     }
 
     localPixelXInContainingChunk(pixelX) {

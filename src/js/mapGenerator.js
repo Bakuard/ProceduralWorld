@@ -1,9 +1,8 @@
-import {objectTypes} from "./objectTypes.js";
 import './util.js';
+import {objectTypes} from "./objectTypes.js";
 
 export class MapGenerator {
-    constructor(sizeUnitsConverter, mapGeneratorConfig) {
-        this.seed = mapGeneratorConfig.seed ?? Math.randomIntegerInRange(0, 1_000_000);
+    constructor(sizeUnitsConverter, noiseGenerator, mapGeneratorConfig) {
         this.octaves = mapGeneratorConfig.octaves;
         this.persistence = mapGeneratorConfig.persistence;
         this.frequency = mapGeneratorConfig.frequency;
@@ -11,10 +10,11 @@ export class MapGenerator {
         this.treeCellSizePerTile = mapGeneratorConfig.distanceBetweenTreesInTile;
         this.offsetVectors = createOffsetVectors(8, mapGeneratorConfig.treeRandomOffsetInPixel);
         this.sizeUnitsConverter = sizeUnitsConverter;
+        this.noiseGenerator = noiseGenerator;
     }
 
     generate(tileX, tileY) {
-        this.height = multipleOctavesNoise(tileX, tileY, this.seed, this.octaves, this.persistence, this.frequency, this.frequencyMod);
+        this.height = this.noiseGenerator.multipleOctavesNoise(tileX, tileY, this.octaves, this.persistence, this.frequency, this.frequencyMod);
         this.tileType = generateTileType(this.height);
         this.tree = generateTree(this, tileX, tileY);
     }
@@ -25,10 +25,6 @@ export class MapGenerator {
 
     getTree() {
         return this.tree;
-    }
-
-    noise(x, y) {
-        return noise(x, y, this.seed);
     }
 }
 
@@ -71,7 +67,7 @@ function generateTree(mapGenerator, tileX, tileY) {
         || mapGenerator.height < 0.6
         || mapGenerator.height > 0.75) return null;
 
-    const noiseForTree = mapGenerator.noise(tileX, tileY);
+    const noiseForTree = mapGenerator.noiseGenerator.noise(tileX, tileY);
     const offsetVector = mapGenerator.offsetVectors[randomIntegerInRange(noiseForTree, 0, mapGenerator.offsetVectors.length - 1)];
     const pixelX = mapGenerator.sizeUnitsConverter.centerPixelXOfTile(tileX) + offsetVector.x;
     const pixelY = mapGenerator.sizeUnitsConverter.centerPixelYOfTile(tileY) + offsetVector.y;
@@ -91,38 +87,4 @@ function generateTileType(height) {
 
 function randomIntegerInRange(randomValue, min, max) {
     return Math.floor(randomValue * (max - min + 1)) + min;
-}
-
-function noise(x, y, seed) {
-    let n = x * 374761393 + y * 668265263 + seed * 144665633;
-    n = Math.imul(n ^ (n >>> 13), 1274126177);
-    n = n ^ (n >>> 16);
-    return (n >>> 0) / 4294967296;
-}
-
-function lerp(a, b, t) {
-    return a + (b - a) * t;
-}
-
-function interpolatedNoise(x, y, seed, frequency) {
-    x *= frequency;
-    y *= frequency;
-    const left = Math.floor(x), top = Math.floor(y);
-    const localX = x - left, localY = y - top;
-    const topLeftCorner = noise(left, top, seed);
-    const topRightCorner = noise(left + 1, top, seed);
-    const bottomLeftCorner = noise(left, top + 1, seed);
-    const bottomRightCorner = noise(left + 1, top + 1, seed);
-    return lerp(lerp(topLeftCorner, topRightCorner, localX), lerp(bottomLeftCorner, bottomRightCorner, localX), localY);
-}
-
-function multipleOctavesNoise(x, y, seed, octaves, persistence, frequency, frequencyMod) {
-    let result = 0, amplitude = 1, max = 0;
-    while(octaves-- > 0) {
-        result += interpolatedNoise(x, y, seed, frequency) * amplitude;
-        frequency *= frequencyMod;
-        max += amplitude;
-        amplitude *= persistence;
-    }
-    return result / max;
 }
