@@ -47,7 +47,7 @@
     "bodyWidth": 40,
     "bodyHeight": 70,
     "energy": {
-      "defaultMaxEnergy": 10,
+      "maxEnergy": 10,
       "runningEnergyLossPerSec": 0.5,
       "recoverEnergyRatePerSec": 2,
       "recoverEnergyPauseInSec": 0.25,

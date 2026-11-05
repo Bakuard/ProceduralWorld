@@ -130,8 +130,10 @@ function createPlayerSprite(startAnimationName) {
 
 function createEnergyBar(playerConfig) {
     return {
-        currentEnergyLimit: playerConfig.energy.defaultMaxEnergy,
-        currentEnergy: playerConfig.energy.defaultMaxEnergy,
+        maxEnergy: playerConfig.energy.maxEnergy,
+        currentEnergyLimit: playerConfig.energy.maxEnergy,
+        currentEnergy: playerConfig.energy.maxEnergy,
+        receivedDamaged: 0,
         recoveryTimerPauseInMs: 0
     };
 }
@@ -245,7 +247,9 @@ function recoverEnergy(deltaMS) {
 }
 
 function damagePlayer(damage) {
-
+    player.energy.receivedDamaged = Math.min(player.energy.maxEnergy, player.energy.receivedDamaged + damage);
+    player.energy.currentEnergyLimit = Math.max(0, player.energy.currentEnergyLimit - damage);
+    player.energy.currentEnergy = Math.max(0, player.energy.currentEnergy - damage);
 }
 
 function updatePlayer(deltaMS) {
@@ -784,7 +788,7 @@ function updateCamera() {
 
 
 function updateUI() {
-    hudManager.setEnergy(player.energy.currentEnergy, player.energy.currentEnergyLimit);
+    hudManager.setEnergy(player.energy.currentEnergy, player.energy.currentEnergyLimit, player.energy.maxEnergy, player.energy.receivedDamaged);
 }
 
 function update(ticker) {
@@ -889,6 +893,7 @@ async function setup() {
     });
     document.addEventListener('keydown', event => {
         eventManager.pushEvent(event.code, event);
+        if(event.code === 'KeyE') damagePlayer(1);
     });
     document.addEventListener('keyup', event => {
         eventManager.clearEventForAll(event.code);
