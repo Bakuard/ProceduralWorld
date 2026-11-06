@@ -11,7 +11,7 @@ import {UnorderedPool} from './unorderedPool';
 import {IntervalTimer, TimestampIntervalTimer} from './timers';
 import {CollisionManager} from './collisions';
 import {LightManager} from "./lighting";
-import {HUDManager} from "./hud";
+import {UIManager} from "./ui";
 import {NoiseGenerator} from "./noise";
 
 let Config;
@@ -43,29 +43,11 @@ let allTileSpritesContainer;
 let objectsSpriteContainer;
 let debugPhysicsGraphics;
 let gameObjects;
+let domEventsAbortController = null;
 
 let lightManager;
 
-let hudManager;
-
-async function loadTextures() {
-    await Assets.load({ alias: objectTypes.waterTile, src: 'img/water_tile.jpg' });
-    await Assets.load({ alias: objectTypes.sandTile, src: 'img/sand_tile.jpg' });
-    await Assets.load({ alias: objectTypes.grassTile, src: 'img/grass_tile.jpg' });
-    await Assets.load('img/trees.json');
-    await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
-    await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
-    await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
-    await Assets.load({ alias: objectTypes.slime, src: 'img/slime.json' });
-    await LightManager.loadTextures();
-}
-
-async function loadConfig() {
-    const response = await fetch('config/config.json');
-    if (!response.ok) throw `Fail to load config.json: ${response.statusText}`;
-    Config = await response.json();
-}
-
+let uiManager;
 
 function setSpritePositionInObjectsContainer(sprite, x, y) {
     const spriteX = gridStore.localPixelXInGrid(x);
@@ -257,6 +239,16 @@ function updatePlayer(deltaMS) {
     movePlayer(deltaMS);
     playerAttack();
     recoverEnergy(deltaMS);
+}
+
+function checkGameOver() {
+    if(player.energy.receivedDamaged === player.energy.maxEnergy) {
+        stopGame();
+        uiManager.showGameOverModal(() => {
+            uiManager.hideGameOverModal();
+            startNewGame();
+        });
+    }
 }
 
 
@@ -787,8 +779,64 @@ function updateCamera() {
 }
 
 
-function updateUI() {
-    hudManager.setEnergy(player.energy.currentEnergy, player.energy.maxEnergy, player.energy.receivedDamaged);
+async function loadTextures() {
+    await Assets.load({ alias: objectTypes.waterTile, src: 'img/water_tile.jpg' });
+    await Assets.load({ alias: objectTypes.sandTile, src: 'img/sand_tile.jpg' });
+    await Assets.load({ alias: objectTypes.grassTile, src: 'img/grass_tile.jpg' });
+    await Assets.load('img/trees.json');
+    await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
+    await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
+    await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
+    await Assets.load({ alias: objectTypes.slime, src: 'img/slime.json' });
+    await LightManager.loadTextures();
+}
+
+async function loadConfig() {
+    const response = await fetch('config/config.json');
+    if (!response.ok) throw `Fail to load config.json: ${response.statusText}`;
+    Config = await response.json();
+}
+
+async function createRenderer(domContainer) {
+    const renderer = new WebGLRenderer();
+    await renderer.init({
+        background: '#1099BB',
+        width: domContainer.clientWidth,
+        height: domContainer.clientHeight
+    });
+    domContainer.appendChild(renderer.canvas);
+    return renderer;
+}
+
+async function initGame() {
+    //Подгружаем все ассеты
+    await loadTextures();
+    await loadConfig();
+    await LightManager.loadShaders();
+
+    //Подготавливаем контекст WebGL
+    const domContainer = document.querySelector('.game-canvas-container');
+    renderer = await createRenderer(domContainer);
+
+    //Подготавливаем управление UI
+    uiManager = new UIManager();
+
+    //Инициализируем game loop
+    ticker = new Ticker();
+    ticker.add((ticker) => update(ticker));
+}
+
+
+function createPools() {
+    return Object.fromEntries(
+        Object.values(objectTypes)
+            .filter(objType => objType !== objectTypes.player)
+            .map(objType => [objType, new UnorderedPool()])
+    );
+}
+
+function updateHUD() {
+    uiManager.setEnergy(player.energy.currentEnergy, player.energy.maxEnergy, player.energy.receivedDamaged);
 }
 
 function update(ticker) {
@@ -828,43 +876,27 @@ function update(ticker) {
     renderer.render(stage);
 
     //Отрисовываем UI
-    updateUI();
+    updateHUD();
+
+    checkGameOver();
 }
 
-async function setup() {
-    //Загружаем ресурсы
-    await loadTextures();
-    await loadConfig();
-    await LightManager.loadShaders();
-
+function startNewGame() {
     //Инициализируем основные хранилища данных и модель
+    allPools = createPools();
     sizeUnitsConverter = new SizeUnitsConverter(Config.sizeUnitsConverter);
     noiseGenerator = new NoiseGenerator(Config.mapGenerator.seed);
     mapGenerator = new MapGenerator(sizeUnitsConverter, noiseGenerator, Config.mapGenerator);
     gridStore = new GridStore(sizeUnitsConverter, Config.grid);
     eventManager = new EventManager();
     calendar = new Calendar(Config.time);
-    allPools = Object.fromEntries(
-        Object.values(objectTypes)
-            .filter(objType => objType !== objectTypes.player)
-            .map(objType => [objType, new UnorderedPool()])
-    );
     spawnSlimeTimer = IntervalTimer.ofSeconds(Config.slime.spawnRateInSec);
 
     //Подготавливаем обработку коллизий
     collisionManager = new CollisionManager();
 
-    //Создаем Renderer
-    const domContainer = document.querySelector('.game-canvas-container');
-    renderer = new WebGLRenderer();
-    await renderer.init({
-        background: '#1099BB',
-        width: domContainer.clientWidth,
-        height: domContainer.clientHeight
-    });
-    domContainer.appendChild(renderer.canvas);
-
     //Создаем контейнеры для спрайтов и отладочную графику для физики
+    const domContainer = document.querySelector('.game-canvas-container');
     camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, Config.camera);
     stage = new Container();
     gameObjects = new Container();
@@ -877,7 +909,7 @@ async function setup() {
 
     //Подключаем шейдеры
     lightManager = new LightManager(domContainer.clientWidth, domContainer.clientHeight, 0.5, Config.time);
-    lightManager.prepareGlobalLightShader(gameObjects);
+    lightManager.prepareGlobalLighting(gameObjects);
 
     //Создаем игровые объекты вместе с их спрайтами и физическими телами
     createPlayer(Config.player);
@@ -885,42 +917,48 @@ async function setup() {
     camera.centerOn(player.x, player.y);
 
     //Подписываемся на внешние события
+    domEventsAbortController = new AbortController();
+    const { signal } = domEventsAbortController;
     window.addEventListener('resize', () => {
         camera.resize(domContainer.clientWidth, domContainer.clientHeight);
         renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
         resizeMinimap(domContainer.clientWidth, domContainer.clientHeight);
         lightManager.resizePointLightingTexture(domContainer.clientWidth, domContainer.clientHeight);
-    });
+    }, { signal });
     document.addEventListener('keydown', event => {
         eventManager.pushEvent(event.code, event);
         if(event.code === 'KeyE') damagePlayer(1);
-    });
+    }, { signal });
     document.addEventListener('keyup', event => {
         eventManager.clearEventForAll(event.code);
-    });
+    }, { signal });
     document.addEventListener('click', event => {
         if(!minimap.container.visible) eventManager.pushEvent(InputEvents.MouseClick, event);
-    });
+    }, { signal });
     document.addEventListener('wheel', event => {
         eventManager.pushEvent(InputEvents.MouseWheel, event);
-    });
+    }, { signal });
     document.addEventListener('mousedown', event => {
         eventManager.pushEvent(InputEvents.MouseDown, event);
-    });
+    }, { signal });
     document.addEventListener('mouseup', event => {
         eventManager.pushEvent(InputEvents.MouseUp, event);
-    });
+    }, { signal });
     document.addEventListener('mousemove', event => {
         eventManager.pushEvent(InputEvents.MouseMove, event);
-    });
+    }, { signal });
 
-    //Подготавливаем управление UI
-    hudManager = new HUDManager();
-
-    //Инициализируем и запускаем game loop
-    ticker = new Ticker();
-    ticker.add((ticker) => update(ticker));
+    //Запускаем game loop
     ticker.start();
 }
 
-setup();
+
+function stopGame() {
+    ticker.stop();
+    lightManager.destroy();
+    stage.destroy({ children: true, texture: false, textureSource: false });
+    domEventsAbortController.abort();
+}
+
+
+initGame().then(() => startNewGame());

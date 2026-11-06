@@ -16,21 +16,24 @@ export class LightManager {
 
     constructor(viewportWidth, viewportHeight, resolution, timeConfig) {
         this.resolution = resolution;
+        this.viewportWidth = viewportWidth;
+        this.viewportHeight = viewportHeight;
         this.morningPhaseTransitionFraction = timeConfig.morningPhaseTransitionFraction;
         this.afternoonPhaseTransitionFraction = timeConfig.afternoonPhaseTransitionFraction;
         this.eveningPhaseTransitionFraction = timeConfig.eveningPhaseTransitionFraction;
         this.nightPhaseTransitionFraction = timeConfig.nightPhaseTransitionFraction;
-
-        this.lightPointContainer = new Container();
-        this.lightPointTexture = RenderTexture.create({
-            width: viewportWidth,
-            height: viewportHeight,
-            resolution: resolution,
-            scaleMode: 'linear'
-        });
     }
 
-    prepareGlobalLightShader(targetContainer) {
+    prepareGlobalLighting(targetContainer) {
+        this.lightPointContainer = new Container();
+
+        this.lightPointTexture = RenderTexture.create({
+            width: this.viewportWidth,
+            height: this.viewportHeight,
+            resolution: this.resolution,
+            scaleMode: 'linear'
+        });
+
         this.nightShader = Filter.from({
             gl: {
                 fragment: Assets.get(LightManager.nightShaderCode),
@@ -44,9 +47,18 @@ export class LightManager {
                 uLightPointTexture: this.lightPointTexture.source
             },
         });
-
         const existingFilters = targetContainer.filters ?? [];
         targetContainer.filters = [...existingFilters, this.nightShader];
+    }
+
+    destroy() {
+        this.lightPointContainer?.destroy({ children: true });
+        this.lightPointTexture?.destroy(true);
+        this.nightShader?.destroy();
+
+        this.lightPointContainer = null;
+        this.lightPointTexture = null;
+        this.nightShader = null;
     }
 
 
@@ -75,6 +87,8 @@ export class LightManager {
     }
 
     resizePointLightingTexture(viewportWidth, viewportHeight) {
+        this.viewportWidth = viewportWidth;
+        this.viewportHeight = viewportHeight;
         this.lightPointTexture.resize(viewportWidth, viewportHeight, this.resolution);
     }
 
