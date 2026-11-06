@@ -8,12 +8,20 @@
 </head>
 <body>
 	<main class="game">
-		<div class="game-canvas-container"></div>
-		<div class="game-ui">
+		<section class="game-canvas-container"></section>
+		<section class="game-hud">
 			<div class="energy-bar">
 				<div class="energy-bar-available-energy"></div>
+				<div class="energy-bar-tiredness"></div>
+				<div class="energy-bar-damaged"></div>
 			</div>
-		</div>
+		</section>
+		<section class="game-over-overlay hidden">
+			<div class="game-over-modal">
+				<h2 class="game-over-title">Игра окончена</h2>
+				<button class="game-over-restart-btn" type="button">Заново</button>
+			</div>
+		</section>
 	</main>
 </body>
 </html>

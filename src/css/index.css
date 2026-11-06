@@ -1,15 +1,13 @@
-body, canvas, main {
+body, canvas, main, section {
     margin: 0;
     padding: 0;
 }
-
 
 .game {
     position: relative;
     width: 100vw;
     height: 100vh;
 }
-
 
 .game-canvas-container {
     width: 100%;
@@ -21,34 +19,96 @@ canvas {
 }
 
 
-.game-ui {
-    display: grid;
-    grid-template-columns: 1fr 23% 1fr;
-    width: 100%;
-    height: 100%;
-    box-sizing: border-box;
+/* UI. GameOver */
+.game-over-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    padding: 14px;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
+.game-over-overlay.hidden {
+    display: none;
+}
+
+.game-over-modal {
+    background: #1e1e24;
+    border: 2px solid #4a4a5a;
+    border-radius: 8px;
+    padding: 24px 36px;
+    text-align: center;
+    color: #ffffff;
+    font-family: sans-serif;
+}
+
+.game-over-title {
+    margin: 0 0 20px 0;
+    font-size: 28px;
+}
+
+.game-over-restart-btn {
+    padding: 10px 24px;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+
+/* HUD */
+.game-hud {
+    display: grid;
+    grid-template-columns: 1fr 23% 1fr;
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    padding: 16px;
+}
+
+/* HUD. stamina bar */
 .energy-bar {
+    display: flex;
     width: 100%;
     height: 24px;
     background-color: #1A4147;
-    border: 2px solid #1A4147;
-    border-radius: 6px;
-    overflow: hidden;
+    border: 3px solid #1A4147;
+    border-radius: 8px;
+    grid-column: 2 / 3;
     justify-self: center;
     align-self: end;
-    grid-column: 2 / 3;
+    contain: layout style;
 }
 
 .energy-bar-available-energy {
     width: 100%;
-    height: 100%;
     background-color: #56C300;
-    transform: scaleX(1);
-    transform-origin: left center;
+    border-radius: 6px;
+}
+
+.energy-bar-tiredness {
+    width: 0;
+    background-color: transparent;
+}
+
+.energy-bar-damaged {
+    width: 0;
+    position: relative;
+}
+
+.energy-bar-damaged.has-damage {
+    margin-left: 3px;
+    border: 2px solid red;
+    background: repeating-linear-gradient(135deg, red 0 6px, transparent 6px 14px);
+    border-radius: 6px;
+}
+
+.energy-bar-damaged.has-damage::after {
+    content: '';
+    position: absolute;
+    width: 36px;
+    height: 36px;
+    background: url('../img/broken_heart_hud.svg') no-repeat center center;
+    background-size: 36px 36px;
+    left: calc(50% - 18px);
+    bottom: 100%;
 }
