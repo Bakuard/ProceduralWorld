@@ -788,7 +788,7 @@ function updateCamera() {
 
 
 function updateUI() {
-    hudManager.setEnergy(player.energy.currentEnergy, player.energy.currentEnergyLimit, player.energy.maxEnergy, player.energy.receivedDamaged);
+    hudManager.setEnergy(player.energy.currentEnergy, player.energy.maxEnergy, player.energy.receivedDamaged);
 }
 
 function update(ticker) {

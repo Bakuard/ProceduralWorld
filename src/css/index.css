@@ -1,15 +1,13 @@
-body, canvas, main {
+body, canvas, main, section {
     margin: 0;
     padding: 0;
 }
-
 
 .game {
     position: relative;
     width: 100vw;
     height: 100vh;
 }
-
 
 .game-canvas-container {
     width: 100%;
@@ -21,6 +19,7 @@ canvas {
 }
 
 
+/* HUD */
 .game-hud {
     display: grid;
     grid-template-columns: 1fr 23% 1fr;
@@ -30,20 +29,21 @@ canvas {
     position: absolute;
     top: 0;
     left: 0;
-    padding: 14px;
+    padding: 16px;
 }
 
+/* stamina bar */
 .energy-bar {
     display: flex;
-    gap: 1px;
     width: 100%;
     height: 24px;
     background-color: #1A4147;
-    border: 2px solid #1A4147;
+    border: 3px solid #1A4147;
     border-radius: 8px;
     grid-column: 2 / 3;
     justify-self: center;
     align-self: end;
+    contain: layout style;
 }
 
 .energy-bar-available-energy {
@@ -59,22 +59,23 @@ canvas {
 
 .energy-bar-damaged {
     width: 0;
-    background-color: red;
     position: relative;
+}
+
+.energy-bar-damaged.has-damage {
+    margin-left: 3px;
+    border: 2px solid red;
+    background: repeating-linear-gradient(135deg, red 0 6px, transparent 6px 14px);
     border-radius: 6px;
 }
 
-.energy-bar-damaged::after {
+.energy-bar-damaged.has-damage::after {
     content: '';
     position: absolute;
     width: 36px;
     height: 36px;
-    background: url('../img/broken_hear_hud.svg') no-repeat center center;
+    background: url('../img/broken_heart_hud.svg') no-repeat center center;
     background-size: 36px 36px;
     left: calc(50% - 18px);
     bottom: 100%;
-}
-
-.energy-bar-damaged:not(.has-damage)::after {
-    display: none;
 }
