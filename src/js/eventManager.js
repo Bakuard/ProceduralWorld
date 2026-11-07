@@ -12,6 +12,21 @@ export const InputEvents = Object.freeze({
     MouseMove: 'MouseMove'
 });
 
+export class DOMEventUtil {
+    constructor() {
+        this.domEventsAbortController = new AbortController();
+    }
+
+    on(domEventName, callback) {
+        document.addEventListener(domEventName, callback, { signal: this.domEventsAbortController.signal });
+    }
+
+    removeAllListeners() {
+        this.domEventsAbortController.abort();
+        this.domEventsAbortController = new AbortController();
+    }
+}
+
 export class EventManager {
     constructor() {
         this.clearAll();
