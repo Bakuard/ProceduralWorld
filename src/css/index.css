@@ -19,8 +19,14 @@ canvas {
 }
 
 
-/* UI. GameOver */
-.game-over-overlay {
+
+/* UI.Common */
+.hidden {
+    display: none !important;
+}
+
+/* UI. Modal */
+.game-modal-overlay {
     position: absolute;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.4);
@@ -29,11 +35,8 @@ canvas {
     align-items: center;
 }
 
-.game-over-overlay.hidden {
-    display: none;
-}
-
-.game-over-modal {
+/* UI. Game Modal */
+.game-modal {
     background: #1e1e24;
     border: 2px solid #4a4a5a;
     border-radius: 8px;
@@ -43,12 +46,12 @@ canvas {
     font-family: sans-serif;
 }
 
-.game-over-title {
+.game-modal-title {
     margin: 0 0 20px 0;
     font-size: 28px;
 }
 
-.game-over-restart-btn {
+.game-modal-btn {
     padding: 10px 24px;
     font-size: 18px;
     cursor: pointer;

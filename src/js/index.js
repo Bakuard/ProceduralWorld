@@ -3,7 +3,7 @@ import {objectTypes} from './objectTypes';
 import {SizeUnitsConverter} from './sizeUnitsConverter';
 import {GridStore} from './gridStore';
 import {MapGenerator} from './mapGenerator';
-import {EventManager, InputEvents} from './eventManager';
+import {DOMEventUtil, EventManager, InputEvents} from './eventManager';
 import {Vector} from './vector';
 import {Camera} from './camera';
 import {Calendar, dayPhases} from './calendar';
@@ -43,7 +43,7 @@ let allTileSpritesContainer;
 let objectsSpriteContainer;
 let debugPhysicsGraphics;
 let gameObjects;
-let domEventsAbortController = null;
+let domEventUtil;
 
 let lightManager;
 
@@ -821,6 +821,10 @@ async function initGame() {
     //Подготавливаем управление UI
     uiManager = new UIManager();
 
+    //Создаем менеджеры событий
+    eventManager = new EventManager();
+    domEventUtil = new DOMEventUtil();
+
     //Инициализируем game loop
     ticker = new Ticker();
     ticker.add((ticker) => update(ticker));
@@ -888,7 +892,6 @@ function startNewGame() {
     noiseGenerator = new NoiseGenerator(Config.mapGenerator.seed);
     mapGenerator = new MapGenerator(sizeUnitsConverter, noiseGenerator, Config.mapGenerator);
     gridStore = new GridStore(sizeUnitsConverter, Config.grid);
-    eventManager = new EventManager();
     calendar = new Calendar(Config.time);
     spawnSlimeTimer = IntervalTimer.ofSeconds(Config.slime.spawnRateInSec);
 
@@ -917,47 +920,62 @@ function startNewGame() {
     camera.centerOn(player.x, player.y);
 
     //Подписываемся на внешние события
-    domEventsAbortController = new AbortController();
-    const { signal } = domEventsAbortController;
-    window.addEventListener('resize', () => {
+    domEventUtil.on('resize', () => {
         camera.resize(domContainer.clientWidth, domContainer.clientHeight);
         renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
         resizeMinimap(domContainer.clientWidth, domContainer.clientHeight);
         lightManager.resizePointLightingTexture(domContainer.clientWidth, domContainer.clientHeight);
-    }, { signal });
-    document.addEventListener('keydown', event => {
-        eventManager.pushEvent(event.code, event);
-        if(event.code === 'KeyE') damagePlayer(1);
-    }, { signal });
-    document.addEventListener('keyup', event => {
+    });
+    domEventUtil.on('keydown', event => {
+        if(event.key === 'Escape') {
+            if(event.repeat) return;
+            if (ticker.started) pauseGame();
+            else resumeGame();
+        } else {
+            eventManager.pushEvent(event.code, event);
+        }
+    });
+    domEventUtil.on('keyup', event => {
         eventManager.clearEventForAll(event.code);
-    }, { signal });
-    document.addEventListener('click', event => {
+    });
+    domEventUtil.on('click', event => {
         if(!minimap.container.visible) eventManager.pushEvent(InputEvents.MouseClick, event);
-    }, { signal });
-    document.addEventListener('wheel', event => {
+    });
+    domEventUtil.on('wheel', event => {
         eventManager.pushEvent(InputEvents.MouseWheel, event);
-    }, { signal });
-    document.addEventListener('mousedown', event => {
+    });
+    domEventUtil.on('mousedown', event => {
         eventManager.pushEvent(InputEvents.MouseDown, event);
-    }, { signal });
-    document.addEventListener('mouseup', event => {
+    });
+    domEventUtil.on('mouseup', event => {
         eventManager.pushEvent(InputEvents.MouseUp, event);
-    }, { signal });
-    document.addEventListener('mousemove', event => {
+    });
+    domEventUtil.on('mousemove', event => {
         eventManager.pushEvent(InputEvents.MouseMove, event);
-    }, { signal });
+    });
 
     //Запускаем game loop
     ticker.start();
 }
 
-
 function stopGame() {
     ticker.stop();
     lightManager.destroy();
     stage.destroy({ children: true, texture: false, textureSource: false });
-    domEventsAbortController.abort();
+    eventManager.clearAll();
+    domEventUtil.removeAllListeners();
+}
+
+function pauseGame() {
+    if (!ticker.started) return;
+    ticker.stop();
+    uiManager.showGamePauseModal(() => resumeGame());
+}
+
+function resumeGame() {
+    if (ticker.started) return;
+    uiManager.hideGamePauseModal();
+    ticker.start();
 }
 
 

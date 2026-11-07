@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 	<meta charset="UTF-8">
 	<title>Generated World</title>
@@ -8,7 +8,8 @@
 </head>
 <body>
 	<main class="game">
-		<section class="game-canvas-container"></section>
+		<div class="game-canvas-container"></div>
+
 		<section class="game-hud">
 			<div class="energy-bar">
 				<div class="energy-bar-available-energy"></div>
@@ -16,12 +17,20 @@
 				<div class="energy-bar-damaged"></div>
 			</div>
 		</section>
-		<section class="game-over-overlay hidden">
-			<div class="game-over-modal">
-				<h2 class="game-over-title">Игра окончена</h2>
-				<button class="game-over-restart-btn" type="button">Заново</button>
+
+		<div class="game-modal-overlay hidden" id="game-over">
+			<div class="game-modal">
+				<h2 class="game-modal-title">Игра окончена</h2>
+				<button class="game-modal-btn" type="button">Заново</button>
 			</div>
-		</section>
+		</div>
+
+		<div class="game-modal-overlay hidden" id="game-pause">
+			<div class="game-modal">
+				<h2 class="game-modal-title">Пауза</h2>
+				<button class="game-modal-btn" type="button">Продолжить</button>
+			</div>
+		</div>
 	</main>
 </body>
 </html>

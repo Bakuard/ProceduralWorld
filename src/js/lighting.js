@@ -87,8 +87,6 @@ export class LightManager {
     }
 
     resizePointLightingTexture(viewportWidth, viewportHeight) {
-        this.viewportWidth = viewportWidth;
-        this.viewportHeight = viewportHeight;
         this.lightPointTexture.resize(viewportWidth, viewportHeight, this.resolution);
     }
 
