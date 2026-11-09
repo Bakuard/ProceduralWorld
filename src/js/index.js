@@ -660,15 +660,25 @@ function createMinimap(eventManager, viewportWidth, viewportHeight, minimapConfi
 function resizeMinimap(viewportWidth, viewportHeight) {
     minimap.viewportWidth = viewportWidth;
     minimap.viewportHeight = viewportHeight;
+    const prevSizeInPixel = minimap.sizeInPixel;
     minimap.sizeInPixel = Math.min(viewportWidth, viewportHeight) * minimap.scale;
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
-    alignMinimapToCenter();
+    keepMinimapCenter(prevSizeInPixel);
 }
 
 function alignMinimapToCenter() {
     minimap.left = (minimap.viewportWidth - minimap.sizeInPixel) / 2;
     minimap.top = (minimap.viewportHeight - minimap.sizeInPixel) / 2;
     minimap.container.position.set(minimap.left, minimap.top);
+}
+
+function keepMinimapCenter(prevSizeInPixel) {
+    if(prevSizeInPixel != null) {
+        const sizeDelta = minimap.sizeInPixel - prevSizeInPixel;
+        minimap.left -= sizeDelta / 2;
+        minimap.top -= sizeDelta / 2;
+        minimap.container.position.set(minimap.left, minimap.top);
+    }
 }
 
 function repaintMinimap(allPools, gridStore, sizeUnitsConverter) {
@@ -743,7 +753,7 @@ function scaleMinimap(eventManager) {
 
 function scrollMinimap(eventManager) {
     const mouseDownEvent = eventManager.pullEvent('Minimap', InputEvents.MouseDown);
-    if(mouseDownEvent) {
+    if(mouseDownEvent && checkCLickOnMinimap(mouseDownEvent)) {
         minimap.scroll.isScrolling = true;
         minimap.scroll.scrollRecentX = mouseDownEvent.clientX;
         minimap.scroll.scrollRecentY = mouseDownEvent.clientY;
@@ -762,6 +772,14 @@ function scrollMinimap(eventManager) {
     if(mouseUpEvent) {
         minimap.scroll.isScrolling = false;
     }
+}
+
+function checkCLickOnMinimap(mouseEvent) {
+    if(!minimap.container.visible) return false;
+
+    const point = { x: 0, y: 0 };
+    renderer.events.mapPositionToPoint(point, mouseEvent.clientX, mouseEvent.clientY);
+    return minimap.container.getBounds().containsPoint(point.x, point.y);
 }
 
 function updateMinimapView(allPools, gridStore, sizeUnitsConverter, eventManager) {
@@ -939,7 +957,7 @@ function startNewGame() {
         eventManager.clearEventForAll(event.code);
     });
     domEventUtil.on('click', event => {
-        if(!minimap.container.visible) eventManager.pushEvent(InputEvents.MouseClick, event);
+        if(!checkCLickOnMinimap(event)) eventManager.pushEvent(InputEvents.MouseClick, event);
     });
     domEventUtil.on('wheel', event => {
         eventManager.pushEvent(InputEvents.MouseWheel, event);
