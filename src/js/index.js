@@ -182,8 +182,9 @@ function consumeEnergyWhileMoving(deltaMS) {
     const energyLossAmount = Config.player.energy.runningEnergyLossPerSec * (deltaMS / 1000);
     if(player.energy.currentEnergy < energyLossAmount) return false;
 
-    player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
     player.energy.currentEnergy -= energyLossAmount;
+    player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
+    resetRecoverEnergyTimer();
     return true;
 }
 
@@ -203,12 +204,11 @@ function movePlayer(deltaMS) {
 }
 
 function consumeEnergyWhileAttack() {
-    if(player.energy.currentEnergy >= Config.player.energy.attackEnergyLossAmount) {
-        player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
-        player.energy.currentEnergy -= Config.player.energy.attackEnergyLossAmount;
-        return true;
-    }
-    return false;
+    if(player.energy.currentEnergy < Config.player.energy.attackEnergyLossAmount) return false;
+
+    player.energy.currentEnergy -= Config.player.energy.attackEnergyLossAmount;
+    resetRecoverEnergyTimer();
+    return true;
 }
 
 function playerAttack() {
@@ -218,6 +218,12 @@ function playerAttack() {
         const aimY = camera.toGlobalPixelY(mouseClick.clientY);
         createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage, player);
     }
+}
+
+function resetRecoverEnergyTimer() {
+    const currentEnergyPercent = player.energy.currentEnergy / player.energy.maxEnergy;
+    player.energy.recoveryTimerPauseInMs = currentEnergyPercent > 0.01 ?
+        Config.player.energy.recoverEnergyPauseInSec * 1000 : Config.player.energy.recoverEnergyPenaltyInSec * 1000;
 }
 
 function recoverEnergy(deltaMS) {
