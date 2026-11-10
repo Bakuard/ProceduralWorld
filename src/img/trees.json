@@ -1,52 +1,52 @@
 {
-    "frames": {
-        "littleOak": {
-            "frame": {"x": 0, "y": 44, "w": 95, "h": 136},
-            "rotated": false,
-            "trimmed": true,
-            "spriteSourceSize": {"x": 0, "y": 0, "w": 95, "h": 136},
-            "sourceSize": {"w": 95, "h": 136}
-        },
-        "bigOak": {
-            "frame": {"x": 113, "y": 0, "w": 140, "h": 180},
-            "rotated": false,
-            "trimmed": true,
-            "spriteSourceSize": {"x": 0, "y": 0, "w": 140, "h": 180},
-            "sourceSize": {"w": 140, "h": 180}
-        },
-        "heightOak": {
-            "frame": {"x": 261, "y": 0, "w": 146, "h": 180},
-            "rotated": false,
-            "trimmed": true,
-            "spriteSourceSize": {"x": 0, "y": 0, "w": 146, "h": 180},
-            "sourceSize": {"w": 146, "h": 180}
-        },
-        "deadLittleOak": {
-            "frame": {"x": 0, "y": 224, "w": 95, "h": 138},
-            "rotated": false,
-            "trimmed": true,
-            "spriteSourceSize": {"x": 0, "y": 0, "w": 95, "h": 138},
-            "sourceSize": {"w": 95, "h": 138}
-        },
-        "deadBigOak": {
-            "frame": {"x": 125, "y": 180, "w": 115, "h": 182},
-            "rotated": false,
-            "trimmed": true,
-            "spriteSourceSize": {"x": 0, "y": 0, "w": 115, "h": 182},
-            "sourceSize": {"w": 115, "h": 182}
-        },
-        "deadHeightOak": {
-            "frame": {"x": 273, "y": 186, "w": 134, "h": 175},
-            "rotated": false,
-            "trimmed": true,
-            "spriteSourceSize": {"x": 0, "y": 0, "w": 134, "h": 175},
-            "sourceSize": {"w": 134, "h": 175}
-        }
+  "frames": {
+    "bigOak": {
+      "frame": { "x": 122, "y": 3, "w": 140, "h": 180 },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {"x": 0, "y": 0, "w": 140, "h": 180 },
+      "sourceSize": { "w": 140, "h": 180 }
     },
-    "meta": {
-        "image": "trees.png",
-        "format": "RGBA8888",
-        "size": {"w": 408, "h": 362},
-        "scale": "1"
+    "deadBigOak": {
+      "frame": {"x": 3, "y": 3, "w": 115, "h": 182},
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {"x": 0, "y": 0, "w": 115, "h": 182},
+      "sourceSize": {"w": 115, "h": 182}
+    },
+    "deadHeightOak": {
+      "frame": {"x": 266, "y": 3, "w": 134, "h": 175},
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {"x": 0, "y": 0, "w": 134, "h": 175},
+      "sourceSize": {"w": 134, "h": 175}
+    },
+    "deadLittleOak": {
+      "frame": {"x": 554, "y": 3, "w": 86, "h": 138},
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {"x": 9, "y": 0, "w": 86, "h": 138},
+      "sourceSize": {"w": 95, "h": 138}
+    },
+    "heightOak": {
+      "frame": {"x": 404, "y": 3, "w": 146, "h": 171},
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {"x": 0, "y": 9, "w": 146, "h": 171},
+      "sourceSize": {"w": 146, "h": 180}
+    },
+    "littleOak": {
+      "frame": {"x": 644, "y": 3, "w": 95, "h": 136},
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {"x": 0, "y": 0, "w": 95, "h": 136},
+      "sourceSize": {"w": 95, "h": 136}
     }
+  },
+  "meta": {
+    "image": "trees.png",
+    "format": "RGBA8888",
+    "size": {"w": 742, "h": 188},
+    "scale": "1"
+  }
 }

@@ -51,6 +51,7 @@
       "runningEnergyLossPerSec": 0.5,
       "recoverEnergyRatePerSec": 2,
       "recoverEnergyPauseInSec": 0.25,
+      "recoverEnergyPenaltyInSec": 1,
       "attackEnergyLossAmount": 2
     }
   },

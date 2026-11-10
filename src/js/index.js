@@ -182,8 +182,9 @@ function consumeEnergyWhileMoving(deltaMS) {
     const energyLossAmount = Config.player.energy.runningEnergyLossPerSec * (deltaMS / 1000);
     if(player.energy.currentEnergy < energyLossAmount) return false;
 
-    player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
     player.energy.currentEnergy -= energyLossAmount;
+    player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
+    resetRecoverEnergyTimer();
     return true;
 }
 
@@ -203,12 +204,11 @@ function movePlayer(deltaMS) {
 }
 
 function consumeEnergyWhileAttack() {
-    if(player.energy.currentEnergy >= Config.player.energy.attackEnergyLossAmount) {
-        player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
-        player.energy.currentEnergy -= Config.player.energy.attackEnergyLossAmount;
-        return true;
-    }
-    return false;
+    if(player.energy.currentEnergy < Config.player.energy.attackEnergyLossAmount) return false;
+
+    player.energy.currentEnergy -= Config.player.energy.attackEnergyLossAmount;
+    resetRecoverEnergyTimer();
+    return true;
 }
 
 function playerAttack() {
@@ -218,6 +218,12 @@ function playerAttack() {
         const aimY = camera.toGlobalPixelY(mouseClick.clientY);
         createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage, player);
     }
+}
+
+function resetRecoverEnergyTimer() {
+    const currentEnergyPercent = player.energy.currentEnergy / player.energy.maxEnergy;
+    player.energy.recoveryTimerPauseInMs = currentEnergyPercent > 0.01 ?
+        Config.player.energy.recoverEnergyPauseInSec * 1000 : Config.player.energy.recoverEnergyPenaltyInSec * 1000;
 }
 
 function recoverEnergy(deltaMS) {
@@ -660,15 +666,25 @@ function createMinimap(eventManager, viewportWidth, viewportHeight, minimapConfi
 function resizeMinimap(viewportWidth, viewportHeight) {
     minimap.viewportWidth = viewportWidth;
     minimap.viewportHeight = viewportHeight;
+    const prevSizeInPixel = minimap.sizeInPixel;
     minimap.sizeInPixel = Math.min(viewportWidth, viewportHeight) * minimap.scale;
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
-    alignMinimapToCenter();
+    keepMinimapCenter(prevSizeInPixel);
 }
 
 function alignMinimapToCenter() {
     minimap.left = (minimap.viewportWidth - minimap.sizeInPixel) / 2;
     minimap.top = (minimap.viewportHeight - minimap.sizeInPixel) / 2;
     minimap.container.position.set(minimap.left, minimap.top);
+}
+
+function keepMinimapCenter(prevSizeInPixel) {
+    if(prevSizeInPixel != null) {
+        const sizeDelta = minimap.sizeInPixel - prevSizeInPixel;
+        minimap.left -= sizeDelta / 2;
+        minimap.top -= sizeDelta / 2;
+        minimap.container.position.set(minimap.left, minimap.top);
+    }
 }
 
 function repaintMinimap(allPools, gridStore, sizeUnitsConverter) {
@@ -743,7 +759,7 @@ function scaleMinimap(eventManager) {
 
 function scrollMinimap(eventManager) {
     const mouseDownEvent = eventManager.pullEvent('Minimap', InputEvents.MouseDown);
-    if(mouseDownEvent) {
+    if(mouseDownEvent && checkCLickOnMinimap(mouseDownEvent)) {
         minimap.scroll.isScrolling = true;
         minimap.scroll.scrollRecentX = mouseDownEvent.clientX;
         minimap.scroll.scrollRecentY = mouseDownEvent.clientY;
@@ -762,6 +778,14 @@ function scrollMinimap(eventManager) {
     if(mouseUpEvent) {
         minimap.scroll.isScrolling = false;
     }
+}
+
+function checkCLickOnMinimap(mouseEvent) {
+    if(!minimap.container.visible) return false;
+
+    const point = { x: 0, y: 0 };
+    renderer.events.mapPositionToPoint(point, mouseEvent.clientX, mouseEvent.clientY);
+    return minimap.container.getBounds().containsPoint(point.x, point.y);
 }
 
 function updateMinimapView(allPools, gridStore, sizeUnitsConverter, eventManager) {
@@ -939,7 +963,7 @@ function startNewGame() {
         eventManager.clearEventForAll(event.code);
     });
     domEventUtil.on('click', event => {
-        if(!minimap.container.visible) eventManager.pushEvent(InputEvents.MouseClick, event);
+        if(!checkCLickOnMinimap(event)) eventManager.pushEvent(InputEvents.MouseClick, event);
     });
     domEventUtil.on('wheel', event => {
         eventManager.pushEvent(InputEvents.MouseWheel, event);
