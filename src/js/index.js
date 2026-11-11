@@ -120,18 +120,18 @@ function createEnergyBar(playerConfig) {
     };
 }
 
-function createPlayer(playerConfig) {
+function createPlayer(pixelX, pixelY, playerConfig) {
     player = {
         type: objectTypes.player,
-        x: playerConfig.pixelX,
-        y: playerConfig.pixelY,
+        x: pixelX,
+        y: pixelY,
         speed: playerConfig.speed,
         fireTimer: TimestampIntervalTimer.ofMillis(playerConfig.fireRateInMillis),
         velocity: new Vector(),
         sprite: createPlayerSprite(playerConfig.startAnimation),
         energy: createEnergyBar(playerConfig)
     };
-    player.body = collisionManager.createRectCollider(playerConfig.pixelX, playerConfig.pixelY, Config.player.bodyWidth, Config.player.bodyHeight, 0.5, 1, player);
+    player.body = collisionManager.createRectCollider(pixelX, pixelY, Config.player.bodyWidth, Config.player.bodyHeight, 0.5, 1, player);
 
     eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
     objectsSpriteContainer.addChild(player.sprite);
@@ -578,6 +578,37 @@ function createTree(treeMeta, chunk) {
     objectsSpriteContainer.addChild(tree.sprite);
 }
 
+function findPlayerSpawnPixelCoords(startTileX, startTileY, maxRadiusInTile, step, mapGenerator, sizeUnitsConverter) {
+    function isLand(x, y) {
+        mapGenerator.generate(x, y);
+        return mapGenerator.getTileType() !== objectTypes.waterTile;
+    }
+
+    if(isLand(startTileX, startTileY)) return { x: sizeUnitsConverter.centerPixelXOfTile(startTileX), y: sizeUnitsConverter.centerPixelYOfTile(startTileY) };
+
+    const directions = [
+        { dx: step, dy: step },
+        { dx: step, dy: -step },
+        { dx: -step, dy: -step },
+        { dx: -step, dy: step }
+    ];
+
+    for(let radius = 1; radius <= maxRadiusInTile; radius++) {
+        let x = startTileX - radius * step;
+        let y = startTileY;
+
+        for (const { dx, dy } of directions) {
+            for (let i = 0; i < radius; i++) {
+                if(isLand(x, y)) return { x: sizeUnitsConverter.centerPixelXOfTile(x), y: sizeUnitsConverter.centerPixelYOfTile(y) };
+                x += dx;
+                y += dy;
+            }
+        }
+    }
+
+    return { x: sizeUnitsConverter.centerPixelXOfTile(startTileX), y: sizeUnitsConverter.centerPixelYOfTile(startTileY) };
+}
+
 function generateChunksFor(pixelX, pixelY) {
     const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
 
@@ -939,9 +970,10 @@ function startNewGame() {
     lightManager.prepareGlobalLighting(gameObjects);
 
     //Создаем игровые объекты вместе с их спрайтами и физическими телами
-    createPlayer(Config.player);
-    generateChunksFor(player.x, player.y);
-    camera.centerOn(player.x, player.y);
+    const spawnPlayerCoords = findPlayerSpawnPixelCoords(Config.mapGenerator.startTileX, Config.mapGenerator.startTileY, 100, 1, mapGenerator, sizeUnitsConverter);
+    createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, Config.player);
+    generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y);
+    camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
 
     //Подписываемся на внешние события
     domEventUtil.on('resize', () => {
