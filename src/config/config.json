@@ -25,6 +25,8 @@
   },
   "mapGenerator": {
     "seed": null,
+    "startTileX": 0,
+    "startTileY": 0,
     "octaves": 16,
     "persistence": 0.5,
     "frequency": 0.01,
@@ -39,8 +41,6 @@
     "deadZoneBottomIndent": 0.4
   },
   "player": {
-    "pixelX": 0,
-    "pixelY": 0,
     "speed": 170,
     "startAnimation": "idle",
     "fireRateInMillis": 500,
