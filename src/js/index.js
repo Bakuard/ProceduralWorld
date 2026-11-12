@@ -1,4 +1,4 @@
-import {WebGLRenderer,  Filter, defaultFilterVert, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix, RenderTexture} from 'pixi.js';
+import {WebGLRenderer,  Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix} from 'pixi.js';
 import {objectTypes} from './objectTypes';
 import {SizeUnitsConverter} from './sizeUnitsConverter';
 import {GridStore} from './gridStore';
@@ -6,7 +6,7 @@ import {MapGenerator} from './mapGenerator';
 import {DOMEventUtil, EventManager, InputEvents} from './eventManager';
 import {Vector} from './vector';
 import {Camera} from './camera';
-import {Calendar, dayPhases} from './calendar';
+import {Calendar} from './calendar';
 import {UnorderedPool} from './unorderedPool';
 import {IntervalTimer, TimestampIntervalTimer} from './timers';
 import {CollisionManager} from './collisions';
@@ -49,14 +49,14 @@ let lightManager;
 
 let uiManager;
 
-function setSpritePositionInObjectsContainer(sprite, x, y) {
+function setSpritePositionInObjectsContainer(sprite, x, y, gridStore) {
     const spriteX = gridStore.localPixelXInGrid(x);
     const spriteY = gridStore.localPixelYInGrid(y);
     sprite.position.set(spriteX, spriteY);
 }
 
 
-function debugDrawAllPhysicsBodies() {
+function debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridStore) {
     debugPhysicsGraphics.clear().setStrokeStyle({ width: 2, color: 0x00ff00 });
 
     collisionManager.forEachBody(body => {
@@ -77,15 +77,15 @@ function debugDrawAllPhysicsBodies() {
     });
 }
 
-function allCollisionHandler(objA, objB, bodyA, bodyB) {
+function allCollisionHandler(objA, objB, bodyA, bodyB, gridStore) {
     if(objA.type === objectTypes.slime && objB.type === objectTypes.fireball) {
-        handleFireballAndSlimeCollision(objB, objA);
+        handleFireballAndSlimeCollision(objB, objA, gridStore);
     } else if(objA.type === objectTypes.fireball && objB.type === objectTypes.slime) {
-        handleFireballAndSlimeCollision(objA, objB);
+        handleFireballAndSlimeCollision(objA, objB, gridStore);
     }
 }
 
-function handleFireballAndSlimeCollision(fireball, slime) {
+function handleFireballAndSlimeCollision(fireball, slime, gridStore) {
     removeFireball(fireball);
     createExplosion(fireball.x, fireball.y);
 
@@ -110,36 +110,36 @@ function createPlayerSprite(startAnimationName) {
     return playerSprite;
 }
 
-function createEnergyBar(playerConfig) {
+function createEnergyBar() {
     return {
-        maxEnergy: playerConfig.energy.maxEnergy,
-        currentEnergyLimit: playerConfig.energy.maxEnergy,
-        currentEnergy: playerConfig.energy.maxEnergy,
+        maxEnergy: Config.player.energy.maxEnergy,
+        currentEnergyLimit: Config.player.energy.maxEnergy,
+        currentEnergy: Config.player.energy.maxEnergy,
         receivedDamaged: 0,
         recoveryTimerPauseInMs: 0
     };
 }
 
-function createPlayer(pixelX, pixelY, playerConfig) {
+function createPlayer(pixelX, pixelY, collisionManager, eventManager, objectsSpriteContainer) {
     player = {
         type: objectTypes.player,
         x: pixelX,
         y: pixelY,
-        speed: playerConfig.speed,
-        fireTimer: TimestampIntervalTimer.ofMillis(playerConfig.fireRateInMillis),
+        speed: Config.player.speed,
+        fireTimer: TimestampIntervalTimer.ofMillis(Config.player.fireRateInMillis),
         velocity: new Vector(),
-        sprite: createPlayerSprite(playerConfig.startAnimation),
-        energy: createEnergyBar(playerConfig)
+        sprite: createPlayerSprite(Config.player.startAnimation),
+        energy: createEnergyBar(Config.player)
     };
     player.body = collisionManager.createRectCollider(pixelX, pixelY, Config.player.bodyWidth, Config.player.bodyHeight, 0.5, 1, player);
 
     eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
     objectsSpriteContainer.addChild(player.sprite);
-    setPlayerAnimation('idle');
+    setPlayerAnimation(player, 'idle');
     collisionManager.registerBody(player.body);
 }
 
-function setPlayerAnimation(animationName) {
+function setPlayerAnimation(player, animationName) {
     if(player.animationName === animationName) return;
 
     const spritesheet = Assets.get(objectTypes.player);
@@ -156,19 +156,19 @@ function setPlayerAnimation(animationName) {
     }
 }
 
-function updatePlayerView() {
-    setSpritePositionInObjectsContainer(player.sprite, player.x, player.y);
+function updatePlayerView(player, gridStore) {
+    setSpritePositionInObjectsContainer(player.sprite, player.x, player.y, gridStore);
     player.sprite.zIndex = player.y;
 
-    if(player.velocity.isZero()) setPlayerAnimation('idle');
-    else if(!player.velocity.isZero()) setPlayerAnimation('run');
+    if(player.velocity.isZero()) setPlayerAnimation(player, 'idle');
+    else if(!player.velocity.isZero()) setPlayerAnimation(player, 'run');
 
     if(player.velocity.x !== 0) player.sprite.scale.set(player.velocity.x >= 0 ? 1 : -1, 1);
 
     player.sprite.update(ticker);
 }
 
-function calculatePlayerVelocity(deltaMS) {
+function calculatePlayerVelocity(player, eventManager, deltaMS) {
     player.velocity.x = eventManager.hasEvent('Player', InputEvents.KeyD) - eventManager.hasEvent('Player', InputEvents.KeyA);
     player.velocity.y = eventManager.hasEvent('Player', InputEvents.KeyS) - eventManager.hasEvent('Player', InputEvents.KeyW);
     if(player.velocity.y !== 0 && player.velocity.x !== 0) {
@@ -178,22 +178,22 @@ function calculatePlayerVelocity(deltaMS) {
     player.velocity.scaleBy(player.speed * (deltaMS / 1000));
 }
 
-function consumeEnergyWhileMoving(deltaMS) {
+function consumeEnergyWhileMoving(player, deltaMS) {
     const energyLossAmount = Config.player.energy.runningEnergyLossPerSec * (deltaMS / 1000);
     if(player.energy.currentEnergy < energyLossAmount) return false;
 
     player.energy.currentEnergy -= energyLossAmount;
     player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
-    resetRecoverEnergyTimer();
+    resetRecoverEnergyTimer(player);
     return true;
 }
 
-function movePlayer(deltaMS) {
-    calculatePlayerVelocity(deltaMS);
+function movePlayer(player, eventManager, collisionManager, deltaMS) {
+    calculatePlayerVelocity(player, eventManager, deltaMS);
 
     if(player.velocity.isZero()) return;
 
-    if(!consumeEnergyWhileMoving(deltaMS)) {
+    if(!consumeEnergyWhileMoving(player, deltaMS)) {
         player.velocity.set(0, 0);
         return;
     }
@@ -203,30 +203,30 @@ function movePlayer(deltaMS) {
     collisionManager.setPosition(player.body, player.x, player.y);
 }
 
-function consumeEnergyWhileAttack() {
+function consumeEnergyWhileAttack(player) {
     if(player.energy.currentEnergy < Config.player.energy.attackEnergyLossAmount) return false;
 
     player.energy.currentEnergy -= Config.player.energy.attackEnergyLossAmount;
-    resetRecoverEnergyTimer();
+    resetRecoverEnergyTimer(player);
     return true;
 }
 
-function playerAttack() {
+function playerAttack(player, eventManager, calendar, camera) {
     const mouseClick = eventManager.pullEvent('Player', InputEvents.MouseClick);
-    if(mouseClick && player.fireTimer.checkThenReset(calendar.getTotalMS()) && consumeEnergyWhileAttack()) {
+    if(mouseClick && player.fireTimer.checkThenReset(calendar.getTotalMS()) && consumeEnergyWhileAttack(player)) {
         const aimX = camera.toGlobalPixelX(mouseClick.clientX);
         const aimY = camera.toGlobalPixelY(mouseClick.clientY);
         createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage, player);
     }
 }
 
-function resetRecoverEnergyTimer() {
+function resetRecoverEnergyTimer(player) {
     const currentEnergyPercent = player.energy.currentEnergy / player.energy.maxEnergy;
     player.energy.recoveryTimerPauseInMs = currentEnergyPercent > 0.01 ?
         Config.player.energy.recoverEnergyPauseInSec * 1000 : Config.player.energy.recoverEnergyPenaltyInSec * 1000;
 }
 
-function recoverEnergy(deltaMS) {
+function recoverEnergy(player, deltaMS) {
     if(player.energy.recoveryTimerPauseInMs === 0 && player.energy.currentEnergy < player.energy.currentEnergyLimit) {
         const updatedEnergyAmount = player.energy.currentEnergy + Config.player.energy.recoverEnergyRatePerSec * (deltaMS / 1000);
         player.energy.currentEnergy = Math.min(updatedEnergyAmount, player.energy.currentEnergyLimit);
@@ -234,20 +234,19 @@ function recoverEnergy(deltaMS) {
     player.energy.recoveryTimerPauseInMs = Math.max(0, player.energy.recoveryTimerPauseInMs - deltaMS);
 }
 
-function damagePlayer(damage) {
+function damagePlayer(player, damage) {
     player.energy.receivedDamaged = Math.min(player.energy.maxEnergy, player.energy.receivedDamaged + damage);
     player.energy.currentEnergyLimit = Math.max(0, player.energy.currentEnergyLimit - damage);
     player.energy.currentEnergy = Math.max(0, player.energy.currentEnergy - damage);
 }
 
-function updatePlayer(deltaMS) {
-    calculatePlayerVelocity(deltaMS);
-    movePlayer(deltaMS);
-    playerAttack();
-    recoverEnergy(deltaMS);
+function updatePlayer(player, eventManager, collisionManager, calendar, camera, deltaMS) {
+    movePlayer(player, eventManager, collisionManager, deltaMS);
+    playerAttack(player, eventManager, calendar, camera);
+    recoverEnergy(player, deltaMS);
 }
 
-function checkGameOver() {
+function checkGameOver(player, uiManager) {
     if(player.energy.receivedDamaged === player.energy.maxEnergy) {
         stopGame();
         uiManager.showGameOverModal(() => {
@@ -278,7 +277,7 @@ function createExplosion(globalPixelX, globalPixelY) {
     ));
     explosion.x = globalPixelX;
     explosion.y = globalPixelY;
-    setSpritePositionInObjectsContainer(explosion.sprite, globalPixelX, globalPixelY);
+    setSpritePositionInObjectsContainer(explosion.sprite, globalPixelX, globalPixelY, gridStore);
     explosion.sprite.zIndex = globalPixelY;
     explosion.sprite.gotoAndPlay(0);
 
@@ -346,7 +345,7 @@ function removeFireball(fireball) {
 
 function updateAllFireballsView() {
     allPools[objectTypes.fireball].forEachUsed(fireball => {
-        setSpritePositionInObjectsContainer(fireball.sprite, fireball.x, fireball.y);
+        setSpritePositionInObjectsContainer(fireball.sprite, fireball.x, fireball.y, gridStore);
         lightManager.setLightPointPosition(fireball.lightPoint, fireball.x, fireball.y, camera);
         fireball.sprite.zIndex = fireball.y + Config.fireball.zIndexOffset;
         fireball.sprite.rotation = fireball.velocity.getAngleInRadian();
@@ -458,7 +457,7 @@ function setSlimeAnimation(slime, animationName) {
 
 function updateAllSlimesView() {
     allPools[objectTypes.slime].forEachUsed(slime => {
-        setSpritePositionInObjectsContainer(slime.sprite, slime.x, slime.y);
+        setSpritePositionInObjectsContainer(slime.sprite, slime.x, slime.y, gridStore);
         slime.sprite.zIndex = slime.y;
 
         slime.sprite.update(ticker);
@@ -530,7 +529,7 @@ function updateAllSlimes(deltaMS) {
             if(Math.inRange(slime.sprite.currentFrame, 6, 8)) moveSlime(slime, deltaMS);
             else if(isSlimeNearAim(slime)) slime.state = slimeStates.attack;
         } else if(slime.state === slimeStates.attack) {
-            if(slime.attackTimer.tick(ticker.deltaMS)) damagePlayer(slime.damage);
+            if(slime.attackTimer.tick(ticker.deltaMS)) damagePlayer(player, slime.damage);
             else if(!isSlimeNearAim(slime)) slime.state = slimeStates.chase;
         }
     });
@@ -571,7 +570,7 @@ function createTree(treeMeta, chunk) {
     }));
     tree.x = treeMeta.globalPixelX;
     tree.y = treeMeta.globalPixelY;
-    setSpritePositionInObjectsContainer(tree.sprite, tree.x, tree.y);
+    setSpritePositionInObjectsContainer(tree.sprite, tree.x, tree.y, gridStore);
     tree.sprite.zIndex = tree.y;
 
     chunk.addToChunk(tree, tree.type);
@@ -901,7 +900,7 @@ function updateHUD() {
 function update(ticker) {
     //Обновляем модель
     calendar.updateCurrentTime(ticker.deltaMS);
-    updatePlayer(ticker.deltaMS);
+    updatePlayer(player, eventManager, collisionManager, calendar, camera, ticker.deltaMS);
     updateAllFireballs(ticker.deltaMS);
     spawnSlimes(ticker.deltaMS);
     updateAllSlimes(ticker.deltaMS);
@@ -913,11 +912,11 @@ function update(ticker) {
     }
 
     //Поиск коллизий
-    collisionManager.handleCollisions(allCollisionHandler);
+    collisionManager.handleCollisions((objA, objB, bodyA, bodyB) => allCollisionHandler(objA, objB, bodyA, bodyB, gridStore));
 
     //Обновляем внешний вид игровых объектов
     updateCamera();
-    updatePlayerView();
+    updatePlayerView(player, gridStore);
     updateAllFireballsView();
     updateAllExplosionsView();
     updateAllSlimesView();
@@ -937,7 +936,7 @@ function update(ticker) {
     //Отрисовываем UI
     updateHUD();
 
-    checkGameOver();
+    checkGameOver(player, uiManager);
 }
 
 function startNewGame() {
@@ -971,7 +970,7 @@ function startNewGame() {
 
     //Создаем игровые объекты вместе с их спрайтами и физическими телами
     const spawnPlayerCoords = findPlayerSpawnPixelCoords(Config.mapGenerator.startTileX, Config.mapGenerator.startTileY, 100, 1, mapGenerator, sizeUnitsConverter);
-    createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, Config.player);
+    createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, collisionManager, eventManager, objectsSpriteContainer);
     generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y);
     camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
 
