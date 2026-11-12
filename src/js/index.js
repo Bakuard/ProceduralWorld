@@ -77,17 +77,17 @@ function debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridS
     });
 }
 
-function allCollisionHandler(objA, objB, bodyA, bodyB, gridStore) {
+function allCollisionHandler(objA, objB, bodyA, bodyB, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager) {
     if(objA.type === objectTypes.slime && objB.type === objectTypes.fireball) {
-        handleFireballAndSlimeCollision(objB, objA, gridStore);
+        handleFireballAndSlimeCollision(objB, objA, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager);
     } else if(objA.type === objectTypes.fireball && objB.type === objectTypes.slime) {
-        handleFireballAndSlimeCollision(objA, objB, gridStore);
+        handleFireballAndSlimeCollision(objA, objB, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager);
     }
 }
 
-function handleFireballAndSlimeCollision(fireball, slime, gridStore) {
-    removeFireball(fireball);
-    createExplosion(fireball.x, fireball.y);
+function handleFireballAndSlimeCollision(fireball, slime, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager) {
+    removeFireball(fireball, allPools, lightManager, collisionManager);
+    createExplosion(fireball.x, fireball.y, allPools, gridStore, objectsSpriteContainer, lightManager);
 
     if(fireball.owner) {
         slime.currentHealth -= fireball.damage;
@@ -121,7 +121,7 @@ function createEnergyBar() {
 }
 
 function createPlayer(pixelX, pixelY, collisionManager, eventManager, objectsSpriteContainer) {
-    player = {
+    const player = {
         type: objectTypes.player,
         x: pixelX,
         y: pixelY,
@@ -129,7 +129,7 @@ function createPlayer(pixelX, pixelY, collisionManager, eventManager, objectsSpr
         fireTimer: TimestampIntervalTimer.ofMillis(Config.player.fireRateInMillis),
         velocity: new Vector(),
         sprite: createPlayerSprite(Config.player.startAnimation),
-        energy: createEnergyBar(Config.player)
+        energy: createEnergyBar()
     };
     player.body = collisionManager.createRectCollider(pixelX, pixelY, Config.player.bodyWidth, Config.player.bodyHeight, 0.5, 1, player);
 
@@ -137,6 +137,7 @@ function createPlayer(pixelX, pixelY, collisionManager, eventManager, objectsSpr
     objectsSpriteContainer.addChild(player.sprite);
     setPlayerAnimation(player, 'idle');
     collisionManager.registerBody(player.body);
+    return player;
 }
 
 function setPlayerAnimation(player, animationName) {
@@ -156,7 +157,7 @@ function setPlayerAnimation(player, animationName) {
     }
 }
 
-function updatePlayerView(player, gridStore) {
+function updatePlayerView(player, gridStore, ticker) {
     setSpritePositionInObjectsContainer(player.sprite, player.x, player.y, gridStore);
     player.sprite.zIndex = player.y;
 
@@ -211,12 +212,12 @@ function consumeEnergyWhileAttack(player) {
     return true;
 }
 
-function playerAttack(player, eventManager, calendar, camera) {
+function playerAttack(player, eventManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, collisionManager) {
     const mouseClick = eventManager.pullEvent('Player', InputEvents.MouseClick);
     if(mouseClick && player.fireTimer.checkThenReset(calendar.getTotalMS()) && consumeEnergyWhileAttack(player)) {
         const aimX = camera.toGlobalPixelX(mouseClick.clientX);
         const aimY = camera.toGlobalPixelY(mouseClick.clientY);
-        createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage, player);
+        createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage, player, allPools, objectsSpriteContainer, lightManager, collisionManager);
     }
 }
 
@@ -240,9 +241,9 @@ function damagePlayer(player, damage) {
     player.energy.currentEnergy = Math.max(0, player.energy.currentEnergy - damage);
 }
 
-function updatePlayer(player, eventManager, collisionManager, calendar, camera, deltaMS) {
+function updatePlayer(player, eventManager, collisionManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, deltaMS) {
     movePlayer(player, eventManager, collisionManager, deltaMS);
-    playerAttack(player, eventManager, calendar, camera);
+    playerAttack(player, eventManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, collisionManager);
     recoverEnergy(player, deltaMS);
 }
 
@@ -267,7 +268,7 @@ function createExplosionSprite() {
     return explosionSprite;
 }
 
-function createExplosion(globalPixelX, globalPixelY) {
+function createExplosion(globalPixelX, globalPixelY, allPools, gridStore, objectsSpriteContainer, lightManager) {
     const explosion = allPools[objectTypes.explosion].acquire(() => (
         {
             type: objectTypes.explosion,
@@ -283,16 +284,16 @@ function createExplosion(globalPixelX, globalPixelY) {
 
     objectsSpriteContainer.addChild(explosion.sprite);
     lightManager.registerLightPointSprite(explosion.lightPoint);
-    explosion.sprite.onComplete = () => removeExplosion(explosion);
+    explosion.sprite.onComplete = () => removeExplosion(explosion, allPools, lightManager);
 }
 
-function removeExplosion(explosion) {
+function removeExplosion(explosion, allPools, lightManager) {
     explosion.sprite.removeFromParent();
     lightManager.unregisterLightPointSprite(explosion.lightPoint);
     allPools[objectTypes.explosion].release(explosion);
 }
 
-function updateAllExplosionsView() {
+function updateAllExplosionsView(allPools, lightManager, camera, ticker) {
     allPools[objectTypes.explosion].forEachUsed(explosion => {
         lightManager.setLightPointPosition(explosion.lightPoint, explosion.x, explosion.y, camera);
         explosion.sprite.update(ticker);
@@ -311,7 +312,7 @@ function createFireballSprite() {
     return fireballSprite;
 }
 
-function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPixelY, lifeTimeInMillis, speed, damage, owner) {
+function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPixelY, lifeTimeInMillis, speed, damage, owner, allPools, objectsSpriteContainer, lightManager, collisionManager) {
     let fireball = allPools[objectTypes.fireball].acquire(() => {
         const newFireball = {
             type: objectTypes.fireball,
@@ -336,14 +337,14 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
     collisionManager.registerBody(fireball.body);
 }
 
-function removeFireball(fireball) {
+function removeFireball(fireball, allPools, lightManager, collisionManager) {
     fireball.sprite.removeFromParent();
     lightManager.unregisterLightPointSprite(fireball.lightPoint);
     allPools[objectTypes.fireball].release(fireball);
     collisionManager.unregisterBody(fireball.body);
 }
 
-function updateAllFireballsView() {
+function updateAllFireballsView(allPools, gridStore, lightManager, camera, ticker) {
     allPools[objectTypes.fireball].forEachUsed(fireball => {
         setSpritePositionInObjectsContainer(fireball.sprite, fireball.x, fireball.y, gridStore);
         lightManager.setLightPointPosition(fireball.lightPoint, fireball.x, fireball.y, camera);
@@ -354,7 +355,7 @@ function updateAllFireballsView() {
     });
 }
 
-function moveFireball(fireball, deltaMS) {
+function moveFireball(fireball, collisionManager, deltaMS) {
     fireball.velocity.normalize().scaleBy(fireball.speed * (deltaMS / 1000));
     fireball.x += fireball.velocity.x;
     fireball.y += fireball.velocity.y;
@@ -362,14 +363,14 @@ function moveFireball(fireball, deltaMS) {
     collisionManager.setPositionAndAngle(fireball.body, fireball.x, fireball.y, fireball.velocity.getAngleInRadian());
 }
 
-function updateAllFireballs(deltaMS) {
+function updateAllFireballs(allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager, deltaMS) {
     allPools[objectTypes.fireball].forEachUsed(fireball => {
-        moveFireball(fireball, deltaMS);
+        moveFireball(fireball, collisionManager, deltaMS);
 
         fireball.lifeTimeInMillis -= deltaMS;
         if(fireball.lifeTimeInMillis <= 0) {
-            removeFireball(fireball);
-            createExplosion(fireball.x, fireball.y);
+            removeFireball(fireball, allPools, lightManager, collisionManager);
+            createExplosion(fireball.x, fireball.y, allPools, gridStore, objectsSpriteContainer, lightManager);
         }
     });
 }
@@ -382,7 +383,7 @@ function createSlimeSprite() {
     return slimeSprite;
 }
 
-function createSlime(globalPixelX, globalPixelY, chunk) {
+function createSlime(globalPixelX, globalPixelY, chunk, allPools, objectsSpriteContainer, collisionManager) {
     const slime = allPools[objectTypes.slime].acquire(() => {
         const result = {
             type: objectTypes.slime,
@@ -413,27 +414,27 @@ function createSlime(globalPixelX, globalPixelY, chunk) {
     collisionManager.registerBody(slime.body);
 }
 
-function removeSlime(slime) {
+function removeSlime(slime, allPools, gridStore, collisionManager) {
     slime.sprite.removeFromParent();
     collisionManager.unregisterBody(slime.body);
     gridStore.getChunkByPixel(slime.x, slime.y)?.removeFromChunk(slime, objectTypes.slime);
     allPools[objectTypes.slime].release(slime);
 }
 
-function countSlimesInArea(chunkX, chunkY) {
+function countSlimesInArea(chunkX, chunkY, gridStore) {
     let slimeCount = 0;
     gridStore.forEachChunkInChunkRadius(chunkX, chunkY, 2, chunk => slimeCount += chunk.countByTypeInChunk(objectTypes.slime));
     return slimeCount;
 }
 
-function spawnSlimes(deltaMS) {
+function spawnSlimes(calendar, spawnSlimeTimer, gridStore, allPools, objectsSpriteContainer, collisionManager, deltaMS) {
     if(calendar.isCurrentPhaseBetween(Config.slime.spawnDayPhaseStart, Config.slime.spawnDayPhaseEnd) && spawnSlimeTimer.tick(deltaMS)) {
         for(let chunk of gridStore.chunks) {
-            if(!chunk.hasSlimeSpawner || countSlimesInArea(chunk.chunkX, chunk.chunkY) >= Config.slime.maxSlimesInArea) continue;
+            if(!chunk.hasSlimeSpawner || countSlimesInArea(chunk.chunkX, chunk.chunkY, gridStore) >= Config.slime.maxSlimesInArea) continue;
 
             const x = Math.randomIntegerInRange(chunk.pixelLeft, chunk.pixelRight);
             const y = Math.randomIntegerInRange(chunk.pixelTop, chunk.pixelBottom);
-            createSlime(x, y, chunk);
+            createSlime(x, y, chunk, allPools, objectsSpriteContainer, collisionManager);
         }
     }
 }
@@ -455,7 +456,7 @@ function setSlimeAnimation(slime, animationName) {
     }
 }
 
-function updateAllSlimesView() {
+function updateAllSlimesView(allPools, gridStore, ticker) {
     allPools[objectTypes.slime].forEachUsed(slime => {
         setSpritePositionInObjectsContainer(slime.sprite, slime.x, slime.y, gridStore);
         slime.sprite.zIndex = slime.y;
@@ -470,7 +471,7 @@ function isSlimeNearAim(slime) {
     return distanceX <= 20 && distanceY <= 20;
 }
 
-function choseNextRandomAimIfNeeded(slime) {
+function choseNextRandomAimIfNeeded(slime, gridStore) {
     if(isSlimeNearAim(slime)) {
         let nextAimX = Math.randomIntegerInRange(slime.spawnPointX - Config.slime.roamingRadiusInPixels, slime.spawnPointX + Config.slime.roamingRadiusInPixels);
         let nextAimY = Math.randomIntegerInRange(slime.spawnPointY - Config.slime.roamingRadiusInPixels, slime.spawnPointY + Config.slime.roamingRadiusInPixels);
@@ -480,7 +481,7 @@ function choseNextRandomAimIfNeeded(slime) {
     }
 }
 
-function changeChunk(slime, oldX, oldY, newX, newY) {
+function changeChunk(slime, oldX, oldY, newX, newY, gridStore) {
     const currentChunk = gridStore.getChunkByPixel(oldX, oldY);
     const nextChunk = gridStore.getChunkByPixel(newX, newY);
 
@@ -490,21 +491,21 @@ function changeChunk(slime, oldX, oldY, newX, newY) {
     nextChunk?.addToChunk(slime, objectTypes.slime);
 }
 
-function moveSlime(slime, deltaMS) {
+function moveSlime(slime, gridStore, collisionManager, deltaMS) {
     const oldX = slime.x;
     const oldY = slime.y;
     slime.velocity.set(slime.aim.x - slime.x, slime.aim.y - slime.y).normalize().scaleBy(slime.speed * (deltaMS / 1000));
     slime.x += slime.velocity.x;
     slime.y += slime.velocity.y;
-    changeChunk(slime, oldX, oldY, slime.x, slime.y);
+    changeChunk(slime, oldX, oldY, slime.x, slime.y, gridStore);
 
     collisionManager.setPosition(slime.body, slime.x, slime.y);
 }
 
-function updateAllSlimes(deltaMS) {
+function updateAllSlimes(allPools, gridStore, collisionManager, player, deltaMS) {
     allPools[objectTypes.slime].forEachUsed(slime => {
         if(slime.currentHealth <= 0 || !gridStore.isPixelInMap(slime.x, slime.y)) {
-            removeSlime(slime);
+            removeSlime(slime, allPools, gridStore, collisionManager);
         } else if(slime.state === slimeStates.idle) {
             slime.idleDurationInMS -= deltaMS;
             if(slime.idleDurationInMS <= 0) {
@@ -514,9 +515,9 @@ function updateAllSlimes(deltaMS) {
             }
         } else if(slime.state === slimeStates.roam) {
             if(Math.inRange(slime.sprite.currentFrame, 6, 8)) {
-                moveSlime(slime, deltaMS);
+                moveSlime(slime, gridStore, collisionManager, deltaMS);
             } else {
-                choseNextRandomAimIfNeeded(slime);
+                choseNextRandomAimIfNeeded(slime, gridStore);
             }
 
             slime.roamingDurationInMS -= deltaMS;
@@ -526,26 +527,26 @@ function updateAllSlimes(deltaMS) {
                 setSlimeAnimation(slime, 'slime_idle');
             }
         } else if(slime.state === slimeStates.chase) {
-            if(Math.inRange(slime.sprite.currentFrame, 6, 8)) moveSlime(slime, deltaMS);
+            if(Math.inRange(slime.sprite.currentFrame, 6, 8)) moveSlime(slime, gridStore, collisionManager, deltaMS);
             else if(isSlimeNearAim(slime)) slime.state = slimeStates.attack;
         } else if(slime.state === slimeStates.attack) {
-            if(slime.attackTimer.tick(ticker.deltaMS)) damagePlayer(player, slime.damage);
+            if(slime.attackTimer.tick(deltaMS)) damagePlayer(player, slime.damage);
             else if(!isSlimeNearAim(slime)) slime.state = slimeStates.chase;
         }
     });
 }
 
 
-function createTileSprite(tileType) {
+function createTileSprite(tileType, sizeUnitsConverter) {
     const tileSprite = new Sprite(Assets.get(tileType));
     tileSprite.setSize(sizeUnitsConverter.tileWidthInPixels(), sizeUnitsConverter.tileHeightInPixels());
     return tileSprite;
 }
 
-function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTileYInChunk, tileType, chunk) {
+function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTileYInChunk, tileType, chunk, allPools, sizeUnitsConverter) {
     const tile = allPools[tileType].acquire(() => ({
         type: tileType,
-        sprite: createTileSprite(tileType)
+        sprite: createTileSprite(tileType, sizeUnitsConverter)
     }));
     tile.x = leftPixelOfTile;
     tile.y = topPixelOfTile;
@@ -563,7 +564,7 @@ function createTreeSprite(treeMeta) {
     return treeSprite;
 }
 
-function createTree(treeMeta, chunk) {
+function createTree(treeMeta, chunk, allPools, gridStore, objectsSpriteContainer) {
     const tree = allPools[treeMeta.treeType].acquire(() => ({
         type: treeMeta.treeType,
         sprite: createTreeSprite(treeMeta)
@@ -608,7 +609,7 @@ function findPlayerSpawnPixelCoords(startTileX, startTileY, maxRadiusInTile, ste
     return { x: sizeUnitsConverter.centerPixelXOfTile(startTileX), y: sizeUnitsConverter.centerPixelYOfTile(startTileY) };
 }
 
-function generateChunksFor(pixelX, pixelY) {
+function generateChunksFor(pixelX, pixelY, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, allTileSpritesContainer, objectsSpriteContainer) {
     const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
 
     for(let chunk of result.retainedChunks) {
@@ -657,11 +658,13 @@ function generateChunksFor(pixelX, pixelY) {
                 localTileXInChunk,
                 localTileYInChunk,
                 tileType,
-                chunk
+                chunk,
+                allPools,
+                sizeUnitsConverter
             );
 
             const treeMeta = mapGenerator.getTree();
-            if (treeMeta) createTree(treeMeta, chunk);
+            if (treeMeta) createTree(treeMeta, chunk, allPools, gridStore, objectsSpriteContainer);
 
             if(tileType === objectTypes.grassTile) ++countGrassTiles;
         });
@@ -676,7 +679,7 @@ function generateChunksFor(pixelX, pixelY) {
 function createMinimap(eventManager, viewportWidth, viewportHeight, minimapConfig) {
     eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.MouseWheel, InputEvents.MouseDown, InputEvents.MouseUp, InputEvents.MouseMove);
 
-    minimap = {
+    const minimap = {
         container: new Container(),
         staticObjects: new Graphics(),
         viewportWidth,
@@ -690,25 +693,26 @@ function createMinimap(eventManager, viewportWidth, viewportHeight, minimapConfi
     minimap.container.addChild(minimap.staticObjects);
     minimap.container.visible = false;
 
-    resizeMinimap(viewportWidth, viewportHeight);
+    resizeMinimap(minimap, viewportWidth, viewportHeight);
+    return minimap;
 }
 
-function resizeMinimap(viewportWidth, viewportHeight) {
+function resizeMinimap(minimap, viewportWidth, viewportHeight) {
     minimap.viewportWidth = viewportWidth;
     minimap.viewportHeight = viewportHeight;
     const prevSizeInPixel = minimap.sizeInPixel;
     minimap.sizeInPixel = Math.min(viewportWidth, viewportHeight) * minimap.scale;
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
-    keepMinimapCenter(prevSizeInPixel);
+    keepMinimapCenter(minimap, prevSizeInPixel);
 }
 
-function alignMinimapToCenter() {
+function alignMinimapToCenter(minimap) {
     minimap.left = (minimap.viewportWidth - minimap.sizeInPixel) / 2;
     minimap.top = (minimap.viewportHeight - minimap.sizeInPixel) / 2;
     minimap.container.position.set(minimap.left, minimap.top);
 }
 
-function keepMinimapCenter(prevSizeInPixel) {
+function keepMinimapCenter(minimap, prevSizeInPixel) {
     if(prevSizeInPixel != null) {
         const sizeDelta = minimap.sizeInPixel - prevSizeInPixel;
         minimap.left -= sizeDelta / 2;
@@ -717,17 +721,17 @@ function keepMinimapCenter(prevSizeInPixel) {
     }
 }
 
-function repaintMinimap(allPools, gridStore, sizeUnitsConverter) {
+function repaintMinimap(minimap, allPools, gridStore, sizeUnitsConverter) {
     if(!minimap.container.visible) return;
 
     minimap.staticObjects.clear();
 
-    drawTilesOnMinimap(allPools, gridStore, sizeUnitsConverter, objectTypes.sandTile, 0xFFFF00);
-    drawTilesOnMinimap(allPools, gridStore, sizeUnitsConverter, objectTypes.waterTile, 0x000080);
-    drawTilesOnMinimap(allPools, gridStore, sizeUnitsConverter, objectTypes.grassTile, 0x41980A);
+    drawTilesOnMinimap(minimap, allPools, gridStore, sizeUnitsConverter, objectTypes.sandTile, 0xFFFF00);
+    drawTilesOnMinimap(minimap, allPools, gridStore, sizeUnitsConverter, objectTypes.waterTile, 0x000080);
+    drawTilesOnMinimap(minimap, allPools, gridStore, sizeUnitsConverter, objectTypes.grassTile, 0x41980A);
 
     drawObjectsOnMinimap(
-        allPools, gridStore,
+        minimap, allPools, gridStore,
         objectTypes.littleOak,
         objectTypes.heightOak,
         objectTypes.bigOak,
@@ -739,7 +743,7 @@ function repaintMinimap(allPools, gridStore, sizeUnitsConverter) {
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
 }
 
-function drawTilesOnMinimap(allPools, gridStore, sizeUnitsConverter, tileType, color) {
+function drawTilesOnMinimap(minimap, allPools, gridStore, sizeUnitsConverter, tileType, color) {
     allPools[tileType].forEachUsed(tile => {
         const viewX = gridStore.localPixelXInGrid(tile.x);
         const viewY = gridStore.localPixelYInGrid(tile.y);
@@ -748,7 +752,7 @@ function drawTilesOnMinimap(allPools, gridStore, sizeUnitsConverter, tileType, c
     minimap.staticObjects.fill(color);
 }
 
-function drawObjectsOnMinimap(allPools, gridStore, ...objTypes) {
+function drawObjectsOnMinimap(minimap, allPools, gridStore, ...objTypes) {
     const allObjects = [];
     objTypes.forEach(objType => allPools[objType].copyUsedItemsTo(allObjects));
     allObjects.sort((a, b) => a.y - b.y);
@@ -766,17 +770,17 @@ function drawObjectsOnMinimap(allPools, gridStore, ...objTypes) {
     }
 }
 
-function switchMinimapVisibility(allPools, gridStore, sizeUnitsConverter, eventManager) {
+function switchMinimapVisibility(minimap, allPools, gridStore, sizeUnitsConverter, eventManager) {
     if(eventManager.pullEvent('Minimap', InputEvents.KeyM)) {
         minimap.container.visible = !minimap.container.visible;
         if(!minimap.container.visible) return;
 
-        repaintMinimap(allPools, gridStore, sizeUnitsConverter);
-        alignMinimapToCenter();
+        repaintMinimap(minimap, allPools, gridStore, sizeUnitsConverter);
+        alignMinimapToCenter(minimap);
     }
 }
 
-function scaleMinimap(eventManager) {
+function scaleMinimap(minimap, eventManager) {
     if(!minimap.container.visible) return;
 
     const event = eventManager.pullEvent('Minimap', InputEvents.MouseWheel);
@@ -784,12 +788,12 @@ function scaleMinimap(eventManager) {
 
     minimap.scale += event.deltaY > 0 ? -0.1 : 0.1;
     minimap.scale = Math.clamp(minimap.scale, minimap.minScale, minimap.maxScale);
-    resizeMinimap(minimap.viewportWidth, minimap.viewportHeight);
+    resizeMinimap(minimap, minimap.viewportWidth, minimap.viewportHeight);
 }
 
-function scrollMinimap(eventManager) {
+function scrollMinimap(minimap, eventManager, renderer) {
     const mouseDownEvent = eventManager.pullEvent('Minimap', InputEvents.MouseDown);
-    if(mouseDownEvent && checkCLickOnMinimap(mouseDownEvent)) {
+    if(mouseDownEvent && checkCLickOnMinimap(minimap, renderer, mouseDownEvent)) {
         minimap.scroll.isScrolling = true;
         minimap.scroll.scrollRecentX = mouseDownEvent.clientX;
         minimap.scroll.scrollRecentY = mouseDownEvent.clientY;
@@ -810,7 +814,7 @@ function scrollMinimap(eventManager) {
     }
 }
 
-function checkCLickOnMinimap(mouseEvent) {
+function checkCLickOnMinimap(minimap, renderer, mouseEvent) {
     if(!minimap.container.visible) return false;
 
     const point = { x: 0, y: 0 };
@@ -818,14 +822,14 @@ function checkCLickOnMinimap(mouseEvent) {
     return minimap.container.getBounds().containsPoint(point.x, point.y);
 }
 
-function updateMinimapView(allPools, gridStore, sizeUnitsConverter, eventManager) {
-    switchMinimapVisibility(allPools, gridStore, sizeUnitsConverter, eventManager);
-    scaleMinimap(eventManager);
-    scrollMinimap(eventManager);
+function updateMinimapView(minimap, allPools, gridStore, sizeUnitsConverter, eventManager, renderer) {
+    switchMinimapVisibility(minimap, allPools, gridStore, sizeUnitsConverter, eventManager);
+    scaleMinimap(minimap, eventManager);
+    scrollMinimap(minimap, eventManager, renderer);
 }
 
 
-function updateCamera() {
+function updateCamera(camera, player, gridStore, gameObjects) {
     camera.followIfOutOfDeadZone(player.x, player.y);
     const stageX = camera.toViewportPixelX(gridStore.border.pixelLeft);
     const stageY = camera.toViewportPixelY(gridStore.border.pixelTop);
@@ -893,48 +897,48 @@ function createPools() {
     );
 }
 
-function updateHUD() {
+function updateHUD(uiManager, player) {
     uiManager.setEnergy(player.energy.currentEnergy, player.energy.maxEnergy, player.energy.receivedDamaged);
 }
 
 function update(ticker) {
     //Обновляем модель
     calendar.updateCurrentTime(ticker.deltaMS);
-    updatePlayer(player, eventManager, collisionManager, calendar, camera, ticker.deltaMS);
-    updateAllFireballs(ticker.deltaMS);
-    spawnSlimes(ticker.deltaMS);
-    updateAllSlimes(ticker.deltaMS);
+    updatePlayer(player, eventManager, collisionManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, ticker.deltaMS);
+    updateAllFireballs(allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager, ticker.deltaMS);
+    spawnSlimes(calendar, spawnSlimeTimer, gridStore, allPools, objectsSpriteContainer, collisionManager, ticker.deltaMS);
+    updateAllSlimes(allPools, gridStore, collisionManager, player, ticker.deltaMS);
 
     //Подгружаем и выгружаем часть карты при необходимости
     if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk)) {
-        generateChunksFor(player.x, player.y);
-        repaintMinimap(allPools, gridStore, sizeUnitsConverter);
+        generateChunksFor(player.x, player.y, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, allTileSpritesContainer, objectsSpriteContainer);
+        repaintMinimap(minimap, allPools, gridStore, sizeUnitsConverter);
     }
 
     //Поиск коллизий
-    collisionManager.handleCollisions((objA, objB, bodyA, bodyB) => allCollisionHandler(objA, objB, bodyA, bodyB, gridStore));
+    collisionManager.handleCollisions((objA, objB, bodyA, bodyB) => allCollisionHandler(objA, objB, bodyA, bodyB, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager));
 
     //Обновляем внешний вид игровых объектов
-    updateCamera();
-    updatePlayerView(player, gridStore);
-    updateAllFireballsView();
-    updateAllExplosionsView();
-    updateAllSlimesView();
+    updateCamera(camera, player, gridStore, gameObjects);
+    updatePlayerView(player, gridStore, ticker);
+    updateAllFireballsView(allPools, gridStore, lightManager, camera, ticker);
+    updateAllExplosionsView(allPools, lightManager, camera, ticker);
+    updateAllSlimesView(allPools, gridStore, ticker);
 
     //Обновляем освещение
     lightManager.updateLighting(calendar, renderer);
 
     //Обновляем внешний вид миникарту по необходимости
-    updateMinimapView(allPools, gridStore, sizeUnitsConverter, eventManager);
+    updateMinimapView(minimap, allPools, gridStore, sizeUnitsConverter, eventManager, renderer);
 
     //Обновляем внешний вид границ физических тел для дебага физики
-    //debugDrawAllPhysicsBodies();
+    //debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridStore);
 
     //Отрисовываем игровой мир
     renderer.render(stage);
 
     //Отрисовываем UI
-    updateHUD();
+    updateHUD(uiManager, player);
 
     checkGameOver(player, uiManager);
 }
@@ -957,7 +961,7 @@ function startNewGame() {
     camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, Config.camera);
     stage = new Container();
     gameObjects = new Container();
-    createMinimap(eventManager, domContainer.clientWidth, domContainer.clientHeight, Config.minimap);
+    minimap = createMinimap(eventManager, domContainer.clientWidth, domContainer.clientHeight, Config.minimap);
     allTileSpritesContainer = new Container();
     objectsSpriteContainer = new Container();
     debugPhysicsGraphics = new Graphics();
@@ -970,15 +974,15 @@ function startNewGame() {
 
     //Создаем игровые объекты вместе с их спрайтами и физическими телами
     const spawnPlayerCoords = findPlayerSpawnPixelCoords(Config.mapGenerator.startTileX, Config.mapGenerator.startTileY, 100, 1, mapGenerator, sizeUnitsConverter);
-    createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, collisionManager, eventManager, objectsSpriteContainer);
-    generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y);
+    player = createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, collisionManager, eventManager, objectsSpriteContainer);
+    generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, allTileSpritesContainer, objectsSpriteContainer);
     camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
 
     //Подписываемся на внешние события
     domEventUtil.on('resize', () => {
         camera.resize(domContainer.clientWidth, domContainer.clientHeight);
         renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
-        resizeMinimap(domContainer.clientWidth, domContainer.clientHeight);
+        resizeMinimap(minimap, domContainer.clientWidth, domContainer.clientHeight);
         lightManager.resizePointLightingTexture(domContainer.clientWidth, domContainer.clientHeight);
     });
     domEventUtil.on('keydown', event => {
@@ -994,7 +998,7 @@ function startNewGame() {
         eventManager.clearEventForAll(event.code);
     });
     domEventUtil.on('click', event => {
-        if(!checkCLickOnMinimap(event)) eventManager.pushEvent(InputEvents.MouseClick, event);
+        if(!checkCLickOnMinimap(minimap, renderer, event)) eventManager.pushEvent(InputEvents.MouseClick, event);
     });
     domEventUtil.on('wheel', event => {
         eventManager.pushEvent(InputEvents.MouseWheel, event);
