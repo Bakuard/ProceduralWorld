@@ -19,7 +19,7 @@ export class Calendar {
         this.eveningInMs = calendarConfig.eveningInSec * 1000;
         this.nightInMs = calendarConfig.nightInSec * 1000;
 
-        this.totalElapsedTimeInMs = getElapsedMsBeforeDayPhase(this, calendarConfig.startPhase) + 1
+        this.totalElapsedTimeInMs = getElapsedMsBeforeDayPhase(this, calendarConfig.startPhase)
             + getDayPhaseDuration(this, calendarConfig.startPhase) * calendarConfig.startPhaseProgress;
         this.updateCurrentTime(0);
     }
@@ -29,11 +29,11 @@ export class Calendar {
         this.msSinceDayStart = this.totalElapsedTimeInMs % getTotalDayDurationInMs(this);
         this.totalDays = Math.floor(this.totalElapsedTimeInMs / getTotalDayDurationInMs(this));
 
-        if(this.msSinceDayStart <= this.morningInMs)
+        if(this.msSinceDayStart < this.morningInMs)
             this.currentPhase = dayPhases.morning;
-        else if(this.msSinceDayStart <= getElapsedMsBeforeDayPhase(this, dayPhases.evening))
+        else if(this.msSinceDayStart < getElapsedMsBeforeDayPhase(this, dayPhases.evening))
             this.currentPhase = dayPhases.afternoon;
-        else if(this.msSinceDayStart <= getElapsedMsBeforeDayPhase(this, dayPhases.night))
+        else if(this.msSinceDayStart < getElapsedMsBeforeDayPhase(this, dayPhases.night))
             this.currentPhase = dayPhases.evening;
         else
             this.currentPhase = dayPhases.night;

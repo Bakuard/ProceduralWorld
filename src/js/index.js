@@ -49,10 +49,11 @@ let lightManager;
 
 let uiManager;
 
-function setSpritePositionInObjectsContainer(sprite, x, y, gridStore) {
-    const spriteX = gridStore.localPixelXInGrid(x);
-    const spriteY = gridStore.localPixelYInGrid(y);
-    sprite.position.set(spriteX, spriteY);
+function setSpritePositionInObjectsContainer(sprite, x, y, camera, container) {
+    const parent = sprite.parent ?? container;
+    const viewportX = camera.toViewportPixelX(x);
+    const viewportY = camera.toViewportPixelY(y);
+    parent.toLocal({ x: viewportX, y: viewportY }, undefined, sprite.position);
 }
 
 
@@ -77,17 +78,17 @@ function debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridS
     });
 }
 
-function allCollisionHandler(objA, objB, bodyA, bodyB, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager) {
+function allCollisionHandler(objA, objB, bodyA, bodyB, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager) {
     if(objA.type === objectTypes.slime && objB.type === objectTypes.fireball) {
-        handleFireballAndSlimeCollision(objB, objA, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager);
+        handleFireballAndSlimeCollision(objB, objA, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager);
     } else if(objA.type === objectTypes.fireball && objB.type === objectTypes.slime) {
-        handleFireballAndSlimeCollision(objA, objB, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager);
+        handleFireballAndSlimeCollision(objA, objB, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager);
     }
 }
 
-function handleFireballAndSlimeCollision(fireball, slime, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager) {
+function handleFireballAndSlimeCollision(fireball, slime, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager) {
     removeFireball(fireball, allPools, lightManager, collisionManager);
-    createExplosion(fireball.x, fireball.y, allPools, gridStore, objectsSpriteContainer, lightManager);
+    createExplosion(fireball.x, fireball.y, allPools, camera, objectsSpriteContainer, lightManager);
 
     if(fireball.owner) {
         slime.currentHealth -= fireball.damage;
@@ -157,8 +158,8 @@ function setPlayerAnimation(player, animationName) {
     }
 }
 
-function updatePlayerView(player, gridStore, ticker) {
-    setSpritePositionInObjectsContainer(player.sprite, player.x, player.y, gridStore);
+function updatePlayerView(player, camera, ticker) {
+    setSpritePositionInObjectsContainer(player.sprite, player.x, player.y, camera);
     player.sprite.zIndex = player.y;
 
     if(player.velocity.isZero()) setPlayerAnimation(player, 'idle');
@@ -268,7 +269,7 @@ function createExplosionSprite() {
     return explosionSprite;
 }
 
-function createExplosion(globalPixelX, globalPixelY, allPools, gridStore, objectsSpriteContainer, lightManager) {
+function createExplosion(globalPixelX, globalPixelY, allPools, camera, objectsSpriteContainer, lightManager) {
     const explosion = allPools[objectTypes.explosion].acquire(() => (
         {
             type: objectTypes.explosion,
@@ -278,7 +279,7 @@ function createExplosion(globalPixelX, globalPixelY, allPools, gridStore, object
     ));
     explosion.x = globalPixelX;
     explosion.y = globalPixelY;
-    setSpritePositionInObjectsContainer(explosion.sprite, globalPixelX, globalPixelY, gridStore);
+    setSpritePositionInObjectsContainer(explosion.sprite, globalPixelX, globalPixelY, camera, objectsSpriteContainer);
     explosion.sprite.zIndex = globalPixelY;
     explosion.sprite.gotoAndPlay(0);
 
@@ -344,9 +345,9 @@ function removeFireball(fireball, allPools, lightManager, collisionManager) {
     collisionManager.unregisterBody(fireball.body);
 }
 
-function updateAllFireballsView(allPools, gridStore, lightManager, camera, ticker) {
+function updateAllFireballsView(allPools, lightManager, camera, ticker) {
     allPools[objectTypes.fireball].forEachUsed(fireball => {
-        setSpritePositionInObjectsContainer(fireball.sprite, fireball.x, fireball.y, gridStore);
+        setSpritePositionInObjectsContainer(fireball.sprite, fireball.x, fireball.y, camera);
         lightManager.setLightPointPosition(fireball.lightPoint, fireball.x, fireball.y, camera);
         fireball.sprite.zIndex = fireball.y + Config.fireball.zIndexOffset;
         fireball.sprite.rotation = fireball.velocity.getAngleInRadian();
@@ -363,14 +364,14 @@ function moveFireball(fireball, collisionManager, deltaMS) {
     collisionManager.setPositionAndAngle(fireball.body, fireball.x, fireball.y, fireball.velocity.getAngleInRadian());
 }
 
-function updateAllFireballs(allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager, deltaMS) {
+function updateAllFireballs(allPools, camera, objectsSpriteContainer, lightManager, collisionManager, deltaMS) {
     allPools[objectTypes.fireball].forEachUsed(fireball => {
         moveFireball(fireball, collisionManager, deltaMS);
 
         fireball.lifeTimeInMillis -= deltaMS;
         if(fireball.lifeTimeInMillis <= 0) {
             removeFireball(fireball, allPools, lightManager, collisionManager);
-            createExplosion(fireball.x, fireball.y, allPools, gridStore, objectsSpriteContainer, lightManager);
+            createExplosion(fireball.x, fireball.y, allPools, camera, objectsSpriteContainer, lightManager);
         }
     });
 }
@@ -456,9 +457,9 @@ function setSlimeAnimation(slime, animationName) {
     }
 }
 
-function updateAllSlimesView(allPools, gridStore, ticker) {
+function updateAllSlimesView(allPools, camera, ticker) {
     allPools[objectTypes.slime].forEachUsed(slime => {
-        setSpritePositionInObjectsContainer(slime.sprite, slime.x, slime.y, gridStore);
+        setSpritePositionInObjectsContainer(slime.sprite, slime.x, slime.y, camera);
         slime.sprite.zIndex = slime.y;
 
         slime.sprite.update(ticker);
@@ -564,14 +565,14 @@ function createTreeSprite(treeMeta) {
     return treeSprite;
 }
 
-function createTree(treeMeta, chunk, allPools, gridStore, objectsSpriteContainer) {
+function createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer) {
     const tree = allPools[treeMeta.treeType].acquire(() => ({
         type: treeMeta.treeType,
         sprite: createTreeSprite(treeMeta)
     }));
     tree.x = treeMeta.globalPixelX;
     tree.y = treeMeta.globalPixelY;
-    setSpritePositionInObjectsContainer(tree.sprite, tree.x, tree.y, gridStore);
+    setSpritePositionInObjectsContainer(tree.sprite, tree.x, tree.y, camera, objectsSpriteContainer);
     tree.sprite.zIndex = tree.y;
 
     chunk.addToChunk(tree, tree.type);
@@ -609,8 +610,9 @@ function findPlayerSpawnPixelCoords(startTileX, startTileY, maxRadiusInTile, ste
     return { x: sizeUnitsConverter.centerPixelXOfTile(startTileX), y: sizeUnitsConverter.centerPixelYOfTile(startTileY) };
 }
 
-function generateChunksFor(pixelX, pixelY, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, allTileSpritesContainer, objectsSpriteContainer) {
+function generateChunksFor(pixelX, pixelY, player, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer) {
     const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
+    updateCamera(camera, player, result.newBorder, gameObjects);
 
     for(let chunk of result.retainedChunks) {
         const localLeftOfChunk = gridStore.localLeftPixelOfChunkInGrid(chunk.chunkX);
@@ -664,7 +666,7 @@ function generateChunksFor(pixelX, pixelY, gridStore, collisionManager, allPools
             );
 
             const treeMeta = mapGenerator.getTree();
-            if (treeMeta) createTree(treeMeta, chunk, allPools, gridStore, objectsSpriteContainer);
+            if (treeMeta) createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer);
 
             if(tileType === objectTypes.grassTile) ++countGrassTiles;
         });
@@ -829,10 +831,10 @@ function updateMinimapView(minimap, allPools, gridStore, sizeUnitsConverter, eve
 }
 
 
-function updateCamera(camera, player, gridStore, gameObjects) {
+function updateCamera(camera, player, gridStoreBorder, gameObjects) {
     camera.followIfOutOfDeadZone(player.x, player.y);
-    const stageX = camera.toViewportPixelX(gridStore.border.pixelLeft);
-    const stageY = camera.toViewportPixelY(gridStore.border.pixelTop);
+    const stageX = camera.toViewportPixelX(gridStoreBorder.pixelLeft);
+    const stageY = camera.toViewportPixelY(gridStoreBorder.pixelTop);
     gameObjects.position.set(stageX, stageY);
 }
 
@@ -905,25 +907,25 @@ function update(ticker) {
     //Обновляем модель
     calendar.updateCurrentTime(ticker.deltaMS);
     updatePlayer(player, eventManager, collisionManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, ticker.deltaMS);
-    updateAllFireballs(allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager, ticker.deltaMS);
+    updateAllFireballs(allPools, camera, objectsSpriteContainer, lightManager, collisionManager, ticker.deltaMS);
     spawnSlimes(calendar, spawnSlimeTimer, gridStore, allPools, objectsSpriteContainer, collisionManager, ticker.deltaMS);
     updateAllSlimes(allPools, gridStore, collisionManager, player, ticker.deltaMS);
 
     //Подгружаем и выгружаем часть карты при необходимости
     if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk)) {
-        generateChunksFor(player.x, player.y, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, allTileSpritesContainer, objectsSpriteContainer);
+        generateChunksFor(player.x, player.y, player, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer);
         repaintMinimap(minimap, allPools, gridStore, sizeUnitsConverter);
     }
 
     //Поиск коллизий
-    collisionManager.handleCollisions((objA, objB, bodyA, bodyB) => allCollisionHandler(objA, objB, bodyA, bodyB, allPools, gridStore, objectsSpriteContainer, lightManager, collisionManager));
+    collisionManager.handleCollisions((objA, objB, bodyA, bodyB) => allCollisionHandler(objA, objB, bodyA, bodyB, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager));
 
     //Обновляем внешний вид игровых объектов
-    updateCamera(camera, player, gridStore, gameObjects);
-    updatePlayerView(player, gridStore, ticker);
-    updateAllFireballsView(allPools, gridStore, lightManager, camera, ticker);
+    updateCamera(camera, player, gridStore.border, gameObjects);
+    updatePlayerView(player, camera, ticker);
+    updateAllFireballsView(allPools, lightManager, camera, ticker);
     updateAllExplosionsView(allPools, lightManager, camera, ticker);
-    updateAllSlimesView(allPools, gridStore, ticker);
+    updateAllSlimesView(allPools, camera, ticker);
 
     //Обновляем освещение
     lightManager.updateLighting(calendar, renderer);
@@ -931,7 +933,7 @@ function update(ticker) {
     //Обновляем внешний вид миникарту по необходимости
     updateMinimapView(minimap, allPools, gridStore, sizeUnitsConverter, eventManager, renderer);
 
-    //Обновляем внешний вид границ физических тел для дебага физики
+    //Обновляем видимые границы вокруг физических тел для дебага физики
     //debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridStore);
 
     //Отрисовываем игровой мир
@@ -975,7 +977,7 @@ function startNewGame() {
     //Создаем игровые объекты вместе с их спрайтами и физическими телами
     const spawnPlayerCoords = findPlayerSpawnPixelCoords(Config.mapGenerator.startTileX, Config.mapGenerator.startTileY, 100, 1, mapGenerator, sizeUnitsConverter);
     player = createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, collisionManager, eventManager, objectsSpriteContainer);
-    generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, allTileSpritesContainer, objectsSpriteContainer);
+    generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, player, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer);
     camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
 
     //Подписываемся на внешние события
