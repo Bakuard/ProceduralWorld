@@ -49,11 +49,30 @@ let lightManager;
 
 let uiManager;
 
-function setSpritePositionInObjectsContainer(sprite, x, y, camera, container) {
+function setSpritePositionInObjectsContainer(sprite, x, y, camera, container = null) {
     const parent = sprite.parent ?? container;
     const viewportX = camera.toViewportPixelX(x);
     const viewportY = camera.toViewportPixelY(y);
     parent.toLocal({ x: viewportX, y: viewportY }, undefined, sprite.position);
+}
+
+function setAnimation(obj, animationName, onComplete = null) {
+    if(obj.animationName === animationName && obj.sprite.playing) return;
+
+    const spritesheet = Assets.get(obj.type);
+    const texture = spritesheet.animations[animationName];
+    if(texture) {
+        const animationConfig = spritesheet.data.animationsConfig[animationName];
+        obj.sprite.textures = texture;
+        obj.sprite.animationSpeed = animationConfig.frameRate;
+        obj.sprite.loop = animationConfig.loop;
+        obj.sprite.onComplete = onComplete;
+        obj.animationName = animationName;
+
+        obj.sprite.gotoAndPlay(0);
+    } else {
+        throw `Invalid ${obj.type} animation name: ${animationName}`;
+    }
 }
 
 
@@ -98,7 +117,7 @@ function handleFireballAndSlimeCollision(fireball, slime, allPools, gridStore, c
             chunk.forEachObjWithType(objectTypes.slime, slimeInChunk => {
                 slimeInChunk.aim = fireball.owner;
                 if(slimeInChunk.state === slimeStates.idle || slimeInChunk.state === slimeStates.roam) slimeInChunk.state = slimeStates.chase;
-                setSlimeAnimation(slimeInChunk, 'slime_run');
+                setAnimation(slimeInChunk, 'slime_run');
             });
         });
     }
@@ -136,34 +155,17 @@ function createPlayer(pixelX, pixelY, collisionManager, eventManager, objectsSpr
 
     eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
     objectsSpriteContainer.addChild(player.sprite);
-    setPlayerAnimation(player, 'idle');
+    setAnimation(player, 'idle');
     collisionManager.registerBody(player.body);
     return player;
-}
-
-function setPlayerAnimation(player, animationName) {
-    if(player.animationName === animationName) return;
-
-    const spritesheet = Assets.get(objectTypes.player);
-    const texture = spritesheet.animations[animationName];
-    if(texture) {
-        const animationConfig = spritesheet.data.animationsConfig[animationName];
-        player.sprite.textures = texture;
-        player.sprite.animationSpeed = animationConfig.frameRate;
-        player.sprite.loop = animationConfig.loop;
-        player.sprite.gotoAndPlay(0);
-        player.animationName = animationName;
-    } else {
-        throw 'Invalid player animation name: ' + animationName;
-    }
 }
 
 function updatePlayerView(player, camera, ticker) {
     setSpritePositionInObjectsContainer(player.sprite, player.x, player.y, camera);
     player.sprite.zIndex = player.y;
 
-    if(player.velocity.isZero()) setPlayerAnimation(player, 'idle');
-    else if(!player.velocity.isZero()) setPlayerAnimation(player, 'run');
+    if(player.velocity.isZero()) setAnimation(player, 'idle');
+    else if(!player.velocity.isZero()) setAnimation(player, 'run');
 
     if(player.velocity.x !== 0) player.sprite.scale.set(player.velocity.x >= 0 ? 1 : -1, 1);
 
@@ -260,10 +262,7 @@ function checkGameOver(player, uiManager) {
 
 
 function createExplosionSprite() {
-    const spritesheet = Assets.get(objectTypes.explosion);
-    const explosionSprite = new AnimatedSprite(spritesheet.animations['explode'], false);
-    explosionSprite.animationSpeed = spritesheet.data.animationsConfig['explode'].frameRate;
-    explosionSprite.loop = spritesheet.data.animationsConfig['explode'].loop;
+    const explosionSprite = new AnimatedSprite(Assets.get(objectTypes.explosion).animations['explode'], false);
     explosionSprite.anchor.set(0.5, 1);
     explosionSprite.scale.set(Config.explosion.spriteScale);
     return explosionSprite;
@@ -281,11 +280,10 @@ function createExplosion(globalPixelX, globalPixelY, allPools, camera, objectsSp
     explosion.y = globalPixelY;
     setSpritePositionInObjectsContainer(explosion.sprite, globalPixelX, globalPixelY, camera, objectsSpriteContainer);
     explosion.sprite.zIndex = globalPixelY;
-    explosion.sprite.gotoAndPlay(0);
+    setAnimation(explosion, 'explode', () => removeExplosion(explosion, allPools, lightManager));
 
     objectsSpriteContainer.addChild(explosion.sprite);
     lightManager.registerLightPointSprite(explosion.lightPoint);
-    explosion.sprite.onComplete = () => removeExplosion(explosion, allPools, lightManager);
 }
 
 function removeExplosion(explosion, allPools, lightManager) {
@@ -303,11 +301,7 @@ function updateAllExplosionsView(allPools, lightManager, camera, ticker) {
 
 
 function createFireballSprite() {
-    const spritesheet = Assets.get(objectTypes.fireball);
-    const fireballSprite = new AnimatedSprite(spritesheet.animations['fly'], false);
-    fireballSprite.animationSpeed = spritesheet.data.animationsConfig['fly'].frameRate;
-    fireballSprite.loop = spritesheet.data.animationsConfig['fly'].loop;
-    fireballSprite.play();
+    const fireballSprite = new AnimatedSprite(Assets.get(objectTypes.fireball).animations['fly'], false);
     fireballSprite.anchor.set(1, 0.5);
     fireballSprite.scale.set(Config.fireball.spriteScale);
     return fireballSprite;
@@ -332,6 +326,7 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
     fireball.owner = owner;
     fireball.velocity.set(globalAimPixelX - globalPixelX, globalAimPixelY - globalPixelY);
     collisionManager.setPosition(fireball.body, globalPixelX, globalPixelY);
+    setAnimation(fireball, 'fly');
 
     objectsSpriteContainer.addChild(fireball.sprite);
     lightManager.registerLightPointSprite(fireball.lightPoint);
@@ -408,7 +403,7 @@ function createSlime(globalPixelX, globalPixelY, chunk, allPools, objectsSpriteC
     slime.roamingDurationInMS = Config.slime.roamingDurationInSec * 1000;
     slime.velocity.set(0, 0);
     collisionManager.setPosition(slime.body, globalPixelX, globalPixelY);
-    setSlimeAnimation(slime, 'slime_idle');
+    setAnimation(slime, 'slime_idle');
 
     chunk.addToChunk(slime, objectTypes.slime);
     objectsSpriteContainer.addChild(slime.sprite);
@@ -437,23 +432,6 @@ function spawnSlimes(calendar, spawnSlimeTimer, gridStore, allPools, objectsSpri
             const y = Math.randomIntegerInRange(chunk.pixelTop, chunk.pixelBottom);
             createSlime(x, y, chunk, allPools, objectsSpriteContainer, collisionManager);
         }
-    }
-}
-
-function setSlimeAnimation(slime, animationName) {
-    if(slime.animationName === animationName) return;
-
-    const spritesheet = Assets.get(objectTypes.slime);
-    const texture = spritesheet.animations[animationName];
-    if(texture) {
-        const animationConfig = spritesheet.data.animationsConfig[animationName];
-        slime.sprite.textures = texture;
-        slime.sprite.animationSpeed = animationConfig.frameRate;
-        slime.sprite.loop = animationConfig.loop;
-        slime.sprite.gotoAndPlay(0);
-        slime.animationName = animationName;
-    } else {
-        throw 'Invalid slime animation name: ' + animationName;
     }
 }
 
@@ -512,7 +490,7 @@ function updateAllSlimes(allPools, gridStore, collisionManager, player, deltaMS)
             if(slime.idleDurationInMS <= 0) {
                 slime.state = slimeStates.roam;
                 slime.roamingDurationInMS = Config.slime.roamingDurationInSec * 1000;
-                setSlimeAnimation(slime, 'slime_run');
+                setAnimation(slime, 'slime_run');
             }
         } else if(slime.state === slimeStates.roam) {
             if(Math.inRange(slime.sprite.currentFrame, 6, 8)) {
@@ -525,7 +503,7 @@ function updateAllSlimes(allPools, gridStore, collisionManager, player, deltaMS)
             if(slime.roamingDurationInMS <= 0) {
                 slime.state = slimeStates.idle;
                 slime.idleDurationInMS = Config.slime.idleDurationInSec * 1000;
-                setSlimeAnimation(slime, 'slime_idle');
+                setAnimation(slime, 'slime_idle');
             }
         } else if(slime.state === slimeStates.chase) {
             if(Math.inRange(slime.sprite.currentFrame, 6, 8)) moveSlime(slime, gridStore, collisionManager, deltaMS);
