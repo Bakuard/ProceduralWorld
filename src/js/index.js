@@ -78,6 +78,14 @@ function setAnimation(obj, animationName, onComplete = null) {
 }
 
 
+function removeGameObj(obj, allPools, lightManager, collisionManager) {
+    obj.sprite?.removeFromParent();
+    lightManager.unregisterLightPointSprite(obj.lightPoint);
+    collisionManager.unregisterBody(obj.body);
+    allPools[obj.type].release(obj);
+}
+
+
 function debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridStore) {
     debugPhysicsGraphics.clear().setStrokeStyle({ width: 2, color: 0x00ff00 });
 
@@ -108,8 +116,8 @@ function allCollisionHandler(objA, objB, bodyA, bodyB, allPools, gridStore, came
 }
 
 function handleFireballAndSlimeCollision(fireball, slime, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager) {
-    removeFireball(fireball, allPools, lightManager, collisionManager);
-    createExplosion(fireball.x, fireball.y, allPools, camera, objectsSpriteContainer, lightManager);
+    removeGameObj(fireball, allPools, lightManager, collisionManager);
+    createExplosion(fireball.x, fireball.y, allPools, camera, objectsSpriteContainer, lightManager, collisionManager);
 
     if(fireball.owner) {
         slime.currentHealth -= fireball.damage;
@@ -268,7 +276,7 @@ function createExplosionSprite() {
     return explosionSprite;
 }
 
-function createExplosion(globalPixelX, globalPixelY, allPools, camera, objectsSpriteContainer, lightManager) {
+function createExplosion(globalPixelX, globalPixelY, allPools, camera, objectsSpriteContainer, lightManager, collisionManager) {
     const explosion = allPools[objectTypes.explosion].acquire(() => (
         {
             type: objectTypes.explosion,
@@ -279,16 +287,10 @@ function createExplosion(globalPixelX, globalPixelY, allPools, camera, objectsSp
     explosion.x = globalPixelX;
     explosion.y = globalPixelY;
     setSpritePosition(explosion.sprite, globalPixelX, globalPixelY, camera, objectsSpriteContainer);
-    setAnimation(explosion, 'explode', () => removeExplosion(explosion, allPools, lightManager));
+    setAnimation(explosion, 'explode', () => removeGameObj(explosion, allPools, lightManager, collisionManager));
 
     objectsSpriteContainer.addChild(explosion.sprite);
     lightManager.registerLightPointSprite(explosion.lightPoint);
-}
-
-function removeExplosion(explosion, allPools, lightManager) {
-    explosion.sprite.removeFromParent();
-    lightManager.unregisterLightPointSprite(explosion.lightPoint);
-    allPools[objectTypes.explosion].release(explosion);
 }
 
 function updateAllExplosionsView(allPools, lightManager, camera, ticker) {
@@ -332,13 +334,6 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
     collisionManager.registerBody(fireball.body);
 }
 
-function removeFireball(fireball, allPools, lightManager, collisionManager) {
-    fireball.sprite.removeFromParent();
-    lightManager.unregisterLightPointSprite(fireball.lightPoint);
-    allPools[objectTypes.fireball].release(fireball);
-    collisionManager.unregisterBody(fireball.body);
-}
-
 function updateAllFireballsView(allPools, lightManager, camera, ticker) {
     allPools[objectTypes.fireball].forEachUsed(fireball => {
         setSpritePosition(fireball.sprite, fireball.x, fireball.y, camera, null, Config.fireball.zIndexOffset);
@@ -363,8 +358,8 @@ function updateAllFireballs(allPools, camera, objectsSpriteContainer, lightManag
 
         fireball.lifeTimeInMillis -= deltaMS;
         if(fireball.lifeTimeInMillis <= 0) {
-            removeFireball(fireball, allPools, lightManager, collisionManager);
-            createExplosion(fireball.x, fireball.y, allPools, camera, objectsSpriteContainer, lightManager);
+            removeGameObj(fireball, allPools, lightManager, collisionManager);
+            createExplosion(fireball.x, fireball.y, allPools, camera, objectsSpriteContainer, lightManager, collisionManager);
         }
     });
 }
@@ -408,11 +403,9 @@ function createSlime(globalPixelX, globalPixelY, chunk, allPools, objectsSpriteC
     collisionManager.registerBody(slime.body);
 }
 
-function removeSlime(slime, allPools, gridStore, collisionManager) {
-    slime.sprite.removeFromParent();
-    collisionManager.unregisterBody(slime.body);
+function removeSlime(slime, allPools, gridStore, lightManager, collisionManager) {
+    removeGameObj(slime, allPools, lightManager, collisionManager);
     gridStore.getChunkByPixel(slime.x, slime.y)?.removeFromChunk(slime, objectTypes.slime);
-    allPools[objectTypes.slime].release(slime);
 }
 
 function countSlimesInArea(chunkX, chunkY, gridStore) {
@@ -477,10 +470,10 @@ function moveSlime(slime, gridStore, collisionManager, deltaMS) {
     collisionManager.setPosition(slime.body, slime.x, slime.y);
 }
 
-function updateAllSlimes(allPools, gridStore, collisionManager, player, deltaMS) {
+function updateAllSlimes(allPools, gridStore, lightManager, collisionManager, player, deltaMS) {
     allPools[objectTypes.slime].forEachUsed(slime => {
         if(slime.currentHealth <= 0 || !gridStore.isPixelInMap(slime.x, slime.y)) {
-            removeSlime(slime, allPools, gridStore, collisionManager);
+            removeSlime(slime, allPools, gridStore, lightManager, collisionManager);
         } else if(slime.state === slimeStates.idle) {
             slime.idleDurationInMS -= deltaMS;
             if(slime.idleDurationInMS <= 0) {
@@ -582,7 +575,7 @@ function findPlayerSpawnPixelCoords(startTileX, startTileY, maxRadiusInTile, ste
     return { x: sizeUnitsConverter.centerPixelXOfTile(startTileX), y: sizeUnitsConverter.centerPixelYOfTile(startTileY) };
 }
 
-function generateChunksFor(pixelX, pixelY, player, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer) {
+function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer) {
     const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
     updateCamera(camera, player, result.newBorder, gameObjects);
 
@@ -598,11 +591,7 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, collisionManager, 
         chunk.tileSpritesContainer.removeFromParent();
         chunk.tileSpritesContainer.destroy({ children: false });
 
-        chunk.forEachObj((obj, objType) => {
-            obj.sprite.removeFromParent();
-            collisionManager.unregisterBody(obj.body);
-            allPools[obj.type].release(obj);
-        });
+        chunk.forEachObj((obj, objType) => removeGameObj(obj, allPools, lightManager, collisionManager));
         chunk.forEachTileContainer((globalTileX, globalTileY, localTileXInChunk, localTileYInChunk, tileContainer) => {
             const tile = tileContainer.tile;
             allPools[tile.type].release(tile);
@@ -875,11 +864,11 @@ function update(ticker) {
     updatePlayer(player, eventManager, collisionManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, ticker.deltaMS);
     updateAllFireballs(allPools, camera, objectsSpriteContainer, lightManager, collisionManager, ticker.deltaMS);
     spawnSlimes(calendar, spawnSlimeTimer, gridStore, allPools, objectsSpriteContainer, collisionManager, ticker.deltaMS);
-    updateAllSlimes(allPools, gridStore, collisionManager, player, ticker.deltaMS);
+    updateAllSlimes(allPools, gridStore, lightManager, collisionManager, player, ticker.deltaMS);
 
     //Подгружаем и выгружаем часть карты при необходимости
     if(gridStore.checkDistanceToBorder(player.x, player.y, Config.grid.loadDistanceInChunk)) {
-        generateChunksFor(player.x, player.y, player, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer);
+        generateChunksFor(player.x, player.y, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer);
         repaintMinimap(minimap, allPools, gridStore, sizeUnitsConverter);
     }
 
@@ -943,7 +932,7 @@ function startNewGame() {
     //Создаем игровые объекты вместе с их спрайтами и физическими телами
     const spawnPlayerCoords = findPlayerSpawnPixelCoords(Config.mapGenerator.startTileX, Config.mapGenerator.startTileY, 100, 1, mapGenerator, sizeUnitsConverter);
     player = createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, collisionManager, eventManager, objectsSpriteContainer);
-    generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, player, gridStore, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer);
+    generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer);
     camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
 
     //Подписываемся на внешние события
