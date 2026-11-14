@@ -50,11 +50,12 @@ let lightManager;
 
 let uiManager;
 
-function setSpritePositionInObjectsContainer(sprite, x, y, camera, container = null) {
+function setSpritePosition(sprite, x, y, camera, container = null, zIndexOffset = 0) {
     const parent = sprite.parent ?? container;
     const viewportX = camera.toViewportPixelX(x);
     const viewportY = camera.toViewportPixelY(y);
     parent.toLocal({ x: viewportX, y: viewportY }, undefined, sprite.position);
+    sprite.zIndex = y + zIndexOffset;
 }
 
 function setAnimation(obj, animationName, onComplete = null) {
@@ -162,8 +163,7 @@ function createPlayer(pixelX, pixelY, collisionManager, eventManager, objectsSpr
 }
 
 function updatePlayerView(player, camera, ticker) {
-    setSpritePositionInObjectsContainer(player.sprite, player.x, player.y, camera);
-    player.sprite.zIndex = player.y;
+    setSpritePosition(player.sprite, player.x, player.y, camera);
 
     if(player.velocity.isZero()) setAnimation(player, 'idle');
     else if(!player.velocity.isZero()) setAnimation(player, 'run');
@@ -188,7 +188,6 @@ function consumeEnergyWhileMoving(player, deltaMS) {
     if(player.energy.currentEnergy < energyLossAmount) return false;
 
     player.energy.currentEnergy -= energyLossAmount;
-    player.energy.recoveryTimerPauseInMs = Config.player.energy.recoverEnergyPauseInSec * 1000;
     resetRecoverEnergyTimer(player);
     return true;
 }
@@ -279,8 +278,7 @@ function createExplosion(globalPixelX, globalPixelY, allPools, camera, objectsSp
     ));
     explosion.x = globalPixelX;
     explosion.y = globalPixelY;
-    setSpritePositionInObjectsContainer(explosion.sprite, globalPixelX, globalPixelY, camera, objectsSpriteContainer);
-    explosion.sprite.zIndex = globalPixelY;
+    setSpritePosition(explosion.sprite, globalPixelX, globalPixelY, camera, objectsSpriteContainer);
     setAnimation(explosion, 'explode', () => removeExplosion(explosion, allPools, lightManager));
 
     objectsSpriteContainer.addChild(explosion.sprite);
@@ -343,9 +341,8 @@ function removeFireball(fireball, allPools, lightManager, collisionManager) {
 
 function updateAllFireballsView(allPools, lightManager, camera, ticker) {
     allPools[objectTypes.fireball].forEachUsed(fireball => {
-        setSpritePositionInObjectsContainer(fireball.sprite, fireball.x, fireball.y, camera);
+        setSpritePosition(fireball.sprite, fireball.x, fireball.y, camera, null, Config.fireball.zIndexOffset);
         lightManager.setLightPointPosition(fireball.lightPoint, fireball.x, fireball.y, camera);
-        fireball.sprite.zIndex = fireball.y + Config.fireball.zIndexOffset;
         fireball.sprite.rotation = fireball.velocity.getAngleInRadian();
 
         fireball.sprite.update(ticker);
@@ -438,9 +435,7 @@ function spawnSlimes(calendar, spawnSlimeTimer, gridStore, allPools, objectsSpri
 
 function updateAllSlimesView(allPools, camera, ticker) {
     allPools[objectTypes.slime].forEachUsed(slime => {
-        setSpritePositionInObjectsContainer(slime.sprite, slime.x, slime.y, camera);
-        slime.sprite.zIndex = slime.y;
-
+        setSpritePosition(slime.sprite, slime.x, slime.y, camera);
         slime.sprite.update(ticker);
     });
 }
@@ -551,8 +546,7 @@ function createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer) {
     }));
     tree.x = treeMeta.globalPixelX;
     tree.y = treeMeta.globalPixelY;
-    setSpritePositionInObjectsContainer(tree.sprite, tree.x, tree.y, camera, objectsSpriteContainer);
-    tree.sprite.zIndex = tree.y;
+    setSpritePosition(tree.sprite, tree.x, tree.y, camera, objectsSpriteContainer);
 
     chunk.addToChunk(tree, tree.type);
     objectsSpriteContainer.addChild(tree.sprite);
@@ -597,12 +591,7 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, collisionManager, 
         const localTopOfChunk = gridStore.localTopPixelOfChunkInGrid(chunk.chunkY);
         chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
 
-        chunk.forEachObj((obj, objType) => {
-            const spriteLocalX = gridStore.localPixelXInGrid(obj.x);
-            const spriteLocalY = gridStore.localPixelYInGrid(obj.y);
-            obj.sprite.position.set(spriteLocalX, spriteLocalY);
-            obj.sprite.zIndex = obj.y;
-        });
+        chunk.forEachObj((obj, objType) => setSpritePosition(obj.sprite, obj.x, obj.y, camera));
     }
 
     for(let chunk of result.removedChunks) {
