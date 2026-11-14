@@ -1,4 +1,3 @@
-import './util.js';
 import {objectTypes} from "./objectTypes.js";
 
 export class MapGenerator {
@@ -13,18 +12,12 @@ export class MapGenerator {
         this.noiseGenerator = noiseGenerator;
     }
 
-    generate(tileX, tileY) {
-        this.height = this.noiseGenerator.multipleOctavesNoise(tileX, tileY, this.octaves, this.persistence, this.frequency, this.frequencyMod);
-        this.tileType = generateTileType(this.height);
-        this.tree = generateTree(this, tileX, tileY);
-    }
-
-    getTileType() {
-        return this.tileType;
-    }
-
-    getTree() {
-        return this.tree;
+    generate(tileX, tileY, outputContainer) {
+        outputContainer ??= {};
+        outputContainer.height = this.noiseGenerator.multipleOctavesNoise(tileX, tileY, this.octaves, this.persistence, this.frequency, this.frequencyMod);
+        outputContainer.tileType = generateTileType(outputContainer.height);
+        outputContainer.treeMeta = generateTree(this, tileX, tileY, outputContainer.height);
+        return outputContainer;
     }
 }
 
@@ -61,14 +54,14 @@ function createOffsetVectors(count, vectorLength) {
     return vectors;
 }
 
-function generateTree(mapGenerator, tileX, tileY) {
+function generateTree(mapGenerator, tileX, tileY, height) {
     if(tileX % mapGenerator.treeCellSizePerTile !== 0
         || tileY % mapGenerator.treeCellSizePerTile !== 0
-        || mapGenerator.height < 0.6
-        || mapGenerator.height > 0.75) return null;
+        || height < 0.6
+        || height > 0.75) return null;
 
     const noiseForTree = mapGenerator.noiseGenerator.noise(tileX, tileY);
-    const offsetVector = mapGenerator.offsetVectors[randomIntegerInRange(noiseForTree, 0, mapGenerator.offsetVectors.length - 1)];
+    const offsetVector = mapGenerator.offsetVectors[mapNormalizedToInteger(noiseForTree, 0, mapGenerator.offsetVectors.length - 1)];
     const pixelX = mapGenerator.sizeUnitsConverter.centerPixelXOfTile(tileX) + offsetVector.x;
     const pixelY = mapGenerator.sizeUnitsConverter.centerPixelYOfTile(tileY) + offsetVector.y;
 
@@ -85,6 +78,6 @@ function generateTileType(height) {
 }
 
 
-function randomIntegerInRange(randomValue, min, max) {
-    return Math.floor(randomValue * (max - min + 1)) + min;
+function mapNormalizedToInteger(normalized, min, max) {
+    return Math.floor(normalized * (max - min + 1)) + min;
 }

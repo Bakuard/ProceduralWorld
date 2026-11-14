@@ -13,6 +13,7 @@ import {CollisionManager} from './collisions';
 import {LightManager} from "./lighting";
 import {UIManager} from "./ui";
 import {NoiseGenerator} from "./noise";
+import './util.js';
 
 let Config;
 let sizeUnitsConverter;
@@ -559,8 +560,7 @@ function createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer) {
 
 function findPlayerSpawnPixelCoords(startTileX, startTileY, maxRadiusInTile, step, mapGenerator, sizeUnitsConverter) {
     function isLand(x, y) {
-        mapGenerator.generate(x, y);
-        return mapGenerator.getTileType() !== objectTypes.waterTile;
+        return mapGenerator.generate(x, y).tileType !== objectTypes.waterTile;
     }
 
     if(isLand(startTileX, startTileY)) return { x: sizeUnitsConverter.centerPixelXOfTile(startTileX), y: sizeUnitsConverter.centerPixelYOfTile(startTileY) };
@@ -620,6 +620,7 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, collisionManager, 
         });
     }
 
+    const mapGenerationOutput = {};
     for(let chunk of result.createdChunks) {
         chunk.tileSpritesContainer = new Container();
         chunk.tileSpritesContainer.cullable = true;
@@ -629,9 +630,8 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, collisionManager, 
 
         let countGrassTiles = 0;
         chunk.forEachTileCoords((tileGlobalX, tileGlobalY, localTileXInChunk, localTileYInChunk) => {
-            mapGenerator.generate(tileGlobalX, tileGlobalY);
+            const { tileType, treeMeta } = mapGenerator.generate(tileGlobalX, tileGlobalY, mapGenerationOutput);
 
-            const tileType = mapGenerator.getTileType();
             createTile(
                 sizeUnitsConverter.leftPixelOfTile(tileGlobalX),
                 sizeUnitsConverter.topPixelOfTile(tileGlobalY),
@@ -643,7 +643,6 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, collisionManager, 
                 sizeUnitsConverter
             );
 
-            const treeMeta = mapGenerator.getTree();
             if (treeMeta) createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer);
 
             if(tileType === objectTypes.grassTile) ++countGrassTiles;
