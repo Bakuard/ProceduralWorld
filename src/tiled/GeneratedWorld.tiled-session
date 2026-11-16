@@ -1,0 +1,120 @@
+{
+    "activeFile": "",
+    "expandedProjectPaths": [
+    ],
+    "file.lastUsedOpenFilter": "All Files (*)",
+    "fileStates": {
+        "": {
+            "scaleInDock": 2
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json": {
+            "scale": 0.125,
+            "selectedLayer": 14,
+            "viewCenter": {
+                "x": 5684,
+                "y": 5040
+            }
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#cliff": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#destination": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#fir": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#food_and_firewood": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#gold_mine": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#hut_floor": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#hut_roof": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#river": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#sleeping-bag": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#snow": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#stove": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.tmx": {
+            "scale": 0.29106944444444444,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 1798.5398673474253,
+                "y": 1798.5398673474256
+            }
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.tmx#cliff": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.tmx#fir": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.tmx#food_and_firewood": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.tmx#gold_mine": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.tmx#ground_tiles": {
+            "scaleInDock": 1
+        },
+        "tomb.json": {
+            "scale": 2.7629166666666665,
+            "selectedLayer": 2,
+            "viewCenter": {
+                "x": 240.1447745438094,
+                "y": 239.96380636404766
+            }
+        },
+        "tomb.json#tomb_walls_floors": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "tomb.tmx": {
+            "scale": 2,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 348.75,
+                "y": 273.5
+            }
+        },
+        "tomb.tmx#tomb_walls_floors": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        }
+    },
+    "last.exportedFilePath": "/home/bakuard/JavaScript/ProceduralWorld/src/tiled",
+    "last.imagePath": "/home/bakuard/JavaScript/ProceduralWorld/src/img",
+    "map.height": 30,
+    "map.lastUsedExportFilter": "All Files (*)",
+    "map.lastUsedFormat": "tmx",
+    "map.tileHeight": 60,
+    "map.tileWidth": 60,
+    "openFiles": [
+    ],
+    "project": "GeneratedWorld.tiled-project",
+    "recentFiles": [
+        "tomb.json",
+        "tomb.tmx",
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json",
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.tmx"
+    ],
+    "tileset.embedInMap": true,
+    "tileset.tileSize": {
+        "height": 16,
+        "width": 16
+    }
+}

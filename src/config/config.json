@@ -12,8 +12,8 @@
     "startPhaseProgress": 0
   },
   "sizeUnitsConverter": {
-    "tileWidth": 60,
-    "tileHeight": 60,
+    "tileWidth": 64,
+    "tileHeight": 64,
     "chunkSizeInTile": 10,
     "worldWidthInChunk": 5,
     "worldHeightInChunk": 5
