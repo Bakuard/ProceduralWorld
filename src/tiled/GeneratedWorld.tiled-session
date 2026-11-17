@@ -1,18 +1,18 @@
 {
-    "activeFile": "",
+    "activeFile": "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json",
     "expandedProjectPaths": [
     ],
     "file.lastUsedOpenFilter": "All Files (*)",
     "fileStates": {
         "": {
-            "scaleInDock": 2
+            "scaleInDock": 1
         },
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json": {
-            "scale": 0.125,
-            "selectedLayer": 14,
+            "scale": 0.33,
+            "selectedLayer": 7,
             "viewCenter": {
-                "x": 5684,
-                "y": 5040
+                "x": 2980.3030303030305,
+                "y": 6700
             }
         },
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#cliff": {
@@ -96,7 +96,7 @@
             "scaleInEditor": 1
         }
     },
-    "last.exportedFilePath": "/home/bakuard/JavaScript/ProceduralWorld/src/tiled",
+    "last.exportedFilePath": "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels",
     "last.imagePath": "/home/bakuard/JavaScript/ProceduralWorld/src/img",
     "map.height": 30,
     "map.lastUsedExportFilter": "All Files (*)",
@@ -104,12 +104,13 @@
     "map.tileHeight": 60,
     "map.tileWidth": 60,
     "openFiles": [
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json"
     ],
     "project": "GeneratedWorld.tiled-project",
     "recentFiles": [
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json",
         "tomb.json",
         "tomb.tmx",
-        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json",
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.tmx"
     ],
     "tileset.embedInMap": true,

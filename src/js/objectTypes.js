@@ -2,6 +2,7 @@ export const objectTypes = Object.freeze({
     waterTile: 'water',
     sandTile: 'sand',
     grassTile: 'grass',
+    rockFloorTile: 'rockFloor',
     littleOak: 'littleOak',
     bigOak: 'bigOak',
     heightOak: 'heightOak',

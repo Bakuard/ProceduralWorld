@@ -686,6 +686,7 @@ function repaintMinimap(minimap, allPools, gridStore, sizeUnitsConverter) {
     drawTilesOnMinimap(minimap, allPools, gridStore, sizeUnitsConverter, objectTypes.sandTile, 0xFFFF00);
     drawTilesOnMinimap(minimap, allPools, gridStore, sizeUnitsConverter, objectTypes.waterTile, 0x000080);
     drawTilesOnMinimap(minimap, allPools, gridStore, sizeUnitsConverter, objectTypes.grassTile, 0x41980A);
+    drawTilesOnMinimap(minimap, allPools, gridStore, sizeUnitsConverter, objectTypes.rockFloorTile, 0x4C3732);
 
     drawObjectsOnMinimap(
         minimap, allPools, gridStore,
@@ -798,6 +799,7 @@ async function loadTextures() {
     await Assets.load({ alias: objectTypes.waterTile, src: 'img/water_tile.jpg' });
     await Assets.load({ alias: objectTypes.sandTile, src: 'img/sand_tile.jpg' });
     await Assets.load({ alias: objectTypes.grassTile, src: 'img/grass_tile.jpg' });
+    await Assets.load({ alias: objectTypes.rockFloorTile, src: 'img/rock_tile.png' });
     await Assets.load('img/trees.json');
     await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
     await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });

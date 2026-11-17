@@ -73,8 +73,10 @@ function generateTileType(height) {
         return objectTypes.waterTile;
     else if(height < 0.48)
         return objectTypes.sandTile;
-    else
+    else if(height < 0.82)
         return objectTypes.grassTile;
+    else
+        return objectTypes.rockFloorTile;
 }
 
 
