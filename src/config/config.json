@@ -32,7 +32,21 @@
     "frequency": 0.01,
     "frequencyMod": 2,
     "distanceBetweenTreesInTile": 2,
-    "treeRandomOffsetInPixel": 30
+    "treeJitter": 0.7,
+    "heights": {
+      "waterMax": 0.45,
+      "sandMax": 0.48,
+      "grassMax": 0.82,
+      "treeMin": 0.6,
+      "treeMax": 0.75
+    },
+    "treeTypes": {
+      "littleOakMaxNoise": 0.6,
+      "bigOakMaxNoise": 0.8,
+      "heightOakMaxNoise": 0.95,
+      "deadLittleOakMaxNoise": 0.97,
+      "deadBigOakMaxNoise": 0.99
+    }
   },
   "camera": {
     "deadZoneLeftIndent": 0.4,

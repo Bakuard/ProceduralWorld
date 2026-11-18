@@ -6,8 +6,18 @@ export class MapGenerator {
         this.persistence = mapGeneratorConfig.persistence;
         this.frequency = mapGeneratorConfig.frequency;
         this.frequencyMod = mapGeneratorConfig.frequencyMod;
-        this.treeCellSizePerTile = mapGeneratorConfig.distanceBetweenTreesInTile;
-        this.offsetVectors = createOffsetVectors(8, mapGeneratorConfig.treeRandomOffsetInPixel);
+        this.distanceBetweenTreesInTile = mapGeneratorConfig.distanceBetweenTreesInTile;
+        this.treeJitter = mapGeneratorConfig.treeJitter;
+        this.waterMaxHeight = mapGeneratorConfig.heights.waterMax;
+        this.sandMaxHeight = mapGeneratorConfig.heights.sandMax;
+        this.grassMaxHeight = mapGeneratorConfig.heights.grassMax;
+        this.treeMinHeight = mapGeneratorConfig.heights.treeMin;
+        this.treeMaxHeight = mapGeneratorConfig.heights.treeMax;
+        this.littleOakMaxNoise = mapGeneratorConfig.treeTypes.littleOakMaxNoise;
+        this.bigOakMaxNoise = mapGeneratorConfig.treeTypes.bigOakMaxNoise;
+        this.heightOakMaxNoise = mapGeneratorConfig.treeTypes.heightOakMaxNoise;
+        this.deadLittleOakMaxNoise = mapGeneratorConfig.treeTypes.deadLittleOakMaxNoise;
+        this.deadBigOakMaxNoise = mapGeneratorConfig.treeTypes.deadBigOakMaxNoise;
         this.sizeUnitsConverter = sizeUnitsConverter;
         this.noiseGenerator = noiseGenerator;
     }
@@ -15,71 +25,51 @@ export class MapGenerator {
     generate(tileX, tileY, outputContainer) {
         outputContainer ??= {};
         outputContainer.height = this.noiseGenerator.multipleOctavesNoise(tileX, tileY, this.octaves, this.persistence, this.frequency, this.frequencyMod);
-        outputContainer.tileType = generateTileType(outputContainer.height);
+        outputContainer.tileType = generateTileType(this, outputContainer.height);
         outputContainer.treeMeta = generateTree(this, tileX, tileY, outputContainer.height);
         return outputContainer;
     }
 }
 
-function chooseTreeType(noiseForTree) {
-    if(noiseForTree < 0.6) {
+function chooseTreeType(mapGenerator, noiseForTree) {
+    if(noiseForTree < mapGenerator.littleOakMaxNoise) {
         return objectTypes.littleOak;
-    } else if(noiseForTree < 0.8) {
-        return objectTypes.bigOak
-    } else if(noiseForTree < 0.95) {
+    } else if(noiseForTree < mapGenerator.bigOakMaxNoise) {
+        return objectTypes.bigOak;
+    } else if(noiseForTree < mapGenerator.heightOakMaxNoise) {
         return objectTypes.heightOak;
-    } else if(noiseForTree < 0.97) {
+    } else if(noiseForTree < mapGenerator.deadLittleOakMaxNoise) {
         return objectTypes.deadLittleOak;
-    } else if(noiseForTree < 0.99) {
+    } else if(noiseForTree < mapGenerator.deadBigOakMaxNoise) {
         return objectTypes.deadBigOak;
     } else {
         return objectTypes.deadHeightOak;
     }
 }
 
-function createOffsetVectors(count, vectorLength) {
-    const vectors = [];
-    const step = (2 * Math.PI) / count;
-
-    for (let i = 0; i < count; i++) {
-        const angle = i * step;
-        const x = Math.cos(angle);
-        const y = Math.sin(angle);
-        vectors.push({
-            x: x * vectorLength,
-            y: y * vectorLength
-        });
-    }
-
-    return vectors;
-}
-
 function generateTree(mapGenerator, tileX, tileY, height) {
-    if(tileX % mapGenerator.treeCellSizePerTile !== 0
-        || tileY % mapGenerator.treeCellSizePerTile !== 0
-        || height < 0.6
-        || height > 0.75) return null;
+    if(tileX % mapGenerator.distanceBetweenTreesInTile !== 0
+        || tileY % mapGenerator.distanceBetweenTreesInTile !== 0
+        || height < mapGenerator.treeMinHeight
+        || height > mapGenerator.treeMaxHeight) return null;
 
-    const noiseForTree = mapGenerator.noiseGenerator.noise(tileX, tileY);
-    const offsetVector = mapGenerator.offsetVectors[mapNormalizedToInteger(noiseForTree, 0, mapGenerator.offsetVectors.length - 1)];
-    const pixelX = mapGenerator.sizeUnitsConverter.centerPixelXOfTile(tileX) + offsetVector.x;
-    const pixelY = mapGenerator.sizeUnitsConverter.centerPixelYOfTile(tileY) + offsetVector.y;
+    const noiseForXPos = mapGenerator.noiseGenerator.noise(tileX, tileY, 1) - 0.5;
+    const globalPixelX = mapGenerator.sizeUnitsConverter.centerPixelXOfTile(tileX) + mapGenerator.sizeUnitsConverter.tileWidthInPixels() * mapGenerator.distanceBetweenTreesInTile * mapGenerator.treeJitter * noiseForXPos;
 
-    return { globalPixelX: pixelX, globalPixelY: pixelY, treeType: chooseTreeType(noiseForTree) };
+    const noiseForYPos = mapGenerator.noiseGenerator.noise(tileX, tileY, 2) - 0.5;
+    const globalPixelY = mapGenerator.sizeUnitsConverter.centerPixelYOfTile(tileY) + mapGenerator.sizeUnitsConverter.tileHeightInPixels() * mapGenerator.distanceBetweenTreesInTile * mapGenerator.treeJitter * noiseForYPos;
+
+    const noiseForTreeType = mapGenerator.noiseGenerator.noise(tileX, tileY);
+    return { globalPixelX, globalPixelY, treeType: chooseTreeType(mapGenerator, noiseForTreeType) };
 }
 
-function generateTileType(height) {
-    if(height < 0.45)
+function generateTileType(mapGenerator, height) {
+    if(height < mapGenerator.waterMaxHeight)
         return objectTypes.waterTile;
-    else if(height < 0.48)
+    else if(height < mapGenerator.sandMaxHeight)
         return objectTypes.sandTile;
-    else if(height < 0.82)
+    else if(height < mapGenerator.grassMaxHeight)
         return objectTypes.grassTile;
     else
         return objectTypes.rockFloorTile;
-}
-
-
-function mapNormalizedToInteger(normalized, min, max) {
-    return Math.floor(normalized * (max - min + 1)) + min;
 }
