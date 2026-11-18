@@ -545,36 +545,6 @@ function createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer) {
     objectsSpriteContainer.addChild(tree.sprite);
 }
 
-function findPlayerSpawnPixelCoords(startTileX, startTileY, maxRadiusInTile, step, mapGenerator, sizeUnitsConverter) {
-    function isLand(x, y) {
-        return mapGenerator.generate(x, y).tileType !== objectTypes.waterTile;
-    }
-
-    if(isLand(startTileX, startTileY)) return { x: sizeUnitsConverter.centerPixelXOfTile(startTileX), y: sizeUnitsConverter.centerPixelYOfTile(startTileY) };
-
-    const directions = [
-        { dx: step, dy: step },
-        { dx: step, dy: -step },
-        { dx: -step, dy: -step },
-        { dx: -step, dy: step }
-    ];
-
-    for(let radius = 1; radius <= maxRadiusInTile; radius++) {
-        let x = startTileX - radius * step;
-        let y = startTileY;
-
-        for (const { dx, dy } of directions) {
-            for (let i = 0; i < radius; i++) {
-                if(isLand(x, y)) return { x: sizeUnitsConverter.centerPixelXOfTile(x), y: sizeUnitsConverter.centerPixelYOfTile(y) };
-                x += dx;
-                y += dy;
-            }
-        }
-    }
-
-    return { x: sizeUnitsConverter.centerPixelXOfTile(startTileX), y: sizeUnitsConverter.centerPixelYOfTile(startTileY) };
-}
-
 function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer) {
     const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
     updateCamera(camera, player, result.newBorder, gameObjects);
@@ -932,7 +902,11 @@ function startNewGame() {
     lightManager.prepareGlobalLighting(gameObjects);
 
     //Создаем игровые объекты вместе с их спрайтами и физическими телами
-    const spawnPlayerCoords = findPlayerSpawnPixelCoords(Config.mapGenerator.startTileX, Config.mapGenerator.startTileY, 100, 1, mapGenerator, sizeUnitsConverter);
+    const spawnTileCoords = mapGenerator.findNearestTileWithType(Config.mapGenerator.startTileX, Config.mapGenerator.startTileY, 100, 1, objectTypes.grassTile);
+    const spawnPlayerCoords = {
+        x: sizeUnitsConverter.centerPixelXOfTile(spawnTileCoords.tileX),
+        y: sizeUnitsConverter.centerPixelYOfTile(spawnTileCoords.tileY)
+    };
     player = createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, collisionManager, eventManager, objectsSpriteContainer);
     generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer);
     camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);

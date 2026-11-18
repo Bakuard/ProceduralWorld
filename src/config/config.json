@@ -33,26 +33,26 @@
     "frequencyMod": 2,
     "distanceBetweenTreesInTile": 2,
     "treeJitter": 0.7,
-    "heights": {
+    "terrainHeights": {
       "waterMax": 0.45,
       "sandMax": 0.48,
-      "grassMax": 0.82,
-      "treeMin": 0.6,
-      "treeMax": 0.75
+      "grassMax": 0.82
     },
-    "treeTypes": {
+    "trees": {
+      "minHeight": 0.6,
+      "maxHeight": 0.75,
       "littleOakMaxNoise": 0.6,
       "bigOakMaxNoise": 0.8,
       "heightOakMaxNoise": 0.95,
       "deadLittleOakMaxNoise": 0.97,
       "deadBigOakMaxNoise": 0.99
+    },
+    "dungeons": {
+      "cellSizeInChunk": 5,
+      "attemptNumber": 3,
+      "minHeight": 0.76,
+      "maxHeight": 0.82
     }
-  },
-  "camera": {
-    "deadZoneLeftIndent": 0.4,
-    "deadZoneRightIndent": 0.4,
-    "deadZoneTopIndent": 0.4,
-    "deadZoneBottomIndent": 0.4
   },
   "player": {
     "speed": 170,
@@ -105,6 +105,12 @@
     "roamingRadiusInPixels": 300,
     "bodyWidth": 36,
     "bodyHeight": 30
+  },
+  "camera": {
+    "deadZoneLeftIndent": 0.4,
+    "deadZoneRightIndent": 0.4,
+    "deadZoneTopIndent": 0.4,
+    "deadZoneBottomIndent": 0.4
   },
   "minimap": {
     "minScale": 0.3,

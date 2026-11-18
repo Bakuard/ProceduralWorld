@@ -29,10 +29,10 @@ export class NoiseGenerator {
         y *= frequency;
         const left = Math.floor(x), top = Math.floor(y);
         const localX = x - left, localY = y - top;
-        const topLeftCorner = this.noise(left, top, this.seed);
-        const topRightCorner = this.noise(left + 1, top, this.seed);
-        const bottomLeftCorner = this.noise(left, top + 1, this.seed);
-        const bottomRightCorner = this.noise(left + 1, top + 1, this.seed);
+        const topLeftCorner = this.noise(left, top);
+        const topRightCorner = this.noise(left + 1, top);
+        const bottomLeftCorner = this.noise(left, top + 1);
+        const bottomRightCorner = this.noise(left + 1, top + 1);
         return this.#lerp(this.#lerp(topLeftCorner, topRightCorner, localX), this.#lerp(bottomLeftCorner, bottomRightCorner, localX), localY);
     }
 
