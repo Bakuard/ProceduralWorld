@@ -26,11 +26,32 @@ export class MapGenerator {
         this.noiseGenerator = noiseGenerator;
     }
 
-    generate(tileX, tileY, outputContainer) {
+    generateChunk(chunkX, chunkY, outputContainer) {
         outputContainer ??= {};
-        outputContainer.height = generateHeight(this, tileX, tileY);
-        outputContainer.tileType = generateTileType(this, outputContainer.height);
-        outputContainer.treeMeta = generateTree(this, tileX, tileY, outputContainer.height);
+        outputContainer.tiles ??= [];
+        outputContainer.trees ??= [];
+        outputContainer.tiles.length = 0;
+        outputContainer.trees.length = 0;
+
+        const tileLeft = this.sizeUnitsConverter.leftTileOfChunk(chunkX);
+        const tileTop = this.sizeUnitsConverter.topTileOfChunk(chunkY);
+        const chunkSizeInTile = this.sizeUnitsConverter.chunkSizeInTile;
+
+        for(let localTileY = 0; localTileY < chunkSizeInTile; localTileY++) {
+            for(let localTileX = 0; localTileX < chunkSizeInTile; localTileX++) {
+                const globalTileX = tileLeft + localTileX;
+                const globalTileY = tileTop + localTileY;
+                const height = generateHeight(this, globalTileX, globalTileY);
+                const tileType = generateTileType(this, height);
+                const treeMeta = generateTree(this, globalTileX, globalTileY, height);
+
+                outputContainer.tiles.push({ tileType, globalTileX, globalTileY, localTileX, localTileY });
+
+                if(treeMeta) outputContainer.trees.push(treeMeta);
+            }
+        }
+        outputContainer.dungeonEntrance = generateDungeonEntrance(this, chunkX, chunkY);
+
         return outputContainer;
     }
 
@@ -135,7 +156,8 @@ function generateDungeonEntrance(mapGenerator, chunkX, chunkY) {
         const candidateTileY = mapNormalizedToInteger(noiseY, topTile, topTile + mapGenerator.sizeUnitsConverter.chunkSizeInTile);
 
         const height = generateHeight(mapGenerator, candidateTileX, candidateTileY);
-        if(height >= mapGenerator.dungeonsMinHeight && height <= mapGenerator.dungeonsMaxHeight) return { tileX: candidateTileX, tileY: candidateTileY };
+        if(height >= mapGenerator.dungeonsMinHeight && height <= mapGenerator.dungeonsMaxHeight)
+            return { tileX: candidateTileX, tileY: candidateTileY, type: objectTypes.tombEntrance };
     }
 
     return null;

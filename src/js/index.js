@@ -576,25 +576,18 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, coll
         const localTopOfChunk = gridStore.localTopPixelOfChunkInGrid(chunk.chunkY);
         chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
 
+        const { tiles, trees, dungeonEntrance } = mapGenerator.generateChunk(chunk.chunkX, chunk.chunkY, mapGenerationOutput);
+
         let countGrassTiles = 0;
-        chunk.forEachTileCoords((tileGlobalX, tileGlobalY, localTileXInChunk, localTileYInChunk) => {
-            const { tileType, treeMeta } = mapGenerator.generate(tileGlobalX, tileGlobalY, mapGenerationOutput);
+        for (const tile of tiles) {
+            const leftPixel = sizeUnitsConverter.leftPixelOfTile(tile.globalTileX);
+            const topPixel = sizeUnitsConverter.topPixelOfTile(tile.globalTileY);
+            createTile(leftPixel, topPixel, tile.localTileX, tile.localTileY, tile.tileType, chunk, allPools, sizeUnitsConverter);
 
-            createTile(
-                sizeUnitsConverter.leftPixelOfTile(tileGlobalX),
-                sizeUnitsConverter.topPixelOfTile(tileGlobalY),
-                localTileXInChunk,
-                localTileYInChunk,
-                tileType,
-                chunk,
-                allPools,
-                sizeUnitsConverter
-            );
+            if(tile.tileType === objectTypes.grassTile) ++countGrassTiles;
+        }
+        for(const treeMeta of trees) createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer);
 
-            if (treeMeta) createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer);
-
-            if(tileType === objectTypes.grassTile) ++countGrassTiles;
-        });
         chunk.hasSlimeSpawner = (countGrassTiles / sizeUnitsConverter.chunkAreaInTiles() >= Config.slime.minGrassTilePercentForSpawn)
             && noiseGenerator.noise(chunk.chunkX, chunk.chunkY) <= Config.slime.spawnerProbabilityInChunk;
 
