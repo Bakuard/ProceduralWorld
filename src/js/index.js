@@ -545,6 +545,25 @@ function createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer) {
     objectsSpriteContainer.addChild(tree.sprite);
 }
 
+function createDungeonEntranceSprite(dungeonEntranceMeta) {
+    const tombEntranceSprite = new Sprite(Assets.get(dungeonEntranceMeta.dungeonType));
+    tombEntranceSprite.anchor.set(0.5, 1);
+    return tombEntranceSprite;
+}
+
+function createDungeonEntrance(dungeonEntranceMeta, chunk, allPools, camera, objectsSpriteContainer) {
+    const dungeonEntrance = allPools[objectTypes.tomb].acquire(() => ({
+        type: dungeonEntranceMeta.dungeonType,
+        sprite: createDungeonEntranceSprite(dungeonEntranceMeta)
+    }));
+    dungeonEntrance.x = dungeonEntranceMeta.globalPixelX;
+    dungeonEntrance.y = dungeonEntranceMeta.globalPixelY;
+    setSpritePosition(dungeonEntrance.sprite, dungeonEntrance.x, dungeonEntrance.y, camera, objectsSpriteContainer);
+
+    chunk.addToChunk(dungeonEntrance, dungeonEntrance.type);
+    objectsSpriteContainer.addChild(dungeonEntrance.sprite);
+}
+
 function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer) {
     const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
     updateCamera(camera, player, result.newBorder, gameObjects);
@@ -587,6 +606,7 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, coll
             if(tile.tileType === objectTypes.grassTile) ++countGrassTiles;
         }
         for(const treeMeta of trees) createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer);
+        if(dungeonEntrance && dungeonEntrance.dungeonType === objectTypes.tomb) createDungeonEntrance(dungeonEntrance, chunk, allPools, camera, objectsSpriteContainer);
 
         chunk.hasSlimeSpawner = (countGrassTiles / sizeUnitsConverter.chunkAreaInTiles() >= Config.slime.minGrassTilePercentForSpawn)
             && noiseGenerator.noise(chunk.chunkX, chunk.chunkY) <= Config.slime.spawnerProbabilityInChunk;
@@ -658,7 +678,8 @@ function repaintMinimap(minimap, allPools, gridStore, sizeUnitsConverter) {
         objectTypes.bigOak,
         objectTypes.deadLittleOak,
         objectTypes.deadHeightOak,
-        objectTypes.deadBigOak
+        objectTypes.deadBigOak,
+        objectTypes.tomb
     );
 
     minimap.container.setSize(minimap.sizeInPixel, minimap.sizeInPixel);
@@ -764,6 +785,7 @@ async function loadTextures() {
     await Assets.load({ alias: objectTypes.grassTile, src: 'img/grass_tile.jpg' });
     await Assets.load({ alias: objectTypes.rockFloorTile, src: 'img/rock_tile.png' });
     await Assets.load('img/trees.json');
+    await Assets.load({ alias: objectTypes.tomb, src: 'img/tomb-entrance.png' });
     await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
     await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
     await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
@@ -865,6 +887,34 @@ function update(ticker) {
     checkGameOver(player, uiManager);
 }
 
+function debugFromDevConsole() {
+    window.Config = Config;
+    window.sizeUnitsConverter = sizeUnitsConverter;
+    window.gridStore = gridStore;
+    window.noiseGenerator = noiseGenerator;
+    window.mapGenerator = mapGenerator;
+    window.eventManager = eventManager;
+    window.calendar = calendar;
+    window.player = player;
+    window.allPools = allPools;
+    window.slimeStates = slimeStates;
+    window.spawnSlimeTimer = spawnSlimeTimer;
+    window.collisionManager = collisionManager;
+    window.minimap = minimap;
+    window.renderer = renderer;
+    window.stage = stage;
+    window.ticker = ticker;
+    window.camera = camera;
+    window.allTileSpritesContainer = allTileSpritesContainer;
+    window.objectsSpriteContainer = objectsSpriteContainer;
+    window.debugPhysicsGraphics = debugPhysicsGraphics;
+    window.gameObjects = gameObjects;
+    window.domEventUtil = domEventUtil;
+    window.lightManager = lightManager;
+    window.uiManager = uiManager;
+    window.objectTypes = objectTypes;
+}
+
 function startNewGame() {
     //Инициализируем основные хранилища данных и модель
     allPools = createPools();
@@ -894,12 +944,15 @@ function startNewGame() {
     lightManager = new LightManager(domContainer.clientWidth, domContainer.clientHeight, 0.5, Config.time);
     lightManager.prepareGlobalLighting(gameObjects);
 
-    //Создаем игровые объекты вместе с их спрайтами и физическими телами
-    const spawnTileCoords = mapGenerator.findNearestTileWithType(Config.mapGenerator.startTileX, Config.mapGenerator.startTileY, 100, 1, objectTypes.grassTile);
+    //Находим точку спавна игрока
+    const spawnTileCoords = mapGenerator.findNearestTileWithType(Config.mapGenerator.spawnPoint.startTileX, Config.mapGenerator.spawnPoint.startTileY, Config.mapGenerator.spawnPoint.maxRadiusInTile, Config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
+        ?? { tileX: Config.mapGenerator.spawnPoint.startTileX, tileY: Config.mapGenerator.spawnPoint.startTileY };
     const spawnPlayerCoords = {
         x: sizeUnitsConverter.centerPixelXOfTile(spawnTileCoords.tileX),
         y: sizeUnitsConverter.centerPixelYOfTile(spawnTileCoords.tileY)
     };
+
+    //Создаем игровые объекты вместе с их спрайтами и физическими телами
     player = createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, collisionManager, eventManager, objectsSpriteContainer);
     generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer);
     camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
@@ -938,6 +991,9 @@ function startNewGame() {
     domEventUtil.on('mousemove', event => {
         eventManager.pushEvent(InputEvents.MouseMove, event);
     });
+
+    //Экспортируем переменные в глобальную область видимости для отладки из консоли
+    debugFromDevConsole();
 
     //Запускаем game loop
     ticker.start();

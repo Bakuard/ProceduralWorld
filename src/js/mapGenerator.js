@@ -55,34 +55,31 @@ export class MapGenerator {
         return outputContainer;
     }
 
-    findNearestTileWithType(startTileX, startTileY, maxRadiusInTile, step, tileType) {
-        if(generateTileType(this, generateHeight(this, startTileX, startTileY)) === tileType) {
-            return { tileX: startTileX, tileY: startTileY };
-        }
+    findNearestTileWithType(startTileX, startTileY, maxSteps, step, tileType) {
+        return findNearest(
+            startTileX,
+            startTileY,
+            maxSteps,
+            step,
+            (tileX, tileY) => generateTileType(this, generateHeight(this, tileX, tileY)) === tileType ? { tileX, tileY } : null
+        );
+    }
 
-        const directions = [
-            { dx: step, dy: step },
-            { dx: step, dy: -step },
-            { dx: -step, dy: -step },
-            { dx: -step, dy: step }
-        ];
+    findNearestDungeonWithType(startChunkX, startChunkY, maxRadiusInCells, dungeonType) {
+        const startCellX = Math.floor(startChunkX / this.dungeonsCellSizeInChunk);
+        const startCellY = Math.floor(startChunkY / this.dungeonsCellSizeInChunk);
 
-        for(let radius = 1; radius <= maxRadiusInTile; radius++) {
-            let x = startTileX - radius * step;
-            let y = startTileY;
-
-            for (const { dx, dy } of directions) {
-                for (let i = 0; i < radius; i++) {
-                    if(generateTileType(this, generateHeight(this, x, y)) === tileType) {
-                        return { tileX: x, tileY: y };
-                    }
-                    x += dx;
-                    y += dy;
-                }
+        return findNearest(
+            startCellX,
+            startCellY,
+            maxRadiusInCells,
+            1,
+            (cellX, cellY) => {
+                const { candidateChunkX, candidateChunkY } = chooseDungeonChunkCandidate(this, cellX, cellY);
+                const dungeonEntrance = generateDungeonEntranceInChunk(this, cellX, cellY, candidateChunkX, candidateChunkY);
+                return dungeonEntrance?.dungeonType === dungeonType ? dungeonEntrance : null;
             }
-        }
-
-        return { tileX: startTileX, tileY: startTileY };
+        );
     }
 }
 
@@ -133,31 +130,42 @@ function generateTree(mapGenerator, tileX, tileY, height) {
     return { globalPixelX, globalPixelY, treeType: chooseTreeType(mapGenerator, noiseForTreeType) };
 }
 
+function chooseDungeonChunkCandidate(mapGenerator, cellX, cellY) {
+    const leftChunk = mapGenerator.dungeonsCellSizeInChunk * cellX;
+    const topChunk = mapGenerator.dungeonsCellSizeInChunk * cellY;
+    const noiseX = mapGenerator.noiseGenerator.noise(cellX, cellY);
+    const noiseY = mapGenerator.noiseGenerator.noise(cellX, cellY, 1);
+    const candidateChunkX = mapNormalizedToInteger(noiseX, leftChunk, leftChunk + mapGenerator.dungeonsCellSizeInChunk);
+    const candidateChunkY = mapNormalizedToInteger(noiseY, topChunk, topChunk + mapGenerator.dungeonsCellSizeInChunk);
+    return { candidateChunkX, candidateChunkY };
+}
+
 function generateDungeonEntrance(mapGenerator, chunkX, chunkY) {
     const cellX = Math.floor(chunkX / mapGenerator.dungeonsCellSizeInChunk);
     const cellY = Math.floor(chunkY / mapGenerator.dungeonsCellSizeInChunk);
-    const leftChunk = mapGenerator.dungeonsCellSizeInChunk * cellX;
-    const topChunk = mapGenerator.dungeonsCellSizeInChunk * cellY;
-
-    let noiseX = mapGenerator.noiseGenerator.noise(cellX, cellY);
-    let noiseY = mapGenerator.noiseGenerator.noise(cellX, cellY, 1);
-    const candidateChunkX = mapNormalizedToInteger(noiseX, leftChunk, leftChunk + mapGenerator.dungeonsCellSizeInChunk);
-    const candidateChunkY = mapNormalizedToInteger(noiseY, topChunk, topChunk + mapGenerator.dungeonsCellSizeInChunk);
+    const { candidateChunkX, candidateChunkY } = chooseDungeonChunkCandidate(mapGenerator, cellX, cellY);
 
     if(candidateChunkX !== chunkX || candidateChunkY !== chunkY) return null;
 
+    return generateDungeonEntranceInChunk(mapGenerator, cellX, cellY, candidateChunkX, candidateChunkY);
+}
+
+function generateDungeonEntranceInChunk(mapGenerator, cellX, cellY, candidateChunkX, candidateChunkY) {
     const leftTile = mapGenerator.sizeUnitsConverter.leftTileOfChunk(candidateChunkX);
     const topTile = mapGenerator.sizeUnitsConverter.topTileOfChunk(candidateChunkY);
 
     for(let i = 0; i < mapGenerator.dungeonsAttemptNumber; ++i) {
-        noiseX = mapGenerator.noiseGenerator.noise(cellX, cellY, 2 + i * 2);
-        noiseY = mapGenerator.noiseGenerator.noise(cellX, cellY, 3 + i * 2);
+        const noiseX = mapGenerator.noiseGenerator.noise(cellX, cellY, 2 + i * 2);
+        const noiseY = mapGenerator.noiseGenerator.noise(cellX, cellY, 3 + i * 2);
         const candidateTileX = mapNormalizedToInteger(noiseX, leftTile, leftTile + mapGenerator.sizeUnitsConverter.chunkSizeInTile);
         const candidateTileY = mapNormalizedToInteger(noiseY, topTile, topTile + mapGenerator.sizeUnitsConverter.chunkSizeInTile);
 
         const height = generateHeight(mapGenerator, candidateTileX, candidateTileY);
-        if(height >= mapGenerator.dungeonsMinHeight && height <= mapGenerator.dungeonsMaxHeight)
-            return { tileX: candidateTileX, tileY: candidateTileY, type: objectTypes.tombEntrance };
+        if(height >= mapGenerator.dungeonsMinHeight && height <= mapGenerator.dungeonsMaxHeight) {
+            const globalPixelX = mapGenerator.sizeUnitsConverter.centerPixelXOfTile(candidateTileX);
+            const globalPixelY = mapGenerator.sizeUnitsConverter.centerPixelYOfTile(candidateTileY);
+            return { globalPixelX, globalPixelY, dungeonType: objectTypes.tomb };
+        }
     }
 
     return null;
@@ -166,4 +174,32 @@ function generateDungeonEntrance(mapGenerator, chunkX, chunkY) {
 
 function mapNormalizedToInteger(normalized, min, max) {
     return Math.floor(normalized * (max - min)) + min;
+}
+
+function findNearest(startUnitX, startUnitY, maxSteps, step, mapper) {
+    let result = mapper(startUnitX, startUnitY);
+    if(result != null) return result;
+
+    const directions = [
+        { dx: step, dy: step },
+        { dx: step, dy: -step },
+        { dx: -step, dy: -step },
+        { dx: -step, dy: step }
+    ];
+
+    for(let radius = 1; radius <= maxSteps; radius++) {
+        let x = startUnitX - radius * step;
+        let y = startUnitY;
+
+        for (const { dx, dy } of directions) {
+            for (let i = 0; i < radius; i++) {
+                result = mapper(x, y);
+                if(result != null) return result;
+                x += dx;
+                y += dy;
+            }
+        }
+    }
+
+    return null;
 }

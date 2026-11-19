@@ -24,9 +24,13 @@
     "loadDistanceInChunk": 1.3
   },
   "mapGenerator": {
-    "seed": null,
-    "startTileX": 0,
-    "startTileY": 0,
+    "seed": 842777,
+    "spawnPoint": {
+      "startTileX": 0,
+      "startTileY": 0,
+      "maxRadiusInTile": 100,
+      "step": 1
+    },
     "octaves": 16,
     "persistence": 0.5,
     "frequency": 0.01,
@@ -49,7 +53,7 @@
     },
     "dungeons": {
       "cellSizeInChunk": 5,
-      "attemptNumber": 3,
+      "attemptNumber": 1,
       "minHeight": 0.76,
       "maxHeight": 0.82
     }

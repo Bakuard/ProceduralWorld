@@ -9,7 +9,7 @@ export const objectTypes = Object.freeze({
     deadLittleOak: 'deadLittleOak',
     deadBigOak: 'deadBigOak',
     deadHeightOak: 'deadHeightOak',
-    tombEntrance: 'tombEntrance',
+    tomb: 'tomb',
     player: 'player',
     slime: 'slime',
     fireball: 'fireball',

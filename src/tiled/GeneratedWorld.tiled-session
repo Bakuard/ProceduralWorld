@@ -8,11 +8,11 @@
             "scaleInDock": 1
         },
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json": {
-            "scale": 1,
-            "selectedLayer": 7,
+            "scale": 0.75,
+            "selectedLayer": 1,
             "viewCenter": {
-                "x": 8743.5,
-                "y": 7940
+                "x": 8083.333333333333,
+                "y": 3413.333333333333
             }
         },
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#cliff": {
@@ -43,6 +43,9 @@
             "scaleInDock": 1
         },
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#snow": {
+            "scaleInDock": 1
+        },
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#snow-steps": {
             "scaleInDock": 1
         },
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#stove": {
@@ -97,7 +100,7 @@
         }
     },
     "last.exportedFilePath": "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels",
-    "last.imagePath": "/home/bakuard/JavaScript/ProceduralWorld/src/img",
+    "last.imagePath": "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/img/tiles",
     "map.height": 30,
     "map.lastUsedExportFilter": "All Files (*)",
     "map.lastUsedFormat": "tmx",
@@ -115,7 +118,7 @@
     ],
     "tileset.embedInMap": true,
     "tileset.tileSize": {
-        "height": 16,
-        "width": 16
+        "height": 60,
+        "width": 60
     }
 }
