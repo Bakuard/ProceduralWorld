@@ -7,6 +7,7 @@ export class CollisionManager {
         this.collisionDetector = Matter.Detector.create({});
         this.allPhysicsBodies = new DenseArray();
         this.physicsBodiesListWasChanged = false;
+        this.handlers = {};
     }
 
     createCircleCollider(pixelX, pixelY, radius, anchorX, anchorY, owner) {
@@ -44,8 +45,12 @@ export class CollisionManager {
         this.setPosition(body, x, y);
     }
 
-    registerBody(body) {
-        this.physicsBodiesListWasChanged |= this.allPhysicsBodies.addLast(body);
+    registerBody(body, groupName) {
+        const wasAdded = this.allPhysicsBodies.addLast(body);
+        if(wasAdded) {
+            body.groupName = groupName;
+            this.physicsBodiesListWasChanged = true;
+        }
     }
 
     unregisterBody(body) {
@@ -56,16 +61,32 @@ export class CollisionManager {
         this.allPhysicsBodies.forEach(callback);
     }
 
-    handleCollisions(callbackHandler) {
+    registerHandler(groupName1, groupName2, callback) {
+        if(this.handlers[groupName2]?.[groupName1]) this.handlers[groupName2][groupName1] = null;
+
+        this.handlers[groupName1] ??= {};
+        this.handlers[groupName1][groupName2] = callback;
+    }
+
+    handleCollisions() {
         if(this.physicsBodiesListWasChanged) {
             Matter.Detector.setBodies(this.collisionDetector, this.allPhysicsBodies.innerArray);
             this.physicsBodiesListWasChanged = false;
         }
 
         Matter.Detector.collisions(this.collisionDetector).forEach(collision => {
-            const objA = collision.bodyA.owner;
-            const objB = collision.bodyB.owner;
-            callbackHandler(objA, objB, collision.bodyA, collision.bodyB);
+            const { bodyA, bodyB } = collision;
+
+            const handlerAB = this.handlers[bodyA.groupName]?.[bodyB.groupName];
+            if(handlerAB) {
+                handlerAB(bodyA.owner, bodyB.owner);
+                return;
+            }
+
+            const handlerBA = this.handlers[bodyB.groupName]?.[bodyA.groupName];
+            if(handlerBA) {
+                handlerBA(bodyB.owner, bodyA.owner);
+            }
         });
     }
 }

@@ -8,11 +8,11 @@
             "scaleInDock": 1
         },
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json": {
-            "scale": 0.75,
+            "scale": 0.5,
             "selectedLayer": 1,
             "viewCenter": {
-                "x": 8083.333333333333,
-                "y": 3413.333333333333
+                "x": 9123,
+                "y": 1056
             }
         },
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json#cliff": {

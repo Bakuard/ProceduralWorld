@@ -107,14 +107,6 @@ function debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridS
     });
 }
 
-function allCollisionHandler(objA, objB, bodyA, bodyB, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager) {
-    if(objA.type === objectTypes.slime && objB.type === objectTypes.fireball) {
-        handleFireballAndSlimeCollision(objB, objA, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager);
-    } else if(objA.type === objectTypes.fireball && objB.type === objectTypes.slime) {
-        handleFireballAndSlimeCollision(objA, objB, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager);
-    }
-}
-
 function handleFireballAndSlimeCollision(fireball, slime, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager) {
     removeGameObj(fireball, allPools, lightManager, collisionManager);
     createExplosion(fireball.x, fireball.y, allPools, camera, objectsSpriteContainer, lightManager, collisionManager);
@@ -166,7 +158,7 @@ function createPlayer(pixelX, pixelY, collisionManager, eventManager, objectsSpr
     eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
     objectsSpriteContainer.addChild(player.sprite);
     setAnimation(player, 'idle');
-    collisionManager.registerBody(player.body);
+    collisionManager.registerBody(player.body, objectTypes.player);
     return player;
 }
 
@@ -331,7 +323,7 @@ function createFireball(globalPixelX, globalPixelY, globalAimPixelX, globalAimPi
 
     objectsSpriteContainer.addChild(fireball.sprite);
     lightManager.registerLightPointSprite(fireball.lightPoint);
-    collisionManager.registerBody(fireball.body);
+    collisionManager.registerBody(fireball.body, objectTypes.fireball);
 }
 
 function updateAllFireballsView(allPools, lightManager, camera, ticker) {
@@ -400,7 +392,7 @@ function createSlime(globalPixelX, globalPixelY, chunk, allPools, objectsSpriteC
 
     chunk.addToChunk(slime, objectTypes.slime);
     objectsSpriteContainer.addChild(slime.sprite);
-    collisionManager.registerBody(slime.body);
+    collisionManager.registerBody(slime.body, objectTypes.slime);
 }
 
 function removeSlime(slime, allPools, gridStore, lightManager, collisionManager) {
@@ -860,7 +852,7 @@ function update(ticker) {
     }
 
     //Поиск коллизий
-    collisionManager.handleCollisions((objA, objB, bodyA, bodyB) => allCollisionHandler(objA, objB, bodyA, bodyB, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager));
+    collisionManager.handleCollisions();
 
     //Обновляем внешний вид игровых объектов
     updateCamera(camera, player, gridStore.border, gameObjects);
@@ -918,15 +910,13 @@ function debugFromDevConsole() {
 function startNewGame() {
     //Инициализируем основные хранилища данных и модель
     allPools = createPools();
+    collisionManager = new CollisionManager();
     sizeUnitsConverter = new SizeUnitsConverter(Config.sizeUnitsConverter);
     noiseGenerator = new NoiseGenerator(Config.mapGenerator.seed);
     mapGenerator = new MapGenerator(sizeUnitsConverter, noiseGenerator, Config.mapGenerator);
     gridStore = new GridStore(sizeUnitsConverter, Config.grid);
     calendar = new Calendar(Config.time);
     spawnSlimeTimer = IntervalTimer.ofSeconds(Config.slime.spawnRateInSec);
-
-    //Подготавливаем обработку коллизий
-    collisionManager = new CollisionManager();
 
     //Создаем контейнеры для спрайтов и отладочную графику для физики
     const domContainer = document.querySelector('.game-canvas-container');
@@ -956,6 +946,11 @@ function startNewGame() {
     player = createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, collisionManager, eventManager, objectsSpriteContainer);
     generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer);
     camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
+
+    //Регистрируем обработку коллизий
+    collisionManager.registerHandler(objectTypes.fireball, objectTypes.slime, (fireball, slime) => {
+        handleFireballAndSlimeCollision(fireball, slime, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager);
+    });
 
     //Подписываемся на внешние события
     domEventUtil.on('resize', () => {
