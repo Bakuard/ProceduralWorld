@@ -411,8 +411,8 @@ function spawnSlimes(calendar, spawnSlimeTimer, gridStore, allPools, objectsSpri
         for(let chunk of gridStore.chunks) {
             if(!chunk.hasSlimeSpawner || countSlimesInArea(chunk.chunkX, chunk.chunkY, gridStore) >= Config.slime.maxSlimesInArea) continue;
 
-            const x = Math.randomIntegerInRange(chunk.pixelLeft, chunk.pixelRight);
-            const y = Math.randomIntegerInRange(chunk.pixelTop, chunk.pixelBottom);
+            const x = Math.randomIntegerInRange(chunk.pixelLeft, chunk.pixelRight - 1);
+            const y = Math.randomIntegerInRange(chunk.pixelTop, chunk.pixelBottom - 1);
             createSlime(x, y, chunk, allPools, objectsSpriteContainer, collisionManager);
         }
     }
@@ -435,8 +435,8 @@ function choseNextRandomAimIfNeeded(slime, gridStore) {
     if(isSlimeNearAim(slime)) {
         let nextAimX = Math.randomIntegerInRange(slime.spawnPointX - Config.slime.roamingRadiusInPixels, slime.spawnPointX + Config.slime.roamingRadiusInPixels);
         let nextAimY = Math.randomIntegerInRange(slime.spawnPointY - Config.slime.roamingRadiusInPixels, slime.spawnPointY + Config.slime.roamingRadiusInPixels);
-        nextAimX = Math.clamp(nextAimX, gridStore.border.pixelLeft, gridStore.border.pixelRight);
-        nextAimY = Math.clamp(nextAimY, gridStore.border.pixelTop, gridStore.border.pixelBottom);
+        nextAimX = Math.clamp(nextAimX, gridStore.border.pixelLeft, gridStore.border.pixelRight - 1);
+        nextAimY = Math.clamp(nextAimY, gridStore.border.pixelTop, gridStore.border.pixelBottom - 1);
         slime.aim = { x: nextAimX, y: nextAimY };
     }
 }
