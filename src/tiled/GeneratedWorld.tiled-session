@@ -1,5 +1,5 @@
 {
-    "activeFile": "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json",
+    "activeFile": "tomb.json",
     "expandedProjectPaths": [
     ],
     "file.lastUsedOpenFilter": "All Files (*)",
@@ -75,8 +75,11 @@
             "scaleInDock": 1
         },
         "tomb.json": {
+            "expandedGroupLayers": [
+                5
+            ],
             "scale": 2.7629166666666665,
-            "selectedLayer": 2,
+            "selectedLayer": 0,
             "viewCenter": {
                 "x": 240.1447745438094,
                 "y": 239.96380636404766
@@ -107,12 +110,12 @@
     "map.tileHeight": 60,
     "map.tileWidth": 60,
     "openFiles": [
-        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json"
+        "tomb.json"
     ],
     "project": "GeneratedWorld.tiled-project",
     "recentFiles": [
-        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json",
         "tomb.json",
+        "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json",
         "tomb.tmx",
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.tmx"
     ],

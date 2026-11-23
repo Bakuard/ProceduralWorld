@@ -14,16 +14,18 @@ import {LightManager} from "./lighting";
 import {UIManager} from "./ui";
 import {NoiseGenerator} from "./noise";
 import './util.js';
+import {TiledParser} from "./tiledParser";
 
 let Config;
 let sizeUnitsConverter;
+let allPools;
+let calendar;
+let eventManager;
+let tiledParser;
 let gridStore;
 let noiseGenerator;
 let mapGenerator;
-let eventManager;
-let calendar;
 let player;
-let allPools;
 const slimeStates = Object.freeze({
     idle: 'idle',
     roam: 'roam',
@@ -786,9 +788,11 @@ async function loadTextures() {
 }
 
 async function loadConfig() {
-    const response = await fetch('config/config.json');
-    if (!response.ok) throw `Fail to load config.json: ${response.statusText}`;
-    Config = await response.json();
+    Config = await Assets.load('config/config.json');
+}
+
+async function loadTiledMaps() {
+    await Assets.load({ alias: 'tombMap', src: 'tiled/tomb.json' });
 }
 
 async function createRenderer(domContainer) {
@@ -807,6 +811,10 @@ async function initGame() {
     await loadTextures();
     await loadConfig();
     await LightManager.loadShaders();
+    await loadTiledMaps();
+
+    //Создаем парсер тайловых карт и подгружаем тайловые карты
+    tiledParser = new TiledParser();
 
     //Подготавливаем контекст WebGL
     const domContainer = document.querySelector('.game-canvas-container');
