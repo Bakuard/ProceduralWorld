@@ -18,14 +18,14 @@ export class Calendar {
         this.afternoonInMs = calendarConfig.afternoonInSec * 1000;
         this.eveningInMs = calendarConfig.eveningInSec * 1000;
         this.nightInMs = calendarConfig.nightInSec * 1000;
+        this.startPhase = calendarConfig.startPhase;
+        this.startPhaseProgress = calendarConfig.startPhaseProgress;
 
-        this.totalElapsedTimeInMs = getElapsedMsBeforeDayPhase(this, calendarConfig.startPhase)
-            + getDayPhaseDuration(this, calendarConfig.startPhase) * calendarConfig.startPhaseProgress;
-        this.updateCurrentTime(0);
+        this.reset();
     }
 
-    updateCurrentTime(deltaTimeInMs) {
-        this.totalElapsedTimeInMs += deltaTimeInMs;
+    setTimeInMs(totalElapsedTimeInMs) {
+        this.totalElapsedTimeInMs = totalElapsedTimeInMs;
         this.msSinceDayStart = this.totalElapsedTimeInMs % getTotalDayDurationInMs(this);
         this.totalDays = Math.floor(this.totalElapsedTimeInMs / getTotalDayDurationInMs(this));
 
@@ -37,6 +37,21 @@ export class Calendar {
             this.currentPhase = dayPhases.evening;
         else
             this.currentPhase = dayPhases.night;
+    }
+
+    setTime(days, phase, phaseProgress) {
+        const daysAsMs = days * getTotalDayDurationInMs(this);
+        const phaseAsMs = getElapsedMsBeforeDayPhase(this, phase);
+        const phaseProgressAsMs = getDayPhaseDuration(this, phase) * phaseProgress;
+        this.setTimeInMs(daysAsMs + phaseAsMs + phaseProgressAsMs);
+    }
+
+    reset() {
+        this.setTime(0, this.startPhase, this.startPhaseProgress);
+    }
+
+    addMs(ms) {
+        this.setTimeInMs(this.totalElapsedTimeInMs + ms);
     }
 
     isMorning() {
@@ -72,7 +87,7 @@ export class Calendar {
         return this.totalDays;
     }
 
-    getTotalMS() {
+    getTotalMs() {
         return this.totalElapsedTimeInMs;
     }
 

@@ -45,6 +45,7 @@ export class CollisionManager {
         this.setPosition(body, x, y);
     }
 
+
     registerBody(body, groupName) {
         const wasAdded = this.allPhysicsBodies.addLast(body);
         if(wasAdded) {
@@ -54,12 +55,18 @@ export class CollisionManager {
     }
 
     unregisterBody(body) {
-        this.physicsBodiesListWasChanged |= this.allPhysicsBodies.quickRemove(body);
+        this.physicsBodiesListWasChanged ||= this.allPhysicsBodies.quickRemove(body);
     }
 
-    forEachBody(callback) {
+    unregisterAllBodies() {
+        this.physicsBodiesListWasChanged ||= this.allPhysicsBodies.getSize() > 0;
+        this.allPhysicsBodies.clear();
+    }
+
+    forEachRegisteredBody(callback) {
         this.allPhysicsBodies.forEach(callback);
     }
+
 
     registerHandler(groupName1, groupName2, callback) {
         if(this.handlers[groupName2]?.[groupName1]) this.handlers[groupName2][groupName1] = null;
@@ -67,6 +74,11 @@ export class CollisionManager {
         this.handlers[groupName1] ??= {};
         this.handlers[groupName1][groupName2] = callback;
     }
+
+    unregisterAllHandlers() {
+        this.handlers = {};
+    }
+
 
     handleCollisions() {
         if(this.physicsBodiesListWasChanged) {

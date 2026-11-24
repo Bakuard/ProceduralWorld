@@ -10,6 +10,8 @@ export const objectTypes = Object.freeze({
     deadBigOak: 'deadBigOak',
     deadHeightOak: 'deadHeightOak',
     tomb: 'tomb',
+    tombFloorTile: 'tombFloor',
+    tombWallTile: 'tombWall',
     player: 'player',
     slime: 'slime',
     fireball: 'fireball',

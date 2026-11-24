@@ -16,6 +16,11 @@ export class UnorderedPool {
         return itemExist;
     }
 
+    releaseAll() {
+        this.unusedItems.push(...this.usedItems.innerArray);
+        this.usedItems.clear();
+    }
+
     getUsed(index) {
         return this.usedItems.get(index);
     }
@@ -66,6 +71,10 @@ export class DenseArray {
             return true;
         }
         return false;
+    }
+
+    clear() {
+        this.innerArray.length = 0;
     }
 
     get(index) {

@@ -1,4 +1,14 @@
-import {WebGLRenderer,  Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix} from 'pixi.js';
+import {
+    WebGLRenderer,
+    Assets,
+    Container,
+    Sprite,
+    AnimatedSprite,
+    Ticker,
+    Graphics,
+    Matrix,
+    ViewContainer
+} from 'pixi.js';
 import {objectTypes} from './objectTypes';
 import {SizeUnitsConverter} from './sizeUnitsConverter';
 import {GridStore} from './gridStore';
@@ -91,7 +101,7 @@ function removeGameObj(obj, allPools, lightManager, collisionManager) {
 function debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridStore) {
     debugPhysicsGraphics.clear().setStrokeStyle({ width: 2, color: 0x00ff00 });
 
-    collisionManager.forEachBody(body => {
+    collisionManager.forEachRegisteredBody(body => {
         const width = body.bounds.max.x - body.bounds.min.x;
         const height = body.bounds.max.y - body.bounds.min.y;
 
@@ -219,7 +229,7 @@ function consumeEnergyWhileAttack(player) {
 
 function playerAttack(player, eventManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, collisionManager) {
     const mouseClick = eventManager.pullEvent('Player', InputEvents.MouseClick);
-    if(mouseClick && player.fireTimer.checkThenReset(calendar.getTotalMS()) && consumeEnergyWhileAttack(player)) {
+    if(mouseClick && player.fireTimer.checkThenReset(calendar.getTotalMs()) && consumeEnergyWhileAttack(player)) {
         const aimX = camera.toGlobalPixelX(mouseClick.clientX);
         const aimY = camera.toGlobalPixelY(mouseClick.clientY);
         createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, Config.fireball.lifeTimeInMillis, Config.fireball.speed, Config.fireball.damage, player, allPools, objectsSpriteContainer, lightManager, collisionManager);
@@ -255,9 +265,10 @@ function updatePlayer(player, eventManager, collisionManager, calendar, camera, 
 function checkGameOver(player, uiManager) {
     if(player.energy.receivedDamaged === player.energy.maxEnergy) {
         stopGame();
+        calendar.reset();
         uiManager.showGameOverModal(() => {
             uiManager.hideGameOverModal();
-            startNewGame();
+            startMainScene();
         });
     }
 }
@@ -795,6 +806,14 @@ async function loadTiledMaps() {
     await Assets.load({ alias: 'tombMap', src: 'tiled/tomb.json' });
 }
 
+async function loadAssets() {
+    await loadTextures();
+    await loadConfig();
+    await LightManager.loadShaders();
+    await loadTiledMaps();
+}
+
+
 async function createRenderer(domContainer) {
     const renderer = new WebGLRenderer();
     await renderer.init({
@@ -807,15 +826,6 @@ async function createRenderer(domContainer) {
 }
 
 async function initGame() {
-    //Подгружаем все ассеты
-    await loadTextures();
-    await loadConfig();
-    await LightManager.loadShaders();
-    await loadTiledMaps();
-
-    //Создаем парсер тайловых карт и подгружаем тайловые карты
-    tiledParser = new TiledParser();
-
     //Подготавливаем контекст WebGL
     const domContainer = document.querySelector('.game-canvas-container');
     renderer = await createRenderer(domContainer);
@@ -827,9 +837,23 @@ async function initGame() {
     eventManager = new EventManager();
     domEventUtil = new DOMEventUtil();
 
+    //Создаем пулы для всех объектов
+    allPools = createPools();
+
+    //Создаем менеджер коллизий
+    collisionManager = new CollisionManager();
+
+    //Подготавливаем конвертер для единиц измерения размеров и расстояний
+    sizeUnitsConverter = new SizeUnitsConverter(Config.sizeUnitsConverter);
+
+    //Создаем парсер тайловых карт и подгружаем тайловые карты
+    tiledParser = new TiledParser();
+
+    //Создаем календарь для внутреигрового времени
+    calendar = new Calendar(Config.time);
+
     //Инициализируем game loop
     ticker = new Ticker();
-    ticker.add((ticker) => update(ticker));
 }
 
 
@@ -847,7 +871,7 @@ function updateHUD(uiManager, player) {
 
 function update(ticker) {
     //Обновляем модель
-    calendar.updateCurrentTime(ticker.deltaMS);
+    calendar.addMs(ticker.deltaMS);
     updatePlayer(player, eventManager, collisionManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, ticker.deltaMS);
     updateAllFireballs(allPools, camera, objectsSpriteContainer, lightManager, collisionManager, ticker.deltaMS);
     spawnSlimes(calendar, spawnSlimeTimer, gridStore, allPools, objectsSpriteContainer, collisionManager, ticker.deltaMS);
@@ -915,15 +939,48 @@ function debugFromDevConsole() {
     window.objectTypes = objectTypes;
 }
 
-function startNewGame() {
+function subscribeOnDomEvents() {
+    domEventUtil.on('resize', () => {
+        camera.resize(domContainer.clientWidth, domContainer.clientHeight);
+        renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
+        resizeMinimap(minimap, domContainer.clientWidth, domContainer.clientHeight);
+        lightManager.resizePointLightingTexture(domContainer.clientWidth, domContainer.clientHeight);
+    });
+    domEventUtil.on('keydown', event => {
+        if(event.key === 'Escape') {
+            if(event.repeat) return;
+            if (ticker.started) pauseGame();
+            else resumeGame();
+        } else {
+            eventManager.pushEvent(event.code, event);
+        }
+    });
+    domEventUtil.on('keyup', event => {
+        eventManager.clearEventForAll(event.code);
+    });
+    domEventUtil.on('click', event => {
+        if(!checkCLickOnMinimap(minimap, renderer, event)) eventManager.pushEvent(InputEvents.MouseClick, event);
+    });
+    domEventUtil.on('wheel', event => {
+        eventManager.pushEvent(InputEvents.MouseWheel, event);
+    });
+    domEventUtil.on('mousedown', event => {
+        eventManager.pushEvent(InputEvents.MouseDown, event);
+    });
+    domEventUtil.on('mouseup', event => {
+        eventManager.pushEvent(InputEvents.MouseUp, event);
+    });
+    domEventUtil.on('mousemove', event => {
+        eventManager.pushEvent(InputEvents.MouseMove, event);
+    });
+}
+
+function startMainScene() {
     //Инициализируем основные хранилища данных и модель
-    allPools = createPools();
-    collisionManager = new CollisionManager();
-    sizeUnitsConverter = new SizeUnitsConverter(Config.sizeUnitsConverter);
     noiseGenerator = new NoiseGenerator(Config.mapGenerator.seed);
     mapGenerator = new MapGenerator(sizeUnitsConverter, noiseGenerator, Config.mapGenerator);
     gridStore = new GridStore(sizeUnitsConverter, Config.grid);
-    calendar = new Calendar(Config.time);
+
     spawnSlimeTimer = IntervalTimer.ofSeconds(Config.slime.spawnRateInSec);
 
     //Создаем контейнеры для спрайтов и отладочную графику для физики
@@ -961,44 +1018,13 @@ function startNewGame() {
     });
 
     //Подписываемся на внешние события
-    domEventUtil.on('resize', () => {
-        camera.resize(domContainer.clientWidth, domContainer.clientHeight);
-        renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
-        resizeMinimap(minimap, domContainer.clientWidth, domContainer.clientHeight);
-        lightManager.resizePointLightingTexture(domContainer.clientWidth, domContainer.clientHeight);
-    });
-    domEventUtil.on('keydown', event => {
-        if(event.key === 'Escape') {
-            if(event.repeat) return;
-            if (ticker.started) pauseGame();
-            else resumeGame();
-        } else {
-            eventManager.pushEvent(event.code, event);
-        }
-    });
-    domEventUtil.on('keyup', event => {
-        eventManager.clearEventForAll(event.code);
-    });
-    domEventUtil.on('click', event => {
-        if(!checkCLickOnMinimap(minimap, renderer, event)) eventManager.pushEvent(InputEvents.MouseClick, event);
-    });
-    domEventUtil.on('wheel', event => {
-        eventManager.pushEvent(InputEvents.MouseWheel, event);
-    });
-    domEventUtil.on('mousedown', event => {
-        eventManager.pushEvent(InputEvents.MouseDown, event);
-    });
-    domEventUtil.on('mouseup', event => {
-        eventManager.pushEvent(InputEvents.MouseUp, event);
-    });
-    domEventUtil.on('mousemove', event => {
-        eventManager.pushEvent(InputEvents.MouseMove, event);
-    });
+    subscribeOnDomEvents()
 
     //Экспортируем переменные в глобальную область видимости для отладки из консоли
     debugFromDevConsole();
 
     //Запускаем game loop
+    ticker.add(update);
     ticker.start();
 }
 
@@ -1022,5 +1048,40 @@ function resumeGame() {
     ticker.start();
 }
 
+function stopMainScene() {
+    ticker.stop();
+    ticker.remove(update);
 
-initGame().then(() => startNewGame());
+    lightManager.destroy();
+    eventManager.clearAll();
+    domEventUtil.removeAllListeners();
+    Object.values(allPools).forEach(pool => pool.releaseAll());
+    collisionManager.unregisterAllBodies();
+    collisionManager.unregisterAllHandlers();
+
+    detachAllNonContainersRecursively([allTileSpritesContainer, objectsSpriteContainer]);
+}
+
+function detachAllNonContainersRecursively(nodes) {
+    for(let i = nodes.length - 1; i >= 0; i--) {
+        const node = nodes[i];
+        if(node instanceof ViewContainer) node.removeFromParent();
+        else detachAllNonContainersRecursively(node.children);
+    }
+}
+
+
+function startDungeonScene() {
+
+    subscribeOnDomEvents();
+
+    ticker.add(updateDungeonScene);
+    ticker.start();
+}
+
+function updateDungeonScene(ticker) {
+
+}
+
+
+loadAssets().then(() => initGame()).then(() => startMainScene());
