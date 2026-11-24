@@ -16,11 +16,6 @@ export class UnorderedPool {
         return itemExist;
     }
 
-    releaseAll() {
-        this.unusedItems.push(...this.usedItems.innerArray);
-        this.usedItems.clear();
-    }
-
     getUsed(index) {
         return this.usedItems.get(index);
     }

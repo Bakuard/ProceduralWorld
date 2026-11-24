@@ -17,8 +17,8 @@ export class DOMEventUtil {
         this.domEventsAbortController = new AbortController();
     }
 
-    on(domEventName, callback) {
-        document.addEventListener(domEventName, callback, { signal: this.domEventsAbortController.signal });
+    on(domContainer, domEventName, callback) {
+        domContainer.addEventListener(domEventName, callback, { signal: this.domEventsAbortController.signal });
     }
 
     removeAllListeners() {

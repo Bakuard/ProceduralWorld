@@ -51,14 +51,13 @@ export class LightManager {
         targetContainer.filters = [...existingFilters, this.nightShader];
     }
 
-    destroy() {
-        this.lightPointContainer?.destroy({ children: true });
-        this.lightPointTexture?.destroy(true);
-        this.nightShader?.destroy();
+    enableLighting() {
+        this.nightShader.enabled = true;
+    }
 
-        this.lightPointContainer = null;
-        this.lightPointTexture = null;
-        this.nightShader = null;
+    disableLighting() {
+        this.nightShader.enabled = false;
+        this.lightPointContainer?.removeChildren();
     }
 
 
@@ -87,6 +86,8 @@ export class LightManager {
     }
 
     resizePointLightingTexture(viewportWidth, viewportHeight) {
+        this.viewportWidth = viewportWidth;
+        this.viewportHeight = viewportHeight;
         this.lightPointTexture.resize(viewportWidth, viewportHeight, this.resolution);
     }
 
