@@ -20,44 +20,47 @@ let globalGameData = {
     config: {},
     sizeUnitsConverter: null,
     allPools: {},
-    calendar: null,
     tiledParser: null,
+    uiManager: null,
+    lightManager: null,
+    collisionManager: null,
+
+    ticker: null,
+
+    view: {
+        domContainer: null,
+        renderer: null,
+        stage: null,
+        allTileSpritesContainer: null,
+        objectsSpriteContainer: null,
+        debugPhysicsGraphics: null,
+        gameObjects: null
+    }
 }
 
-let allPools;
-let calendar;
-let eventManager;
-let tiledParser;
-let gridStore;
-let noiseGenerator;
-let mapGenerator;
-let player;
+let sessionData = {
+    calendar: null,
+    player: null,
+    noiseGenerator: null,
+    mapGenerator: null,
+    eventManager: null,
+    domEventUtil: null,
+    camera: null
+}
+
+let mainScene = {
+    gridStore: null,
+    spawnSlimeTimer: null,
+    minimap: null
+}
+
 const slimeStates = Object.freeze({
     idle: 'idle',
     roam: 'roam',
     chase: 'chase',
     attack: 'attack'
 });
-let spawnSlimeTimer;
 
-let collisionManager;
-
-let minimap;
-
-let domContainer;
-let renderer;
-let stage;
-let ticker;
-let camera;
-let allTileSpritesContainer;
-let objectsSpriteContainer;
-let debugPhysicsGraphics;
-let gameObjects;
-let domEventUtil;
-
-let lightManager;
-
-let uiManager;
 
 function setSpritePosition(sprite, x, y, camera, container = null, zIndexOffset = 0) {
     const parent = sprite.parent ?? container;
@@ -152,29 +155,40 @@ function createEnergyBar(config) {
     };
 }
 
-function createPlayer(pixelX, pixelY, collisionManager, eventManager, objectsSpriteContainer, config) {
+function createPlayer(globalPixelX, globalPixelY, collisionManager, eventManager, objectsSpriteContainer, config) {
     const player = {
         type: objectTypes.player,
-        x: pixelX,
-        y: pixelY,
+        x: globalPixelX,
+        y: globalPixelY,
         speed: config.player.speed,
         fireTimer: TimestampIntervalTimer.ofMillis(config.player.fireRateInMillis),
         velocity: new Vector(),
         sprite: createPlayerSprite(config.player.startAnimation),
-        energy: createEnergyBar(config)
+        energy: createEnergyBar(config),
+        body: null
     };
-    player.body = collisionManager.createRectCollider(pixelX, pixelY, config.player.bodyWidth, config.player.bodyHeight, 0.5, 1, player);
+    player.body = collisionManager.createRectCollider(globalPixelX, globalPixelY, config.player.bodyWidth, config.player.bodyHeight, 0.5, 1, player);
 
     eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
     objectsSpriteContainer.addChild(player.sprite);
     setAnimation(player, 'idle');
-    collisionManager.registerBody(player.body, objectTypes.player);
     return player;
 }
 
-function destroyPlayer(player, allPools, lightManager, collisionManager) {
-    removeGameObj(player, allPools, lightManager, collisionManager);
-    player.sprite.destroy();
+function placePlayerInScene(player, pixelX, pixelY, collisionManager) {
+    player.x = pixelX;
+    player.y = pixelY;
+    player.velocity.set(0, 0);
+    collisionManager.setPosition(player.body, pixelX, pixelY);
+    collisionManager.registerBody(player.body, objectTypes.player);
+    setAnimation(player, 'idle');
+}
+
+function destroyPlayer(player, collisionManager) {
+    collisionManager.unregisterBody(player.body);
+    player.sprite?.removeFromParent();
+    player.sprite?.stop?.();
+    player.sprite?.destroy();
 }
 
 function updatePlayerView(player, camera, ticker) {
@@ -268,10 +282,11 @@ function updatePlayer(player, eventManager, collisionManager, calendar, camera, 
 function checkGameOver(player, uiManager) {
     if(player.energy.receivedDamaged === player.energy.maxEnergy) {
         stopMainScene();
-        calendar.reset();
+        removeSession();
 
         uiManager.showGameOverModal(() => {
             uiManager.hideGameOverModal();
+            createSession();
             startMainScene();
         });
     }
@@ -656,6 +671,7 @@ function destroyMinimap(minimap) {
 }
 
 function resizeMinimap(minimap, viewportWidth, viewportHeight) {
+    if(!minimap?.container || minimap.container.destroyed) return;
     minimap.viewportWidth = viewportWidth;
     minimap.viewportHeight = viewportHeight;
     const prevSizeInPixel = minimap.sizeInPixel;
@@ -775,7 +791,7 @@ function scrollMinimap(minimap, eventManager, renderer) {
 }
 
 function checkCLickOnMinimap(minimap, renderer, mouseEvent) {
-    if(!minimap.container.visible) return false;
+    if(!minimap?.container?.visible) return false;
 
     const point = { x: 0, y: 0 };
     renderer.events.mapPositionToPoint(point, mouseEvent.clientX, mouseEvent.clientY);
@@ -853,257 +869,247 @@ function createPools() {
     );
 }
 
-async function initGame() {
-    //Подготавливаем контекст WebGL
-    domContainer = document.querySelector('.game-canvas-container');
-    renderer = await createRenderer(domContainer);
-
-    //Создаем менеджер освещения
-    lightManager = new LightManager(domContainer.clientWidth, domContainer.clientHeight, 0.5, globalGameData.config.time);
-
-    //Подготавливаем управление UI
-    uiManager = new UIManager();
-
-    //Создаем менеджеры событий
-    eventManager = new EventManager();
-    domEventUtil = new DOMEventUtil();
-
-    //Создаем пулы для всех объектов
-    allPools = createPools();
-
-    //Создаем менеджер коллизий
-    collisionManager = new CollisionManager();
-
-    //Подготавливаем конвертер для единиц измерения размеров и расстояний
-    globalGameData.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.sizeUnitsConverter);
-
-    //Создаем парсер тайловых карт и подгружаем тайловые карты
-    tiledParser = new TiledParser();
-
-    //Создаем календарь для внутреигрового времени
-    calendar = new Calendar(globalGameData.config.time);
-
-    //Создаем камеру
-    camera = new Camera(domContainer.clientWidth, domContainer.clientHeight, globalGameData.config.camera);
-
-    //Инициализируем game loop
-    ticker = new Ticker();
-}
-
-
-function updateMainScene(ticker) {
-    //Обновляем модель
-    calendar.addMs(ticker.deltaMS);
-    updatePlayer(player, eventManager, collisionManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, globalGameData.config, ticker.deltaMS);
-    updateAllFireballs(allPools, camera, objectsSpriteContainer, lightManager, collisionManager, globalGameData.config, ticker.deltaMS);
-    spawnSlimes(calendar, spawnSlimeTimer, gridStore, allPools, objectsSpriteContainer, collisionManager, globalGameData.config, ticker.deltaMS);
-    updateAllSlimes(allPools, gridStore, lightManager, collisionManager, player, globalGameData.config, ticker.deltaMS);
-
-    //Подгружаем и выгружаем часть карты при необходимости
-    if(gridStore.checkDistanceToBorder(player.x, player.y, globalGameData.config.grid.loadDistanceInChunk)) {
-        generateChunksFor(player.x, player.y, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, globalGameData.sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer, globalGameData.config);
-        repaintMinimap(minimap, allPools, gridStore, globalGameData.sizeUnitsConverter);
-    }
-
-    //Поиск коллизий
-    collisionManager.handleCollisions();
-
-    //Обновляем внешний вид игровых объектов
-    updateCamera(camera, player, gridStore.border, gameObjects);
-    updatePlayerView(player, camera, ticker);
-    updateAllFireballsView(allPools, lightManager, camera, globalGameData.config, ticker);
-    updateAllExplosionsView(allPools, lightManager, camera, ticker);
-    updateAllSlimesView(allPools, camera, ticker);
-
-    //Обновляем освещение
-    lightManager.updateLighting(calendar, renderer);
-
-    //Обновляем внешний вид миникарту по необходимости
-    updateMinimapView(minimap, allPools, gridStore, globalGameData.sizeUnitsConverter, eventManager, renderer);
-
-    //Обновляем видимые границы вокруг физических тел для дебага физики
-    //debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridStore);
-
-    //Отрисовываем игровой мир
-    renderer.render(stage);
-
-    //Отрисовываем UI
-    updateHUD(uiManager, player);
-
-    checkGameOver(player, uiManager);
-}
-
-function debugFromDevConsole() {
-    window.config = globalGameData.config;
-    window.sizeUnitsConverter = globalGameData.sizeUnitsConverter;
-    window.gridStore = gridStore;
-    window.noiseGenerator = noiseGenerator;
-    window.mapGenerator = mapGenerator;
-    window.eventManager = eventManager;
-    window.calendar = calendar;
-    window.player = player;
-    window.allPools = allPools;
-    window.slimeStates = slimeStates;
-    window.spawnSlimeTimer = spawnSlimeTimer;
-    window.collisionManager = collisionManager;
-    window.minimap = minimap;
-    window.renderer = renderer;
-    window.stage = stage;
-    window.ticker = ticker;
-    window.camera = camera;
-    window.allTileSpritesContainer = allTileSpritesContainer;
-    window.objectsSpriteContainer = objectsSpriteContainer;
-    window.debugPhysicsGraphics = debugPhysicsGraphics;
-    window.gameObjects = gameObjects;
-    window.domEventUtil = domEventUtil;
-    window.lightManager = lightManager;
-    window.uiManager = uiManager;
-    window.objectTypes = objectTypes;
-}
-
 function createSceneGraph() {
-    stage = new Container();
-    gameObjects = new Container();
-    allTileSpritesContainer = new Container();
-    objectsSpriteContainer = new Container();
-    debugPhysicsGraphics = new Graphics();
-    gameObjects.addChild(allTileSpritesContainer, objectsSpriteContainer, debugPhysicsGraphics);
-    stage.addChild(gameObjects);
+    globalGameData.view.stage = new Container();
+    globalGameData.view.gameObjects = new Container();
+    globalGameData.view.allTileSpritesContainer = new Container();
+    globalGameData.view.objectsSpriteContainer = new Container();
+    globalGameData.view.debugPhysicsGraphics = new Graphics();
+    globalGameData.view.gameObjects.addChild(globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.view.debugPhysicsGraphics);
+    globalGameData.view.stage.addChild(globalGameData.view.gameObjects);
 }
+
+async function initGlobalGameData() {
+    //Подготавливаем контекст WebGL
+    globalGameData.view.domContainer = document.querySelector('.game-canvas-container');
+    globalGameData.view.renderer = await createRenderer(globalGameData.view.domContainer);
+
+    globalGameData.uiManager = new UIManager();
+    globalGameData.allPools = createPools();
+    globalGameData.collisionManager = new CollisionManager();
+    globalGameData.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.sizeUnitsConverter);
+    globalGameData.tiledParser = new TiledParser();
+    globalGameData.ticker = new Ticker();
+
+    createSceneGraph();
+
+    globalGameData.lightManager = new LightManager(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight, 0.5, globalGameData.config.time);
+    globalGameData.lightManager.prepareGlobalLighting(globalGameData.view.gameObjects)
+}
+
 
 function subscribeOnDomEvents() {
-    domEventUtil.on(window, 'resize', () => {
-        camera.resize(domContainer.clientWidth, domContainer.clientHeight);
-        renderer.resize(domContainer.clientWidth, domContainer.clientHeight);
-        resizeMinimap(minimap, domContainer.clientWidth, domContainer.clientHeight);
-        lightManager.resizePointLightingTexture(domContainer.clientWidth, domContainer.clientHeight);
+    sessionData.domEventUtil.on(window, 'resize', () => {
+        sessionData.camera.resize(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
+        globalGameData.view.renderer.resize(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
+        resizeMinimap(mainScene.minimap, globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
+        globalGameData.lightManager.resizePointLightingTexture(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
     });
-    domEventUtil.on(document, 'keydown', event => {
+    sessionData.domEventUtil.on(document, 'keydown', event => {
         if(event.key === 'Escape') {
             if(event.repeat) return;
-            if (ticker.started) pauseCurrentScene();
+            if (globalGameData.ticker.started) pauseCurrentScene();
             else resumeCurrentScene();
         } else {
-            eventManager.pushEvent(event.code, event);
+            sessionData.eventManager.pushEvent(event.code, event);
         }
     });
-    domEventUtil.on(document, 'keyup', event => {
-        eventManager.clearEventForAll(event.code);
+    sessionData.domEventUtil.on(document, 'keyup', event => {
+        sessionData.eventManager.clearEventForAll(event.code);
     });
-    domEventUtil.on(document, 'click', event => {
-        if(!checkCLickOnMinimap(minimap, renderer, event)) eventManager.pushEvent(InputEvents.MouseClick, event);
+    sessionData.domEventUtil.on(document, 'click', event => {
+        if(!checkCLickOnMinimap(mainScene.minimap, globalGameData.view.renderer, event)) sessionData.eventManager.pushEvent(InputEvents.MouseClick, event);
     });
-    domEventUtil.on(document, 'wheel', event => {
-        eventManager.pushEvent(InputEvents.MouseWheel, event);
+    sessionData.domEventUtil.on(document, 'wheel', event => {
+        sessionData.eventManager.pushEvent(InputEvents.MouseWheel, event);
     });
-    domEventUtil.on(document, 'mousedown', event => {
-        eventManager.pushEvent(InputEvents.MouseDown, event);
+    sessionData.domEventUtil.on(document, 'mousedown', event => {
+        sessionData.eventManager.pushEvent(InputEvents.MouseDown, event);
     });
-    domEventUtil.on(document, 'mouseup', event => {
-        eventManager.pushEvent(InputEvents.MouseUp, event);
+    sessionData.domEventUtil.on(document, 'mouseup', event => {
+        sessionData.eventManager.pushEvent(InputEvents.MouseUp, event);
     });
-    domEventUtil.on(document, 'mousemove', event => {
-        eventManager.pushEvent(InputEvents.MouseMove, event);
+    sessionData.domEventUtil.on(document, 'mousemove', event => {
+        sessionData.eventManager.pushEvent(InputEvents.MouseMove, event);
     });
 }
 
-function startMainScene() {
-    //Инициализируем основные хранилища данных и модель
-    noiseGenerator = new NoiseGenerator(globalGameData.config.mapGenerator.seed);
-    mapGenerator = new MapGenerator(globalGameData.sizeUnitsConverter, noiseGenerator, globalGameData.config.mapGenerator);
-    gridStore = new GridStore(globalGameData.sizeUnitsConverter, globalGameData.config.grid);
-    spawnSlimeTimer = IntervalTimer.ofSeconds(globalGameData.config.slime.spawnRateInSec);
+function createSession() {
+    sessionData.calendar = new Calendar(globalGameData.config.time);
+    sessionData.noiseGenerator = new NoiseGenerator(globalGameData.config.mapGenerator.seed);
+    sessionData.mapGenerator = new MapGenerator(globalGameData.sizeUnitsConverter, sessionData.noiseGenerator, globalGameData.config.mapGenerator);
+    sessionData.eventManager = new EventManager();
+    sessionData.domEventUtil = new DOMEventUtil();
+    sessionData.camera = new Camera(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight, globalGameData.config.camera);
+    sessionData.player = createPlayer(0, 0, globalGameData.collisionManager, sessionData.eventManager, globalGameData.view.objectsSpriteContainer, globalGameData.config);
 
-    //Создаем контейнеры для спрайтов и отладочную графику для физики
-    minimap = createMinimap(eventManager, domContainer.clientWidth, domContainer.clientHeight, stage, globalGameData.config.minimap);
+    subscribeOnDomEvents();
+}
+
+function removeSession() {
+    sessionData.domEventUtil.removeAllListeners();
+    sessionData.eventManager.clearAll();
+    destroyPlayer(sessionData.player, globalGameData.collisionManager);
+}
+
+
+function startMainScene() {
+    //Инициализируем основные хранилища данных и модель сцены
+    mainScene.gridStore = new GridStore(globalGameData.sizeUnitsConverter, globalGameData.config.grid);
+    mainScene.spawnSlimeTimer = IntervalTimer.ofSeconds(globalGameData.config.slime.spawnRateInSec);
+    mainScene.minimap = createMinimap(sessionData.eventManager, globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight, globalGameData.view.stage, globalGameData.config.minimap);
 
     //Находим точку спавна игрока
-    const spawnTileCoords = mapGenerator.findNearestTileWithType(globalGameData.config.mapGenerator.spawnPoint.startTileX, globalGameData.config.mapGenerator.spawnPoint.startTileY, globalGameData.config.mapGenerator.spawnPoint.maxRadiusInTile, globalGameData.config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
+    const spawnTileCoords = sessionData.mapGenerator.findNearestTileWithType(globalGameData.config.mapGenerator.spawnPoint.startTileX, globalGameData.config.mapGenerator.spawnPoint.startTileY, globalGameData.config.mapGenerator.spawnPoint.maxRadiusInTile, globalGameData.config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
         ?? { tileX: globalGameData.config.mapGenerator.spawnPoint.startTileX, tileY: globalGameData.config.mapGenerator.spawnPoint.startTileY };
     const spawnPlayerCoords = {
         x: globalGameData.sizeUnitsConverter.centerPixelXOfTile(spawnTileCoords.tileX),
         y: globalGameData.sizeUnitsConverter.centerPixelYOfTile(spawnTileCoords.tileY)
     };
 
-    //Создаем игровые объекты вместе с их спрайтами и физическими телами
-    player = createPlayer(spawnPlayerCoords.x, spawnPlayerCoords.y, collisionManager, eventManager, objectsSpriteContainer, globalGameData.config);
-    camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
-    generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, globalGameData.sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer, globalGameData.config);
+    //Размещаем игрока и создаем игровые объекты сцены
+    placePlayerInScene(sessionData.player, spawnPlayerCoords.x, spawnPlayerCoords.y, globalGameData.collisionManager);
+    sessionData.camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
+    generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, sessionData.player, mainScene.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, sessionData.mapGenerator, globalGameData.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
 
     //Включаем освещение
-    lightManager.enableLighting();
+    globalGameData.lightManager.enableLighting();
 
     //Регистрируем обработку коллизий
-    collisionManager.registerHandler(objectTypes.fireball, objectTypes.slime, (fireball, slime) => {
-        handleFireballAndSlimeCollision(fireball, slime, allPools, gridStore, camera, objectsSpriteContainer, lightManager, collisionManager, globalGameData.config);
+    globalGameData.collisionManager.registerHandler(objectTypes.fireball, objectTypes.slime, (fireball, slime) => {
+        handleFireballAndSlimeCollision(fireball, slime, globalGameData.allPools, mainScene.gridStore, sessionData.camera, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.config);
     });
-
-    //Подписываемся на внешние события
-    subscribeOnDomEvents()
 
     //Экспортируем переменные в глобальную область видимости для отладки из консоли
     debugFromDevConsole();
 
     //Запускаем game loop
-    ticker.add(updateMainScene);
-    ticker.start();
+    globalGameData.ticker.add(updateMainScene);
+    globalGameData.ticker.start();
+}
+
+function updateMainScene(ticker) {
+    //Обновляем модель
+    sessionData.calendar.addMs(ticker.deltaMS);
+    updatePlayer(sessionData.player, sessionData.eventManager, globalGameData.collisionManager, sessionData.calendar, sessionData.camera, globalGameData.allPools, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.config, ticker.deltaMS);
+    updateAllFireballs(globalGameData.allPools, sessionData.camera, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.config, ticker.deltaMS);
+    spawnSlimes(sessionData.calendar, mainScene.spawnSlimeTimer, mainScene.gridStore, globalGameData.allPools, globalGameData.view.objectsSpriteContainer, globalGameData.collisionManager, globalGameData.config, ticker.deltaMS);
+    updateAllSlimes(globalGameData.allPools, mainScene.gridStore, globalGameData.lightManager, globalGameData.collisionManager, sessionData.player, globalGameData.config, ticker.deltaMS);
+
+    //Подгружаем и выгружаем часть карты при необходимости
+    if(mainScene.gridStore.checkDistanceToBorder(sessionData.player.x, sessionData.player.y, globalGameData.config.grid.loadDistanceInChunk)) {
+        generateChunksFor(sessionData.player.x, sessionData.player.y, sessionData.player, mainScene.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, sessionData.mapGenerator, globalGameData.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
+        repaintMinimap(mainScene.minimap, globalGameData.allPools, mainScene.gridStore, globalGameData.sizeUnitsConverter);
+    }
+
+    //Поиск коллизий
+    globalGameData.collisionManager.handleCollisions();
+
+    //Обновляем внешний вид игровых объектов
+    updateCamera(sessionData.camera, sessionData.player, mainScene.gridStore.border, globalGameData.view.gameObjects);
+    updatePlayerView(sessionData.player, sessionData.camera, ticker);
+    updateAllFireballsView(globalGameData.allPools, globalGameData.lightManager, sessionData.camera, globalGameData.config, ticker);
+    updateAllExplosionsView(globalGameData.allPools, globalGameData.lightManager, sessionData.camera, ticker);
+    updateAllSlimesView(globalGameData.allPools, sessionData.camera, ticker);
+
+    //Обновляем освещение
+    globalGameData.lightManager.updateLighting(sessionData.calendar, globalGameData.view.renderer);
+
+    //Обновляем внешний вид миникарту по необходимости
+    updateMinimapView(mainScene.minimap, globalGameData.allPools, mainScene.gridStore, globalGameData.sizeUnitsConverter, sessionData.eventManager, globalGameData.view.renderer);
+
+    //Обновляем видимые границы вокруг физических тел для дебага физики
+    //debugDrawAllPhysicsBodies(globalGameData.view.debugPhysicsGraphics, globalGameData.collisionManager, mainScene.gridStore);
+
+    //Отрисовываем игровой мир
+    globalGameData.view.renderer.render(globalGameData.view.stage);
+
+    //Отрисовываем UI
+    updateHUD(globalGameData.uiManager, sessionData.player);
+
+    checkGameOver(sessionData.player, globalGameData.uiManager);
 }
 
 function stopMainScene() {
-    ticker.stop();
-    ticker.remove(updateMainScene);
+    globalGameData.ticker.stop();
+    globalGameData.ticker.remove(updateMainScene);
 
-    domEventUtil.removeAllListeners();
-    eventManager.clearAll();
+    removeChunksWithAllObjs(mainScene.gridStore.chunks, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager);
+    globalGameData.allPools[objectTypes.fireball].forEachUsed(fireball => removeGameObj(fireball, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager));
+    globalGameData.allPools[objectTypes.explosion].forEachUsed(fireball => removeGameObj(fireball, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager));
+    destroyMinimap(mainScene.minimap);
 
-    destroyPlayer(player, allPools, lightManager, collisionManager);
-    removeChunksWithAllObjs(gridStore.chunks, allPools, lightManager, collisionManager);
-    allPools[objectTypes.fireball].forEachUsed(fireball => removeGameObj(fireball, allPools, lightManager, collisionManager));
-    allPools[objectTypes.explosion].forEachUsed(fireball => removeGameObj(fireball, allPools, lightManager, collisionManager));
-    destroyMinimap(minimap);
-
-    lightManager.disableLighting();
-    collisionManager.unregisterAllBodies();
-    collisionManager.unregisterAllHandlers();
+    globalGameData.lightManager.disableLighting();
+    globalGameData.collisionManager.unregisterAllBodies();
+    globalGameData.collisionManager.unregisterAllHandlers();
 }
 
 function pauseCurrentScene() {
-    if (!ticker.started) return;
-    ticker.stop();
-    uiManager.showGamePauseModal(() => resumeCurrentScene());
+    if (!globalGameData.ticker.started) return;
+    globalGameData.ticker.stop();
+    globalGameData.uiManager.showGamePauseModal(() => resumeCurrentScene());
 }
 
 function resumeCurrentScene() {
-    if (ticker.started) return;
-    uiManager.hideGamePauseModal();
-    ticker.start();
+    if (globalGameData.ticker.started) return;
+    globalGameData.uiManager.hideGamePauseModal();
+    globalGameData.ticker.start();
 }
 
 
 function startDungeonScene() {
-
-    subscribeOnDomEvents();
-
-    ticker.add(updateDungeonScene);
-    ticker.start();
+    globalGameData.ticker.add(updateDungeonScene);
+    globalGameData.ticker.start();
 }
 
 function updateDungeonScene(ticker) {
     //Обновляем модель
-    calendar.addMs(ticker.deltaMS);
+    sessionData.calendar.addMs(ticker.deltaMS);
 
     //Отрисовываем игровой мир
-    renderer.render(stage);
+    globalGameData.view.renderer.render(globalGameData.view.stage);
 
     //Отрисовываем UI
-    updateHUD(uiManager, player);
+    updateHUD(globalGameData.uiManager, sessionData.player);
 
-    checkGameOver(player, uiManager);
+    checkGameOver(sessionData.player, globalGameData.uiManager);
+}
+
+function stopDungeonScene() {
+
+}
+
+
+function debugFromDevConsole() {
+    window.config = globalGameData.config;
+    window.sizeUnitsConverter = globalGameData.sizeUnitsConverter;
+    window.gridStore = mainScene.gridStore;
+    window.noiseGenerator = sessionData.noiseGenerator;
+    window.mapGenerator = sessionData.mapGenerator;
+    window.eventManager = sessionData.eventManager;
+    window.calendar = sessionData.calendar;
+    window.player = sessionData.player;
+    window.allPools = globalGameData.allPools;
+    window.slimeStates = slimeStates;
+    window.spawnSlimeTimer = mainScene.spawnSlimeTimer;
+    window.collisionManager = globalGameData.collisionManager;
+    window.minimap = mainScene.minimap;
+    window.renderer = globalGameData.view.renderer;
+    window.stage = globalGameData.view.stage;
+    window.ticker = globalGameData.ticker;
+    window.camera = sessionData.camera;
+    window.allTileSpritesContainer = globalGameData.view.allTileSpritesContainer;
+    window.objectsSpriteContainer = globalGameData.view.objectsSpriteContainer;
+    window.debugPhysicsGraphics = globalGameData.view.debugPhysicsGraphics;
+    window.gameObjects = globalGameData.view.gameObjects;
+    window.domEventUtil = sessionData.domEventUtil;
+    window.lightManager = globalGameData.lightManager;
+    window.uiManager = globalGameData.uiManager;
+    window.objectTypes = objectTypes;
 }
 
 
 loadAssets()
-    .then(() => initGame())
-    .then(() => createSceneGraph())
-    .then(() => lightManager.prepareGlobalLighting(gameObjects))
+    .then(() => initGlobalGameData())
+    .then(() => createSession())
     .then(() => startMainScene());
