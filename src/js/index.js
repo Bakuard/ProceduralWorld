@@ -942,6 +942,8 @@ function createSession() {
 
     sessionData.currentScene = new MainScene();
     globalGameData.ticker.add(updateCurrentScene);
+    globalGameData.ticker.add(switchScene, null, -1);
+    sessionData.eventManager.registerInbox('SceneSwitcher', 'SwitchScene');
 }
 
 function removeSession() {
@@ -949,6 +951,7 @@ function removeSession() {
     sessionData.eventManager.clearAll();
     destroyPlayer(sessionData.player, globalGameData.collisionManager);
     globalGameData.ticker.remove(updateCurrentScene);
+    globalGameData.ticker.remove(switchScene);
 }
 
 
@@ -978,14 +981,21 @@ function resumeCurrentScene() {
     globalGameData.ticker.start();
 }
 
-function switchScene(newScene) {
-    stopCurrentScene();
-    sessionData.currentScene = newScene;
-    startCurrentScene();
-}
-
 function updateCurrentScene(ticker) {
     sessionData.currentScene.update(globalGameData, sessionData, ticker)
+}
+
+function requestSceneSwitch(newScene) {
+    sessionData.eventManager.pushEvent('SwitchScene', newScene);
+}
+
+function switchScene() {
+    const newScene = sessionData.eventManager.pullEvent('SceneSwitcher', 'SwitchScene');
+    if(newScene) {
+        stopCurrentScene();
+        sessionData.currentScene = newScene;
+        startCurrentScene();
+    }
 }
 
 
