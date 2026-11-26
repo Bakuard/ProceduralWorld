@@ -1097,6 +1097,8 @@ class TombScene {
     start(globalGameData, sessionData) {
         this.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.tombScene.sizeUnitsConverter);
         this.gridStore = new GridStore(this.sizeUnitsConverter, globalGameData.config.tombScene.grid);
+
+
     }
 
     update(globalGameData, sessionData, ticker) {

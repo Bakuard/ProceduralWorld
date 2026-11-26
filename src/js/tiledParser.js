@@ -5,35 +5,39 @@ export class TiledParser {
         this.cache = {};
     }
 
-    getTileLayerData(mapName, layerName) {
-        let result = this.cache[mapName]?.[layerName];
-        if(!result) {
-            result = extractTileLayerData(mapName, layerName);
-            this.cache[mapName] ??= {};
-            this.cache[mapName][layerName] = result;
-        }
-        return result;
+    getTileLayer(mapName, layerName) {
+        return getFromCacheOrExtractLayer(mapName, layerName, this.cache, extractTileLayerData);
+    }
+
+    getObjLayer(mapName, layerName) {
+        return getFromCacheOrExtractLayer(mapName, layerName, this.cache, extractObjLayerData);
+    }
+
+    getObjLayerThenGroup(mapName, layerName, key) {
+        const { visible, objects } = this.getObjLayer(mapName, layerName);
+        const objectsMap = {};
+        objects.forEach(obj => {
+            const mapKey = obj[key];
+            const mapValue = objectsMap[mapKey];
+            if (mapValue == null) objectsMap[mapKey] = [obj];
+            else objectsMap[mapKey].push(obj);
+        });
+        return { visible, objectsMap };
     }
 }
 
-function validateMap(mapName, rawMap) {
-    if(!rawMap || typeof rawMap !== 'object') throw new Error(`Invalid Tiled map format for '${mapName}'`);
-    if(rawMap.infinite) throw new Error(`Infinite maps are not supported (map '${mapName}')`);
-    if(rawMap.tilesets.some(tileset => tileset.source)) throw new Error(`External tilesets are not supported`);
-}
-
-function findTileLayerByPath(mapName, rawMap, layerPath) {
+function findLayerByPath(rawMap, layerPath, expectedType) {
     const pathSegments = layerPath.split('/');
 
     let currentLayer = rawMap;
     let visible = true;
     for(let segmentName of pathSegments) {
         currentLayer = currentLayer.layers?.find(layer => layer.name === segmentName);
-        if(!currentLayer) throw new Error(`Layer '${layerPath}' not found in map '${mapName}'`);
+        if(!currentLayer) throw new Error(`Layer '${layerPath}' not found in map`);
         visible = visible && currentLayer.visible;
     }
 
-    if(currentLayer.type !== 'tilelayer') throw new Error(`Layer '${layerPath}' in map '${mapName}' is not a tilelayer (actual type: '${currentLayer.type}')`);
+    if(currentLayer.type !== expectedType) throw new Error(`Layer '${layerPath}' is not a ${expectedType} (actual type: '${currentLayer.type}')`);
 
     return { layer: currentLayer, visible };
 }
@@ -44,42 +48,104 @@ function findTilesetForGid(rawMap, gid) {
     return tileset;
 }
 
-function extractTileMetadata(rawMap, gid) {
+function findFrameInTileset(rawMap, gid) {
     const tileset = findTilesetForGid(rawMap, gid);
 
     const localTileId = gid - tileset.firstgid;
     const col = localTileId % tileset.columns;
     const row = Math.floor(localTileId / tileset.columns);
 
-    const metadata = {
+    return {
         tilesetName: tileset.name,
         tileTextureWidth: tileset.tilewidth,
         tileTextureHeight: tileset.tileheight,
         tileTextureLeft: tileset.margin + col * (tileset.tilewidth + tileset.spacing),
         tileTextureTop: tileset.margin + row * (tileset.tileheight + tileset.spacing)
     };
+}
 
-    const customTileEntry = tileset.tiles?.find(tile => tile.id === localTileId);
-    for(const prop of customTileEntry?.properties ?? []) {
-        if(metadata[prop.name] != null) throw new Error(`Custom property '${prop.name}' of tile gid=${gid} (local id=${localTileId} in tileset '${tileset.name}') conflicts with reserved metadata field`);
-        metadata[prop.name] = prop.value;
+function assignCustomProperties(target, properties) {
+    for(const prop of properties ?? []) {
+        if(Object.hasOwn(target, prop.name)) throw new Error(`Custom property '${prop.name}' conflicts with reserved metadata field`);
+        target[prop.name] = prop.value;
     }
+    return target;
+}
 
-    return metadata;
+function getValidatedMap(mapName) {
+    const rawMap = Assets.get(mapName);
+    if(!rawMap) throw new Error(`Map '${mapName}' is not loaded`);
+    if(typeof(rawMap) !== 'object') throw new Error(`Invalid Tiled map format for '${mapName}'`);
+    if(rawMap.infinite) throw new Error(`Infinite maps are not supported (map '${mapName}')`);
+    if(rawMap.tilesets.some(tileset => tileset.source)) throw new Error(`External tilesets are not supported`);
+    return rawMap;
+}
+
+function cleanGid(gid) {
+    return gid & 0x1FFFFFFF;
+}
+
+function extractAllFrames(rawMap, gidArray) {
+    const frames = {};
+    for(const rawGid of gidArray) {
+        const gid = cleanGid(rawGid);
+        if(gid !== 0 && !frames[gid]) frames[gid] = findFrameInTileset(rawMap, gid);
+    }
+    return frames;
 }
 
 function extractTileLayerData(mapName, layerName) {
-    const rawMap = Assets.get(mapName);
-    if(!rawMap) throw new Error(`Map '${mapName}' is not loaded`);
+    const rawMap = getValidatedMap(mapName);
+    const { layer, visible } = findLayerByPath(rawMap, layerName, 'tilelayer');
 
-    const { layer, visible } = findTileLayerByPath(mapName, rawMap, layerName);
+    const cleanedGids = layer.data.map(cleanGid);
 
-    const tiles = layer.data.map(gid => gid === 0 ? null : gid);
+    return {
+        widthInTile: layer.width,
+        heightInTile: layer.height,
+        visible,
+        tiles: cleanedGids.map(gid => gid === 0 ? null : gid),
+        frames: extractAllFrames(rawMap, cleanedGids)
+    };
+}
 
-    const tilesData = {};
-    for(const gid of layer.data) {
-        if(gid !== 0 && !tilesData[gid]) tilesData[gid] = extractTileMetadata(rawMap, gid);
+function extractObjectData(rawObj) {
+    const isTiledObject = rawObj.gid != null;
+
+    const objData = {
+        gid: isTiledObject ? cleanGid(rawObj.gid) : null,
+        name: rawObj.name,
+        type: rawObj.type,
+        left: rawObj.x,
+        top: isTiledObject ? rawObj.y - rawObj.height : rawObj.y,
+        width: rawObj.width,
+        height: rawObj.height,
+        rotation: rawObj.rotation,
+        visible: rawObj.visible
+    };
+
+    return assignCustomProperties(objData, rawObj.properties);
+}
+
+function extractObjLayerData(mapName, layerName) {
+    const rawMap = getValidatedMap(mapName);
+    const { layer, visible } = findLayerByPath(rawMap, layerName, 'objectgroup');
+
+    const objects = layer.objects?.map(rawObj => extractObjectData(rawObj)) ?? [];
+
+    return {
+        visible,
+        objects,
+        frames: extractAllFrames(rawMap, objects.filter(obj => obj.gid).map(obj => obj.gid))
+    };
+}
+
+function getFromCacheOrExtractLayer(mapName, layerName, cache, extractor) {
+    let result = cache[mapName]?.[layerName];
+    if(!result) {
+        result = extractor(mapName, layerName);
+        cache[mapName] ??= {};
+        cache[mapName][layerName] = result;
     }
-
-    return { widthInTile: layer.width, heightInTile: layer.height, visible, tiles, tilesData };
+    return result;
 }
