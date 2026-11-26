@@ -18,7 +18,6 @@ import {TiledParser} from "./tiledParser";
 
 let globalGameData = {
     config: {},
-    sizeUnitsConverter: null,
     allPools: {},
     tiledParser: null,
     uiManager: null,
@@ -42,7 +41,6 @@ let sessionData = {
     calendar: null,
     player: null,
     noiseGenerator: null,
-    mapGenerator: null,
     eventManager: null,
     domEventUtil: null,
     camera: null,
@@ -882,7 +880,6 @@ async function initGlobalGameData() {
     globalGameData.uiManager = new UIManager();
     globalGameData.allPools = createPools();
     globalGameData.collisionManager = new CollisionManager();
-    globalGameData.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.sizeUnitsConverter);
     globalGameData.tiledParser = new TiledParser();
     globalGameData.ticker = new Ticker();
 
@@ -932,7 +929,6 @@ function subscribeOnDomEvents() {
 function createSession() {
     sessionData.calendar = new Calendar(globalGameData.config.time);
     sessionData.noiseGenerator = new NoiseGenerator(globalGameData.config.mapGenerator.seed);
-    sessionData.mapGenerator = new MapGenerator(globalGameData.sizeUnitsConverter, sessionData.noiseGenerator, globalGameData.config.mapGenerator);
     sessionData.eventManager = new EventManager();
     sessionData.domEventUtil = new DOMEventUtil();
     sessionData.camera = new Camera(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight, globalGameData.config.camera);
@@ -1001,6 +997,8 @@ function switchScene() {
 
 class MainScene {
     constructor() {
+        this.sizeUnitsConverter = null;
+        this.mapGenerator = null;
         this.gridStore = null;
         this.spawnSlimeTimer = null;
         this.minimap = null;
@@ -1008,22 +1006,24 @@ class MainScene {
 
     start(globalGameData, sessionData) {
         //Инициализируем основные хранилища данных и модель сцены
-        this.gridStore = new GridStore(globalGameData.sizeUnitsConverter, globalGameData.config.grid);
+        this.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.mainScene.sizeUnitsConverter);
+        this.mapGenerator = new MapGenerator(this.sizeUnitsConverter, sessionData.noiseGenerator, globalGameData.config.mapGenerator);
+        this.gridStore = new GridStore(this.sizeUnitsConverter, globalGameData.config.mainScene.grid);
         this.spawnSlimeTimer = IntervalTimer.ofSeconds(globalGameData.config.slime.spawnRateInSec);
         this.minimap = createMinimap(sessionData.eventManager, globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight, globalGameData.view.stage, globalGameData.config.minimap);
 
         //Находим точку спавна игрока
-        const spawnTileCoords = sessionData.mapGenerator.findNearestTileWithType(globalGameData.config.mapGenerator.spawnPoint.startTileX, globalGameData.config.mapGenerator.spawnPoint.startTileY, globalGameData.config.mapGenerator.spawnPoint.maxRadiusInTile, globalGameData.config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
+        const spawnTileCoords = this.mapGenerator.findNearestTileWithType(globalGameData.config.mapGenerator.spawnPoint.startTileX, globalGameData.config.mapGenerator.spawnPoint.startTileY, globalGameData.config.mapGenerator.spawnPoint.maxRadiusInTile, globalGameData.config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
             ?? { tileX: globalGameData.config.mapGenerator.spawnPoint.startTileX, tileY: globalGameData.config.mapGenerator.spawnPoint.startTileY };
         const spawnPlayerCoords = {
-            x: globalGameData.sizeUnitsConverter.centerPixelXOfTile(spawnTileCoords.tileX),
-            y: globalGameData.sizeUnitsConverter.centerPixelYOfTile(spawnTileCoords.tileY)
+            x: this.sizeUnitsConverter.centerPixelXOfTile(spawnTileCoords.tileX),
+            y: this.sizeUnitsConverter.centerPixelYOfTile(spawnTileCoords.tileY)
         };
 
         //Размещаем игрока и создаем игровые объекты сцены
         placePlayerInScene(sessionData.player, spawnPlayerCoords.x, spawnPlayerCoords.y, globalGameData.collisionManager);
         sessionData.camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
-        generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, sessionData.mapGenerator, globalGameData.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
+        generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
 
         //Включаем освещение
         globalGameData.lightManager.enableLighting();
@@ -1043,9 +1043,9 @@ class MainScene {
         updateAllSlimes(globalGameData.allPools, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, sessionData.player, globalGameData.config, ticker.deltaMS);
 
         //Подгружаем и выгружаем часть карты при необходимости
-        if(this.gridStore.checkDistanceToBorder(sessionData.player.x, sessionData.player.y, globalGameData.config.grid.loadDistanceInChunk)) {
-            generateChunksFor(sessionData.player.x, sessionData.player.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, sessionData.mapGenerator, globalGameData.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
-            repaintMinimap(this.minimap, globalGameData.allPools, this.gridStore, globalGameData.sizeUnitsConverter);
+        if(this.gridStore.checkDistanceToBorder(sessionData.player.x, sessionData.player.y, globalGameData.config.mainScene.grid.loadDistanceInChunk)) {
+            generateChunksFor(sessionData.player.x, sessionData.player.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
+            repaintMinimap(this.minimap, globalGameData.allPools, this.gridStore, this.sizeUnitsConverter);
         }
 
         //Поиск коллизий
@@ -1062,7 +1062,7 @@ class MainScene {
         globalGameData.lightManager.updateLighting(sessionData.calendar, globalGameData.view.renderer);
 
         //Обновляем внешний вид миникарту по необходимости
-        updateMinimapView(this.minimap, globalGameData.allPools, this.gridStore, globalGameData.sizeUnitsConverter, sessionData.eventManager, globalGameData.view.renderer);
+        updateMinimapView(this.minimap, globalGameData.allPools, this.gridStore, this.sizeUnitsConverter, sessionData.eventManager, globalGameData.view.renderer);
 
         //Обновляем видимые границы вокруг физических тел для дебага физики
         //debugDrawAllPhysicsBodies(globalGameData.view.debugPhysicsGraphics, globalGameData.collisionManager, this.gridStore);
@@ -1088,8 +1088,16 @@ class MainScene {
     }
 }
 
-class DungeonScene {
-    start(globalGameData, sessionData) {}
+class TombScene {
+    constructor() {
+        this.sizeUnitsConverter = null;
+        this.gridStore = null;
+    }
+
+    start(globalGameData, sessionData) {
+        this.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.tombScene.sizeUnitsConverter);
+        this.gridStore = new GridStore(this.sizeUnitsConverter, globalGameData.config.tombScene.grid);
+    }
 
     update(globalGameData, sessionData, ticker) {
         sessionData.calendar.addMs(ticker.deltaMS);
@@ -1098,9 +1106,7 @@ class DungeonScene {
         checkGameOver(sessionData.player, globalGameData.uiManager);
     }
 
-    stop(globalGameData, sessionData) {
-
-    }
+    stop(globalGameData, sessionData) {}
 }
 
 

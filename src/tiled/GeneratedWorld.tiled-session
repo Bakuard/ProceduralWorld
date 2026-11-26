@@ -5,7 +5,7 @@
     "file.lastUsedOpenFilter": "All Files (*)",
     "fileStates": {
         "": {
-            "scaleInDock": 1
+            "scaleInDock": 2
         },
         "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels/level1.json": {
             "scale": 0.5,
@@ -102,7 +102,7 @@
             "scaleInEditor": 1
         }
     },
-    "last.exportedFilePath": "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/levels",
+    "last.exportedFilePath": "/home/bakuard/JavaScript/ProceduralWorld/src/tiled",
     "last.imagePath": "/home/bakuard/JavaScript/FrostAndStarve2026/public/assets/img/tiles",
     "map.height": 30,
     "map.lastUsedExportFilter": "All Files (*)",
