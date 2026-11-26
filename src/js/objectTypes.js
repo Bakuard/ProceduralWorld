@@ -12,6 +12,8 @@ export const objectTypes = Object.freeze({
     tomb: 'tomb',
     tombFloorTile: 'tombFloor',
     tombWallTile: 'tombWall',
+    tombWallDecorTile: 'tombWallDecor',
+    tombExit: 'tombExit',
     player: 'player',
     slime: 'slime',
     fireball: 'fireball',

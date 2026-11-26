@@ -1,4 +1,4 @@
-import {WebGLRenderer, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix} from 'pixi.js';
+import {WebGLRenderer, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix, Texture, Rectangle} from 'pixi.js';
 import {objectTypes} from './objectTypes';
 import {SizeUnitsConverter} from './sizeUnitsConverter';
 import {GridStore} from './gridStore';
@@ -522,25 +522,27 @@ function updateAllSlimes(allPools, gridStore, lightManager, collisionManager, pl
 }
 
 
-function createTileSprite(tileType, sizeUnitsConverter) {
-    const tileSprite = new Sprite(Assets.get(tileType));
+function createTileSprite(texture, sizeUnitsConverter) {
+    const tileSprite = new Sprite(texture);
     tileSprite.setSize(sizeUnitsConverter.tileWidthInPixels(), sizeUnitsConverter.tileHeightInPixels());
     return tileSprite;
 }
 
-function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTileYInChunk, tileType, chunk, allPools, sizeUnitsConverter) {
+function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTileYInChunk, tileType, texture, chunk, allPools, sizeUnitsConverter) {
     const tile = allPools[tileType].acquire(() => ({
         type: tileType,
-        sprite: createTileSprite(tileType, sizeUnitsConverter)
+        sprite: createTileSprite(texture, sizeUnitsConverter)
     }));
     tile.x = leftPixelOfTile;
     tile.y = topPixelOfTile;
+    tile.sprite.texture = texture;
+    tile.sprite.setSize(sizeUnitsConverter.tileWidthInPixels(), sizeUnitsConverter.tileHeightInPixels());
     const topTilePixel = sizeUnitsConverter.topPixelOfTile(localTileYInChunk);
     const leftTilePixel = sizeUnitsConverter.leftPixelOfTile(localTileXInChunk);
     tile.sprite.position.set(leftTilePixel, topTilePixel);
 
     chunk.tileSpritesContainer.addChild(tile.sprite);
-    chunk.getTileContainerByLocalCoords(localTileXInChunk, localTileYInChunk).tile = tile;
+    chunk.getTileContainerByLocalCoords(localTileXInChunk, localTileYInChunk)[tileType] = tile;
 }
 
 function createTreeSprite(treeMeta) {
@@ -588,8 +590,11 @@ function removeChunksWithAllObjs(removedChunks, allPools, lightManager, collisio
 
         chunk.forEachObj((obj, objType) => removeGameObj(obj, allPools, lightManager, collisionManager));
         chunk.forEachTileContainer((globalTileX, globalTileY, localTileXInChunk, localTileYInChunk, tileContainer) => {
-            const tile = tileContainer.tile;
-            allPools[tile.type].release(tile);
+            for(const tileType of Object.keys(tileContainer)) {
+                const tile = tileContainer[tileType];
+                allPools[tile.type]?.release(tile);
+                delete tileContainer[tileType];
+            }
         });
     }
 }
@@ -622,7 +627,7 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, coll
         for (const tile of tiles) {
             const leftPixel = sizeUnitsConverter.leftPixelOfTile(tile.globalTileX);
             const topPixel = sizeUnitsConverter.topPixelOfTile(tile.globalTileY);
-            createTile(leftPixel, topPixel, tile.localTileX, tile.localTileY, tile.tileType, chunk, allPools, sizeUnitsConverter);
+            createTile(leftPixel, topPixel, tile.localTileX, tile.localTileY, tile.tileType, Assets.get(tile.tileType), chunk, allPools, sizeUnitsConverter);
 
             if(tile.tileType === objectTypes.grassTile) ++countGrassTiles;
         }
@@ -818,6 +823,7 @@ async function loadTextures() {
     await Assets.load({ alias: objectTypes.rockFloorTile, src: 'img/rock_tile.png' });
     await Assets.load('img/trees.json');
     await Assets.load({ alias: objectTypes.tomb, src: 'img/tomb-entrance.png' });
+    await Assets.load({ alias: 'tomb_walls_floors', src: 'img/tomb_walls_floor.png' });
     await Assets.load({ alias: objectTypes.player, src: 'img/character.json' });
     await Assets.load({ alias: objectTypes.fireball, src: 'img/fireball.json' });
     await Assets.load({ alias: objectTypes.explosion, src: 'img/explosion.json' });
@@ -1015,15 +1021,15 @@ class MainScene {
         //Находим точку спавна игрока
         const spawnTileCoords = this.mapGenerator.findNearestTileWithType(globalGameData.config.mapGenerator.spawnPoint.startTileX, globalGameData.config.mapGenerator.spawnPoint.startTileY, globalGameData.config.mapGenerator.spawnPoint.maxRadiusInTile, globalGameData.config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
             ?? { tileX: globalGameData.config.mapGenerator.spawnPoint.startTileX, tileY: globalGameData.config.mapGenerator.spawnPoint.startTileY };
-        const spawnPlayerCoords = {
+        const playerSpawnPoint = {
             x: this.sizeUnitsConverter.centerPixelXOfTile(spawnTileCoords.tileX),
             y: this.sizeUnitsConverter.centerPixelYOfTile(spawnTileCoords.tileY)
         };
 
         //Размещаем игрока и создаем игровые объекты сцены
-        placePlayerInScene(sessionData.player, spawnPlayerCoords.x, spawnPlayerCoords.y, globalGameData.collisionManager);
-        sessionData.camera.centerOn(spawnPlayerCoords.x, spawnPlayerCoords.y);
-        generateChunksFor(spawnPlayerCoords.x, spawnPlayerCoords.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
+        placePlayerInScene(sessionData.player, playerSpawnPoint.x, playerSpawnPoint.y, globalGameData.collisionManager);
+        sessionData.camera.centerOn(playerSpawnPoint.x, playerSpawnPoint.y);
+        generateChunksFor(playerSpawnPoint.x, playerSpawnPoint.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
 
         //Включаем освещение
         globalGameData.lightManager.enableLighting();
@@ -1098,17 +1104,112 @@ class TombScene {
         this.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.tombScene.sizeUnitsConverter);
         this.gridStore = new GridStore(this.sizeUnitsConverter, globalGameData.config.tombScene.grid);
 
+        const floorLayer = globalGameData.tiledParser.getTileLayer('tombMap', 'floor_layer');
+        const wallsLayer = globalGameData.tiledParser.getTileLayer('tombMap', 'walls/walls_layer');
+        const wallsDecorLayer = globalGameData.tiledParser.getTileLayer('tombMap', 'walls/walls_decor_layer');
+        const spawnPointsLayer = globalGameData.tiledParser.getObjLayerThenGroup('tombMap', 'spawn_points_layer', 'name');
+        const exitLayer = globalGameData.tiledParser.getObjLayer('tombMap', 'exit_layer');
 
+        const scaleX = (floorLayer.widthInTile * this.sizeUnitsConverter.tileWidthInPixels()) / floorLayer.mapWidthInPixel;
+        const scaleY = (floorLayer.heightInTile * this.sizeUnitsConverter.tileHeightInPixels()) / floorLayer.mapHeightInPixel;
+
+        const playerSpawnPoint = spawnPointsLayer.objectsMap['player'][0];
+        const spawnX = playerSpawnPoint.left * scaleX;
+        const spawnY = playerSpawnPoint.top * scaleY;
+        placePlayerInScene(sessionData.player, spawnX, spawnY, globalGameData.collisionManager);
+        sessionData.camera.centerOn(spawnX, spawnY);
+
+        const result = this.gridStore.shiftCenterToChunk(1, 1);
+        updateCamera(sessionData.camera, sessionData.player, result.newBorder, globalGameData.view.gameObjects);
+
+        for(let chunk of result.createdChunks) {
+            chunk.tileSpritesContainer = new Container();
+            chunk.tileSpritesContainer.cullable = true;
+            const localLeftOfChunk = this.gridStore.localLeftPixelOfChunkInGrid(chunk.chunkX);
+            const localTopOfChunk = this.gridStore.localTopPixelOfChunkInGrid(chunk.chunkY);
+            chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
+
+            createTiledLayerInChunk(floorLayer, objectTypes.tombFloorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
+            createTiledLayerInChunk(wallsLayer, objectTypes.tombWallTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
+            createTiledLayerInChunk(wallsDecorLayer, objectTypes.tombWallDecorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
+
+            globalGameData.view.allTileSpritesContainer.addChild(chunk.tileSpritesContainer);
+        }
+
+        for(const exitObjData of exitLayer.objects) {
+            createTombExit(
+                exitObjData.left * scaleX,
+                exitObjData.top * scaleY,
+                exitObjData.width * scaleX,
+                exitObjData.height * scaleY,
+                globalGameData.allPools,
+                globalGameData.collisionManager
+            );
+        }
+
+        globalGameData.collisionManager.registerHandler(objectTypes.player, objectTypes.tombExit, () => {
+            requestSceneSwitch(new MainScene());
+        });
     }
 
     update(globalGameData, sessionData, ticker) {
         sessionData.calendar.addMs(ticker.deltaMS);
+
         globalGameData.view.renderer.render(globalGameData.view.stage);
         updateHUD(globalGameData.uiManager, sessionData.player);
+
         checkGameOver(sessionData.player, globalGameData.uiManager);
     }
 
     stop(globalGameData, sessionData) {}
+}
+
+function getOrCreateTiledFrameTexture(frameData) {
+    const cacheKey = `${frameData.tilesetName}_${frameData.tileTextureLeft}_${frameData.tileTextureTop}_${frameData.tileTextureWidth}_${frameData.tileTextureHeight}`;
+    let texture = Assets.cache.get(cacheKey);
+    if(!texture) {
+        const tilesetTexture = Assets.get(frameData.tilesetName);
+        const frame = new Rectangle(
+            frameData.tileTextureLeft,
+            frameData.tileTextureTop,
+            frameData.tileTextureWidth,
+            frameData.tileTextureHeight
+        );
+        texture = new Texture({ source: tilesetTexture.source, frame });
+        Assets.cache.set(cacheKey, texture);
+    }
+    return texture;
+}
+
+function createTiledLayerInChunk(tileLayerData, tileType, chunk, allPools, sizeUnitsConverter) {
+    chunk.forEachTileCoords((globalTileX, globalTileY, localTileX, localTileY) => {
+        if(globalTileX < 0 || globalTileX >= tileLayerData.widthInTile || globalTileY < 0 || globalTileY >= tileLayerData.heightInTile) return;
+
+        const gid = tileLayerData.tiles[globalTileX + globalTileY * tileLayerData.widthInTile];
+        if(gid == null) return;
+
+        const leftPixel = sizeUnitsConverter.leftPixelOfTile(globalTileX);
+        const topPixel = sizeUnitsConverter.topPixelOfTile(globalTileY);
+        const texture = getOrCreateTiledFrameTexture(tileLayerData.frames[gid]);
+        createTile(leftPixel, topPixel, localTileX, localTileY, tileType, texture, chunk, allPools, sizeUnitsConverter);
+    });
+}
+
+function createTombExit(globalPixelX, globalPixelY, width, height, allPools, collisionManager) {
+    const tombExit = allPools[objectTypes.tombExit].acquire(() => {
+        const exitObj = {
+            type: objectTypes.tombExit
+        };
+        exitObj.body = collisionManager.createRectCollider(globalPixelX, globalPixelY, width, height, 0, 0, exitObj);
+        return exitObj;
+    });
+    tombExit.x = globalPixelX;
+    tombExit.y = globalPixelY;
+    tombExit.width = width;
+    tombExit.height = height;
+    collisionManager.setPosition(tombExit.body, globalPixelX, globalPixelY);
+    collisionManager.registerBody(tombExit.body, objectTypes.tombExit);
+    return tombExit;
 }
 
 

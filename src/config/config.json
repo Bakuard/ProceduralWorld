@@ -30,8 +30,8 @@
       "tileWidth": 64,
       "tileHeight": 64,
       "chunkSizeInTile": 16,
-      "worldWidthInChunk": 3,
-      "worldHeightInChunk": 3
+      "worldWidthInChunk": 2,
+      "worldHeightInChunk": 2
     },
     "grid": {
       "chunkLeft": 0,

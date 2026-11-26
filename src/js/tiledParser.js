@@ -14,15 +14,15 @@ export class TiledParser {
     }
 
     getObjLayerThenGroup(mapName, layerName, key) {
-        const { visible, objects } = this.getObjLayer(mapName, layerName);
+        const layer = this.getObjLayer(mapName, layerName);
         const objectsMap = {};
-        objects.forEach(obj => {
+        layer.objects.forEach(obj => {
             const mapKey = obj[key];
             const mapValue = objectsMap[mapKey];
             if (mapValue == null) objectsMap[mapKey] = [obj];
             else objectsMap[mapKey].push(obj);
         });
-        return { visible, objectsMap };
+        return { ...layer, objectsMap };
     }
 }
 
@@ -101,6 +101,8 @@ function extractTileLayerData(mapName, layerName) {
     const cleanedGids = layer.data.map(cleanGid);
 
     return {
+        mapWidthInPixel: rawMap.width * rawMap.tilewidth,
+        mapHeightInPixel: rawMap.height * rawMap.tileheight,
         widthInTile: layer.width,
         heightInTile: layer.height,
         visible,
@@ -134,6 +136,8 @@ function extractObjLayerData(mapName, layerName) {
     const objects = layer.objects?.map(rawObj => extractObjectData(rawObj)) ?? [];
 
     return {
+        mapWidthInPixel: rawMap.width * rawMap.tilewidth,
+        mapHeightInPixel: rawMap.height * rawMap.tileheight,
         visible,
         objects,
         frames: extractAllFrames(rawMap, objects.filter(obj => obj.gid).map(obj => obj.gid))

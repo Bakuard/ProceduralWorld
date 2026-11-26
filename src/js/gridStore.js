@@ -19,6 +19,10 @@ export class GridStore {
         return shiftCenterToChunk(this, chunkX, chunkY);
     }
 
+    shiftCenterToChunk(chunkX, chunkY) {
+        return shiftCenterToChunk(this, chunkX, chunkY);
+    }
+
     isPixelInMap(pixelX, pixelY) {
         return pixelX >= this.border.pixelLeft
             && pixelX < this.border.pixelRight
