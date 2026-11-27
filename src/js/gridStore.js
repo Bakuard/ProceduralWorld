@@ -47,22 +47,22 @@ export class GridStore {
         }
     }
 
-    localPixelXInGrid(pixelX) {
+    localPixelXFromGlobalPixelX(pixelX) {
         return pixelX - this.border.pixelLeft;
     }
 
-    localPixelYInGrid(pixelY) {
+    localPixelYFromGlobalPixelY(pixelY) {
         return pixelY - this.border.pixelTop;
     }
 
-    localLeftPixelOfChunkInGrid(chunkX) {
+    localLeftPixelOfChunkInGridFromGlobalChunkX(chunkX) {
         const globalLeftPixelOfChunk = this.sizeUnitsConverter.leftPixelOfChunk(chunkX);
-        return this.localPixelXInGrid(globalLeftPixelOfChunk);
+        return this.localPixelXFromGlobalPixelX(globalLeftPixelOfChunk);
     }
 
-    localTopPixelOfChunkInGrid(chunkY) {
+    localTopPixelOfChunkInGridFromGlobalChunkY(chunkY) {
         const globalTopPixelOfChunk = this.sizeUnitsConverter.topPixelOfChunk(chunkY);
-        return this.localPixelYInGrid(globalTopPixelOfChunk);
+        return this.localPixelYFromGlobalPixelY(globalTopPixelOfChunk);
     }
 }
 
@@ -139,38 +139,17 @@ export class Chunk {
         this.tiles = [];
     }
 
-    addToChunk(obj, objType) {
+    addObj(obj, objType) {
         this.objectsByType[objType] ??= [];
         this.objectsByType[objType].push(obj);
     }
 
-    removeFromChunk(obj, objType) {
+    removeObj(obj, objType) {
         this.objectsByType[objType]?.remove(obj);
     }
 
-    countByTypeInChunk(objType) {
+    countObjsByTypeInChunk(objType) {
         return this.objectsByType[objType]?.length ?? 0;
-    }
-
-    getTileContainerByLocalCoords(localTileX, localTileY) {
-        const index = localTileX + localTileY * this.sizeUnitsConverter.chunkSizeInTile;
-        this.tiles[index] ??= {};
-        return this.tiles[index];
-    }
-
-    forEachTileContainer(callback) {
-        this.forEachTileCoords((globalTileX, globalTileY, localTileX, localTileY) => {
-            const tileContainer = this.getTileContainerByLocalCoords(localTileX, localTileY);
-            callback(globalTileX, globalTileY, localTileX, localTileY, tileContainer);
-        });
-    }
-
-    forEachTileCoords(callback) {
-        const tileLeft = this.sizeUnitsConverter.leftTileOfChunk(this.chunkX);
-        const tileTop = this.sizeUnitsConverter.topTileOfChunk(this.chunkY);
-        for(let y = 0; y < this.sizeUnitsConverter.chunkSizeInTile; y++)
-            for (let x = 0; x < this.sizeUnitsConverter.chunkSizeInTile; x++)
-                callback(tileLeft + x, tileTop + y, x, y);
     }
 
     forEachObj(callback) {
@@ -182,4 +161,37 @@ export class Chunk {
         const objects = this.objectsByType[objType] ??= [];
         for(let i = objects.length - 1; i >= 0; --i) callback(objects[i], objType);
     }
+
+
+    getTile(localTileX, localTileY, layerName) {
+        const index = getTileContainerIndex(this, localTileX, localTileY);
+        return this.tiles[index]?.[layerName];
+    }
+
+    setTile(localTileX, localTileY, layerName, tile) {
+        const index = getTileContainerIndex(this, localTileX, localTileY);
+        this.tiles[index] ??= {};
+        this.tiles[index][layerName] = tile;
+    }
+
+    forEachTile(callback) {
+        this.forEachTileCoords((globalTileX, globalTileY, localTileX, localTileY) => {
+            const index = getTileContainerIndex(this, localTileX, localTileY);
+            const tileContainer = this.tiles[index];
+            for (const layerName of Object.keys(tileContainer ?? {}))
+                callback(globalTileX, globalTileY, localTileX, localTileY, layerName, tileContainer[layerName]);
+        });
+    }
+
+    forEachTileCoords(callback) {
+        const tileLeft = this.sizeUnitsConverter.leftTileOfChunk(this.chunkX);
+        const tileTop = this.sizeUnitsConverter.topTileOfChunk(this.chunkY);
+        for(let y = 0; y < this.sizeUnitsConverter.chunkSizeInTile; y++)
+            for (let x = 0; x < this.sizeUnitsConverter.chunkSizeInTile; x++)
+                callback(tileLeft + x, tileTop + y, x, y);
+    }
+}
+
+function getTileContainerIndex(chunk, localTileX, localTileY) {
+    return localTileX + localTileY * chunk.sizeUnitsConverter.chunkSizeInTile;
 }

@@ -31,13 +31,6 @@ export class SizeUnitsConverter {
         return this.tileHeight;
     }
 
-    chunkXFromPixelX(pixelX) {
-        return Math.floor(pixelX / this.chunkWidthInPixels());
-    }
-
-    chunkYFromPixelY(pixelY) {
-        return Math.floor(pixelY / this.chunkHeightInPixels());
-    }
 
     chunkAreaInTiles() {
         return this.chunkSizeInTile * this.chunkSizeInTile;
@@ -47,6 +40,23 @@ export class SizeUnitsConverter {
         return this.worldWidthInChunk * this.worldHeightInChunk;
     }
 
+
+    chunkXFromTileX(tileX) {
+        return Math.floor(tileX / this.chunkSizeInTile);
+    }
+
+    chunkYFromTileY(tileY) {
+        return Math.floor(tileY / this.chunkSizeInTile);
+    }
+
+    chunkXFromPixelX(pixelX) {
+        return Math.floor(pixelX / this.chunkWidthInPixels());
+    }
+
+    chunkYFromPixelY(pixelY) {
+        return Math.floor(pixelY / this.chunkHeightInPixels());
+    }
+
     tileXFromPixelX(pixelX) {
         return Math.floor(pixelX / this.tileWidth);
     }
@@ -54,6 +64,7 @@ export class SizeUnitsConverter {
     tileYFromPixelY(pixelY) {
         return Math.floor(pixelY / this.tileHeight);
     }
+
 
     leftTileOfChunk(chunkX) {
         return chunkX * this.chunkSizeInTile;
@@ -79,16 +90,6 @@ export class SizeUnitsConverter {
         return this.topPixelOfChunk(chunkY) + this.chunkHeightInPixels();
     }
 
-    localPixelXInContainingChunk(pixelX) {
-        const chunkX = this.chunkXFromPixelX(pixelX);
-        return pixelX - this.leftPixelOfChunk(chunkX);
-    }
-
-    localPixelYInContainingChunk(pixelY) {
-        const chunkY = this.chunkYFromPixelY(pixelY);
-        return pixelY - this.topPixelOfChunk(chunkY);
-    }
-
     leftPixelOfTile(tileX) {
         return tileX * this.tileWidth;
     }
@@ -103,6 +104,27 @@ export class SizeUnitsConverter {
 
     centerPixelYOfTile(tileY) {
         return tileY * this.tileHeight + this.tileHeight / 2;
+    }
+
+
+    localTileXInContainingChunk(tileX) {
+        const chunkX = this.chunkXFromTileX(tileX);
+        return tileX - this.leftTileOfChunk(chunkX);
+    }
+
+    localTileYInContainingChunk(tileY) {
+        const chunkY = this.chunkYFromTileY(tileY);
+        return tileY - this.topTileOfChunk(chunkY);
+    }
+
+    localPixelXInContainingChunk(pixelX) {
+        const chunkX = this.chunkXFromPixelX(pixelX);
+        return pixelX - this.leftPixelOfChunk(chunkX);
+    }
+
+    localPixelYInContainingChunk(pixelY) {
+        const chunkY = this.chunkYFromPixelY(pixelY);
+        return pixelY - this.topPixelOfChunk(chunkY);
     }
 
     localPixelXInContainingTile(pixelX) {

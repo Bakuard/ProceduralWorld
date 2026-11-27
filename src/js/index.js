@@ -103,12 +103,12 @@ function debugDrawAllPhysicsBodies(debugPhysicsGraphics, collisionManager, gridS
         if(body.circleRadius > 0) {
             const centerX = body.bounds.min.x + width / 2;
             const centerY = body.bounds.min.y + height / 2;
-            const x = gridStore.localPixelXInGrid(centerX);
-            const y = gridStore.localPixelYInGrid(centerY);
+            const x = gridStore.localPixelXFromGlobalPixelX(centerX);
+            const y = gridStore.localPixelYFromGlobalPixelY(centerY);
             debugPhysicsGraphics.circle(x, y, body.circleRadius).stroke();
         } else {
-            const x = gridStore.localPixelXInGrid(body.bounds.min.x);
-            const y = gridStore.localPixelYInGrid(body.bounds.min.y);
+            const x = gridStore.localPixelXFromGlobalPixelX(body.bounds.min.x);
+            const y = gridStore.localPixelYFromGlobalPixelY(body.bounds.min.y);
             debugPhysicsGraphics.rect(x, y, width, height).stroke();
         }
     });
@@ -415,19 +415,19 @@ function createSlime(globalPixelX, globalPixelY, chunk, allPools, objectsSpriteC
     collisionManager.setPosition(slime.body, globalPixelX, globalPixelY);
     setAnimation(slime, 'slime_idle');
 
-    chunk.addToChunk(slime, objectTypes.slime);
+    chunk.addObj(slime, objectTypes.slime);
     objectsSpriteContainer.addChild(slime.sprite);
     collisionManager.registerBody(slime.body, objectTypes.slime);
 }
 
 function removeSlime(slime, allPools, gridStore, lightManager, collisionManager) {
     removeGameObj(slime, allPools, lightManager, collisionManager);
-    gridStore.getChunkByPixel(slime.x, slime.y)?.removeFromChunk(slime, objectTypes.slime);
+    gridStore.getChunkByPixel(slime.x, slime.y)?.removeObj(slime, objectTypes.slime);
 }
 
 function countSlimesInArea(chunkX, chunkY, gridStore) {
     let slimeCount = 0;
-    gridStore.forEachChunkInChunkRadius(chunkX, chunkY, 2, chunk => slimeCount += chunk.countByTypeInChunk(objectTypes.slime));
+    gridStore.forEachChunkInChunkRadius(chunkX, chunkY, 2, chunk => slimeCount += chunk.countObjsByTypeInChunk(objectTypes.slime));
     return slimeCount;
 }
 
@@ -472,8 +472,8 @@ function changeChunk(slime, oldX, oldY, newX, newY, gridStore) {
 
     if (currentChunk === nextChunk) return;
 
-    currentChunk?.removeFromChunk(slime, objectTypes.slime);
-    nextChunk?.addToChunk(slime, objectTypes.slime);
+    currentChunk?.removeObj(slime, objectTypes.slime);
+    nextChunk?.addObj(slime, objectTypes.slime);
 }
 
 function moveSlime(slime, gridStore, collisionManager, deltaMS) {
@@ -522,27 +522,21 @@ function updateAllSlimes(allPools, gridStore, lightManager, collisionManager, pl
 }
 
 
-function createTileSprite(texture, sizeUnitsConverter) {
-    const tileSprite = new Sprite(texture);
-    tileSprite.setSize(sizeUnitsConverter.tileWidthInPixels(), sizeUnitsConverter.tileHeightInPixels());
-    return tileSprite;
-}
-
-function createTile(leftPixelOfTile, topPixelOfTile, localTileXInChunk, localTileYInChunk, tileType, texture, chunk, allPools, sizeUnitsConverter) {
+function createTile(localTileX, localTileY, tileType, texture, chunk, allPools, sizeUnitsConverter) {
     const tile = allPools[tileType].acquire(() => ({
         type: tileType,
-        sprite: createTileSprite(texture, sizeUnitsConverter)
+        sprite: new Sprite()
     }));
-    tile.x = leftPixelOfTile;
-    tile.y = topPixelOfTile;
+    const leftTilePixel = sizeUnitsConverter.leftPixelOfTile(localTileX);
+    const topTilePixel = sizeUnitsConverter.topPixelOfTile(localTileY);
+    tile.x = chunk.pixelLeft + leftTilePixel;
+    tile.y = chunk.pixelTop + topTilePixel;
     tile.sprite.texture = texture;
     tile.sprite.setSize(sizeUnitsConverter.tileWidthInPixels(), sizeUnitsConverter.tileHeightInPixels());
-    const topTilePixel = sizeUnitsConverter.topPixelOfTile(localTileYInChunk);
-    const leftTilePixel = sizeUnitsConverter.leftPixelOfTile(localTileXInChunk);
     tile.sprite.position.set(leftTilePixel, topTilePixel);
 
     chunk.tileSpritesContainer.addChild(tile.sprite);
-    chunk.getTileContainerByLocalCoords(localTileXInChunk, localTileYInChunk)[tileType] = tile;
+    chunk.setTile(localTileX, localTileY, tileType, tile);
 }
 
 function createTreeSprite(treeMeta) {
@@ -560,7 +554,7 @@ function createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer) {
     tree.y = treeMeta.globalPixelY;
     setSpritePosition(tree.sprite, tree.x, tree.y, camera, objectsSpriteContainer);
 
-    chunk.addToChunk(tree, tree.type);
+    chunk.addObj(tree, tree.type);
     objectsSpriteContainer.addChild(tree.sprite);
 }
 
@@ -579,8 +573,21 @@ function createDungeonEntrance(dungeonEntranceMeta, chunk, allPools, camera, obj
     dungeonEntrance.y = dungeonEntranceMeta.globalPixelY;
     setSpritePosition(dungeonEntrance.sprite, dungeonEntrance.x, dungeonEntrance.y, camera, objectsSpriteContainer);
 
-    chunk.addToChunk(dungeonEntrance, dungeonEntrance.type);
+    chunk.addObj(dungeonEntrance, dungeonEntrance.type);
     objectsSpriteContainer.addChild(dungeonEntrance.sprite);
+}
+
+function updateChunkTileContainerPosition(chunk, gridStore) {
+    const localLeftOfChunk = gridStore.localLeftPixelOfChunkInGridFromGlobalChunkX(chunk.chunkX);
+    const localTopOfChunk = gridStore.localTopPixelOfChunkInGridFromGlobalChunkY(chunk.chunkY);
+    chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
+}
+
+function initChunkTileContainer(chunk, gridStore, allTileSpritesContainer) {
+    chunk.tileSpritesContainer = new Container();
+    chunk.tileSpritesContainer.cullable = true;
+    updateChunkTileContainerPosition(chunk, gridStore);
+    allTileSpritesContainer.addChild(chunk.tileSpritesContainer);
 }
 
 function removeChunksWithAllObjs(removedChunks, allPools, lightManager, collisionManager) {
@@ -589,13 +596,7 @@ function removeChunksWithAllObjs(removedChunks, allPools, lightManager, collisio
         chunk.tileSpritesContainer.destroy({ children: false });
 
         chunk.forEachObj((obj, objType) => removeGameObj(obj, allPools, lightManager, collisionManager));
-        chunk.forEachTileContainer((globalTileX, globalTileY, localTileXInChunk, localTileYInChunk, tileContainer) => {
-            for(const tileType of Object.keys(tileContainer)) {
-                const tile = tileContainer[tileType];
-                allPools[tile.type]?.release(tile);
-                delete tileContainer[tileType];
-            }
-        });
+        chunk.forEachTile((globalTileX, globalTileY, localTileXInChunk, localTileYInChunk, layerName, tile) => allPools[tile.type]?.release(tile));
     }
 }
 
@@ -604,9 +605,7 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, coll
     updateCamera(camera, player, result.newBorder, gameObjects);
 
     for(let chunk of result.retainedChunks) {
-        const localLeftOfChunk = gridStore.localLeftPixelOfChunkInGrid(chunk.chunkX);
-        const localTopOfChunk = gridStore.localTopPixelOfChunkInGrid(chunk.chunkY);
-        chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
+        updateChunkTileContainerPosition(chunk, gridStore);
 
         chunk.forEachObj((obj, objType) => setSpritePosition(obj.sprite, obj.x, obj.y, camera));
     }
@@ -615,29 +614,17 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, coll
 
     const mapGenerationOutput = {};
     for(let chunk of result.createdChunks) {
-        chunk.tileSpritesContainer = new Container();
-        chunk.tileSpritesContainer.cullable = true;
-        const localLeftOfChunk = gridStore.localLeftPixelOfChunkInGrid(chunk.chunkX);
-        const localTopOfChunk = gridStore.localTopPixelOfChunkInGrid(chunk.chunkY);
-        chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
+        initChunkTileContainer(chunk, gridStore, allTileSpritesContainer);
 
         const { tiles, trees, dungeonEntrance } = mapGenerator.generateChunk(chunk.chunkX, chunk.chunkY, mapGenerationOutput);
 
-        let countGrassTiles = 0;
-        for (const tile of tiles) {
-            const leftPixel = sizeUnitsConverter.leftPixelOfTile(tile.globalTileX);
-            const topPixel = sizeUnitsConverter.topPixelOfTile(tile.globalTileY);
-            createTile(leftPixel, topPixel, tile.localTileX, tile.localTileY, tile.tileType, Assets.get(tile.tileType), chunk, allPools, sizeUnitsConverter);
-
-            if(tile.tileType === objectTypes.grassTile) ++countGrassTiles;
-        }
+        for (const tile of tiles) createTile(tile.localTileX, tile.localTileY, tile.tileType, Assets.get(tile.tileType), chunk, allPools, sizeUnitsConverter);
         for(const treeMeta of trees) createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer);
         if(dungeonEntrance && dungeonEntrance.dungeonType === objectTypes.tomb) createDungeonEntrance(dungeonEntrance, chunk, allPools, camera, objectsSpriteContainer);
 
+        const countGrassTiles = tiles.filter(tile => tile.tileType === objectTypes.grassTile).length;
         chunk.hasSlimeSpawner = (countGrassTiles / sizeUnitsConverter.chunkAreaInTiles() >= config.slime.minGrassTilePercentForSpawn)
             && noiseGenerator.noise(chunk.chunkX, chunk.chunkY) <= config.slime.spawnerProbabilityInChunk;
-
-        allTileSpritesContainer.addChild(chunk.tileSpritesContainer);
     }
 }
 
@@ -719,8 +706,8 @@ function repaintMinimap(minimap, allPools, gridStore, sizeUnitsConverter) {
 
 function drawTilesOnMinimap(minimap, allPools, gridStore, sizeUnitsConverter, tileType, color) {
     allPools[tileType].forEachUsed(tile => {
-        const viewX = gridStore.localPixelXInGrid(tile.x);
-        const viewY = gridStore.localPixelYInGrid(tile.y);
+        const viewX = gridStore.localPixelXFromGlobalPixelX(tile.x);
+        const viewY = gridStore.localPixelYFromGlobalPixelY(tile.y);
         minimap.staticObjects.rect(viewX, viewY, sizeUnitsConverter.tileWidth, sizeUnitsConverter.tileHeight);
     });
     minimap.staticObjects.fill(color);
@@ -735,8 +722,8 @@ function drawObjectsOnMinimap(minimap, allPools, gridStore, ...objTypes) {
     for(let obj of allObjects) {
         const texture = Assets.get(obj.type);
 
-        const viewX = gridStore.localPixelXInGrid(obj.x) - texture.width * obj.sprite.anchor.x;
-        const viewY = gridStore.localPixelYInGrid(obj.y) - texture.height * obj.sprite.anchor.y;
+        const viewX = gridStore.localPixelXFromGlobalPixelX(obj.x) - texture.width * obj.sprite.anchor.x;
+        const viewY = gridStore.localPixelYFromGlobalPixelY(obj.y) - texture.height * obj.sprite.anchor.y;
 
         const { frame, source } = texture;
         const matrix = matrixByObjType[obj.type] ??= new Matrix(frame.width / source.width, 0, 0, frame.height / source.height, frame.x / source.width, frame.y / source.height).invert();
@@ -1110,8 +1097,8 @@ class TombScene {
         const spawnPointsLayer = globalGameData.tiledParser.getObjLayerThenGroup('tombMap', 'spawn_points_layer', 'name');
         const exitLayer = globalGameData.tiledParser.getObjLayer('tombMap', 'exit_layer');
 
-        const scaleX = (floorLayer.widthInTile * this.sizeUnitsConverter.tileWidthInPixels()) / floorLayer.mapWidthInPixel;
-        const scaleY = (floorLayer.heightInTile * this.sizeUnitsConverter.tileHeightInPixels()) / floorLayer.mapHeightInPixel;
+        const scaleX = this.sizeUnitsConverter.tileWidthInPixels() / floorLayer.tileWidthInPixel;
+        const scaleY = this.sizeUnitsConverter.tileHeightInPixels() / floorLayer.tileHeightInPixel;
 
         const playerSpawnPoint = spawnPointsLayer.objectsMap['player'][0];
         const spawnX = playerSpawnPoint.left * scaleX;
@@ -1123,17 +1110,11 @@ class TombScene {
         updateCamera(sessionData.camera, sessionData.player, result.newBorder, globalGameData.view.gameObjects);
 
         for(let chunk of result.createdChunks) {
-            chunk.tileSpritesContainer = new Container();
-            chunk.tileSpritesContainer.cullable = true;
-            const localLeftOfChunk = this.gridStore.localLeftPixelOfChunkInGrid(chunk.chunkX);
-            const localTopOfChunk = this.gridStore.localTopPixelOfChunkInGrid(chunk.chunkY);
-            chunk.tileSpritesContainer.position.set(localLeftOfChunk, localTopOfChunk);
+            initChunkTileContainer(chunk, this.gridStore, globalGameData.view.allTileSpritesContainer);
 
             createTiledLayerInChunk(floorLayer, objectTypes.tombFloorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
             createTiledLayerInChunk(wallsLayer, objectTypes.tombWallTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
             createTiledLayerInChunk(wallsDecorLayer, objectTypes.tombWallDecorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
-
-            globalGameData.view.allTileSpritesContainer.addChild(chunk.tileSpritesContainer);
         }
 
         for(const exitObjData of exitLayer.objects) {
@@ -1188,10 +1169,8 @@ function createTiledLayerInChunk(tileLayerData, tileType, chunk, allPools, sizeU
         const gid = tileLayerData.tiles[globalTileX + globalTileY * tileLayerData.widthInTile];
         if(gid == null) return;
 
-        const leftPixel = sizeUnitsConverter.leftPixelOfTile(globalTileX);
-        const topPixel = sizeUnitsConverter.topPixelOfTile(globalTileY);
         const texture = getOrCreateTiledFrameTexture(tileLayerData.frames[gid]);
-        createTile(leftPixel, topPixel, localTileX, localTileY, tileType, texture, chunk, allPools, sizeUnitsConverter);
+        createTile(localTileX, localTileY, tileType, texture, chunk, allPools, sizeUnitsConverter);
     });
 }
 

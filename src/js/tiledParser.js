@@ -101,8 +101,10 @@ function extractTileLayerData(mapName, layerName) {
     const cleanedGids = layer.data.map(cleanGid);
 
     return {
-        mapWidthInPixel: rawMap.width * rawMap.tilewidth,
-        mapHeightInPixel: rawMap.height * rawMap.tileheight,
+        mapWidthInTile: rawMap.width,
+        mapHeightInTile: rawMap.height,
+        tileWidthInPixel: rawMap.tilewidth,
+        tileHeightInPixel: rawMap.tileheight,
         widthInTile: layer.width,
         heightInTile: layer.height,
         visible,
@@ -136,8 +138,10 @@ function extractObjLayerData(mapName, layerName) {
     const objects = layer.objects?.map(rawObj => extractObjectData(rawObj)) ?? [];
 
     return {
-        mapWidthInPixel: rawMap.width * rawMap.tilewidth,
-        mapHeightInPixel: rawMap.height * rawMap.tileheight,
+        mapWidthInTile: rawMap.width,
+        mapHeightInTile: rawMap.height,
+        tileWidthInPixel: rawMap.tilewidth,
+        tileHeightInPixel: rawMap.tileheight,
         visible,
         objects,
         frames: extractAllFrames(rawMap, objects.filter(obj => obj.gid).map(obj => obj.gid))
