@@ -564,17 +564,25 @@ function createDungeonEntranceSprite(dungeonEntranceMeta) {
     return tombEntranceSprite;
 }
 
-function createDungeonEntrance(dungeonEntranceMeta, chunk, allPools, camera, objectsSpriteContainer) {
-    const dungeonEntrance = allPools[objectTypes.tomb].acquire(() => ({
-        type: dungeonEntranceMeta.dungeonType,
-        sprite: createDungeonEntranceSprite(dungeonEntranceMeta)
-    }));
+function createDungeonEntrance(dungeonEntranceMeta, chunk, allPools, camera, objectsSpriteContainer, collisionManager, config) {
+    const dungeonEntrance = allPools[objectTypes.tomb].acquire(() => {
+        const result = {
+            type: dungeonEntranceMeta.dungeonType,
+            sprite: createDungeonEntranceSprite(dungeonEntranceMeta)
+        };
+        const bodyWidth = result.sprite.width * config.mapGenerator.dungeons.bodyWidthNormalized;
+        const bodyHeight = result.sprite.height * config.mapGenerator.dungeons.bodyHeightNormalized;
+        result.body = collisionManager.createRectCollider(dungeonEntranceMeta.globalPixelX, dungeonEntranceMeta.globalPixelY, bodyWidth, bodyHeight, 0.5, 1, result);
+        return result;
+    });
     dungeonEntrance.x = dungeonEntranceMeta.globalPixelX;
     dungeonEntrance.y = dungeonEntranceMeta.globalPixelY;
+    collisionManager.setPosition(dungeonEntrance.body, dungeonEntrance.x, dungeonEntrance.y);
     setSpritePosition(dungeonEntrance.sprite, dungeonEntrance.x, dungeonEntrance.y, camera, objectsSpriteContainer);
 
     chunk.addObj(dungeonEntrance, dungeonEntrance.type);
     objectsSpriteContainer.addChild(dungeonEntrance.sprite);
+    collisionManager.registerBody(dungeonEntrance.body, dungeonEntrance.type);
 }
 
 function updateChunkTileContainerPosition(chunk, gridStore) {
@@ -600,7 +608,7 @@ function removeChunksWithAllObjs(removedChunks, allPools, lightManager, collisio
     }
 }
 
-function populateChunks(chunks, gridStore, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, allTileSpritesContainer, objectsSpriteContainer, config) {
+function populateChunks(chunks, gridStore, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, allTileSpritesContainer, objectsSpriteContainer, collisionManager, config) {
     const mapGenerationOutput = {};
     for(let chunk of chunks) {
         initChunkTileContainer(chunk, gridStore, allTileSpritesContainer);
@@ -609,7 +617,7 @@ function populateChunks(chunks, gridStore, allPools, mapGenerator, sizeUnitsConv
 
         for (const tile of tiles) createTile(tile.localTileX, tile.localTileY, tile.tileType, Assets.get(tile.tileType), chunk, allPools, sizeUnitsConverter);
         for(const treeMeta of trees) createTree(treeMeta, chunk, allPools, camera, objectsSpriteContainer);
-        if(dungeonEntrance && dungeonEntrance.dungeonType === objectTypes.tomb) createDungeonEntrance(dungeonEntrance, chunk, allPools, camera, objectsSpriteContainer);
+        if(dungeonEntrance && dungeonEntrance.dungeonType === objectTypes.tomb) createDungeonEntrance(dungeonEntrance, chunk, allPools, camera, objectsSpriteContainer, collisionManager, config);
 
         const countGrassTiles = tiles.filter(tile => tile.tileType === objectTypes.grassTile).length;
         chunk.hasSlimeSpawner = (countGrassTiles / sizeUnitsConverter.chunkAreaInTiles() >= config.slime.minGrassTilePercentForSpawn)
@@ -626,7 +634,7 @@ function recenterWorldOnPixel(pixelX, pixelY, player, gridStore, lightManager, c
         chunk.forEachObj((obj, objType) => setSpritePosition(obj.sprite, obj.x, obj.y, camera));
     }
     removeChunksWithAllObjs(result.removedChunks, allPools, lightManager, collisionManager);
-    populateChunks(result.createdChunks, gridStore, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, allTileSpritesContainer, objectsSpriteContainer, config);
+    populateChunks(result.createdChunks, gridStore, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, allTileSpritesContainer, objectsSpriteContainer, collisionManager, config);
 }
 
 
@@ -1019,7 +1027,7 @@ class MainScene {
         this.gridStore.shiftCenterToPixel(playerSpawnPoint.x, playerSpawnPoint.y);
         sessionData.camera.centerOn(playerSpawnPoint.x, playerSpawnPoint.y);
         updateCamera(sessionData.camera, sessionData.player, this.gridStore.border, globalGameData.view.gameObjects);
-        populateChunks(this.gridStore.chunks, this.gridStore, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
+        populateChunks(this.gridStore.chunks, this.gridStore, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.collisionManager, globalGameData.config);
 
         //Включаем освещение
         globalGameData.lightManager.enableLighting();
@@ -1027,6 +1035,9 @@ class MainScene {
         //Регистрируем обработку коллизий
         globalGameData.collisionManager.registerHandler(objectTypes.fireball, objectTypes.slime, (fireball, slime) => {
             handleFireballAndSlimeCollision(fireball, slime, globalGameData.allPools, this.gridStore, sessionData.camera, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.config);
+        });
+        globalGameData.collisionManager.registerHandler(objectTypes.player, objectTypes.tomb, (player, tomb) => {
+            requestSceneSwitch(new TombScene());
         });
     }
 
@@ -1138,7 +1149,18 @@ class TombScene {
     update(globalGameData, sessionData, ticker) {
         sessionData.calendar.addMs(ticker.deltaMS);
 
+        updatePlayer(sessionData.player, sessionData.eventManager, globalGameData.collisionManager, sessionData.calendar, sessionData.camera, globalGameData.allPools, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.config, ticker.deltaMS);
+        updateAllFireballs(globalGameData.allPools, sessionData.camera, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.config, ticker.deltaMS);
+
+        globalGameData.collisionManager.handleCollisions();
+
+        updateCamera(sessionData.camera, sessionData.player, this.gridStore.border, globalGameData.view.gameObjects);
+        updatePlayerView(sessionData.player, sessionData.camera, ticker);
+        updateAllFireballsView(globalGameData.allPools, globalGameData.lightManager, sessionData.camera, globalGameData.config, ticker);
+        updateAllExplosionsView(globalGameData.allPools, globalGameData.lightManager, sessionData.camera, ticker);
+
         globalGameData.view.renderer.render(globalGameData.view.stage);
+
         updateHUD(globalGameData.uiManager, sessionData.player);
 
         checkGameOver(sessionData.player, globalGameData.uiManager);
@@ -1152,12 +1174,7 @@ function getOrCreateTiledFrameTexture(frameData) {
     let texture = Assets.cache.get(cacheKey);
     if(!texture) {
         const tilesetTexture = Assets.get(frameData.tilesetName);
-        const frame = new Rectangle(
-            frameData.tileTextureLeft,
-            frameData.tileTextureTop,
-            frameData.tileTextureWidth,
-            frameData.tileTextureHeight
-        );
+        const frame = new Rectangle(frameData.tileTextureLeft, frameData.tileTextureTop, frameData.tileTextureWidth, frameData.tileTextureHeight);
         texture = new Texture({ source: tilesetTexture.source, frame });
         Assets.cache.set(cacheKey, texture);
     }
@@ -1178,9 +1195,7 @@ function createTiledLayerInChunk(tileLayerData, tileType, chunk, allPools, sizeU
 
 function createTombExit(globalPixelX, globalPixelY, width, height, allPools, collisionManager) {
     const tombExit = allPools[objectTypes.tombExit].acquire(() => {
-        const exitObj = {
-            type: objectTypes.tombExit
-        };
+        const exitObj = { type: objectTypes.tombExit };
         exitObj.body = collisionManager.createRectCollider(globalPixelX, globalPixelY, width, height, 0, 0, exitObj);
         return exitObj;
     });

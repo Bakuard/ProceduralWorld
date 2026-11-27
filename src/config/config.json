@@ -64,7 +64,9 @@
       "cellSizeInChunk": 5,
       "attemptNumber": 1,
       "minHeight": 0.76,
-      "maxHeight": 0.82
+      "maxHeight": 0.82,
+      "bodyWidthNormalized": 1,
+      "bodyHeightNormalized": 0.2
     }
   },
   "player": {
