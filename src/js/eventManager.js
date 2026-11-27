@@ -9,7 +9,8 @@ export const InputEvents = Object.freeze({
     MouseWheel: 'MouseWheel',
     MouseDown: 'MouseDown',
     MouseUp: 'MouseUp',
-    MouseMove: 'MouseMove'
+    MouseMove: 'MouseMove',
+    Resize: 'Resize'
 });
 
 export class DOMEventUtil {

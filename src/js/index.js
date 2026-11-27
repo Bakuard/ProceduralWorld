@@ -639,7 +639,7 @@ function recenterWorldOnPixel(pixelX, pixelY, player, gridStore, lightManager, c
 
 
 function createMinimap(eventManager, viewportWidth, viewportHeight, container, minimapConfig) {
-    eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.MouseWheel, InputEvents.MouseDown, InputEvents.MouseUp, InputEvents.MouseMove);
+    eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.MouseWheel, InputEvents.MouseDown, InputEvents.MouseUp, InputEvents.MouseMove, InputEvents.Resize);
 
     const minimap = {
         container: new Container(),
@@ -793,6 +793,9 @@ function checkCLickOnMinimap(minimap, renderer, mouseEvent) {
 }
 
 function updateMinimapView(minimap, allPools, gridStore, sizeUnitsConverter, eventManager, renderer) {
+    const resizeEvent = eventManager.pullEvent('Minimap', InputEvents.Resize);
+    if(resizeEvent) resizeMinimap(minimap, resizeEvent.windowWidth, resizeEvent.windowHeight);
+
     switchMinimapVisibility(minimap, allPools, gridStore, sizeUnitsConverter, eventManager);
     scaleMinimap(minimap, eventManager);
     scrollMinimap(minimap, eventManager, renderer);
@@ -896,8 +899,8 @@ function subscribeOnDomEvents() {
     sessionData.domEventUtil.on(window, 'resize', () => {
         sessionData.camera.resize(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
         globalGameData.view.renderer.resize(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
-        resizeMinimap(sessionData.currentScene.minimap, globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
         globalGameData.lightManager.resizePointLightingTexture(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
+        sessionData.eventManager.pushEvent(InputEvents.Resize, { windowWidth: globalGameData.view.domContainer.clientWidth, windowHeight: globalGameData.view.domContainer.clientHeight });
     });
     sessionData.domEventUtil.on(document, 'keydown', event => {
         if(event.key === 'Escape') {
@@ -1125,13 +1128,13 @@ class TombScene {
         for(let chunk of this.gridStore.chunks) {
             initChunkTileContainer(chunk, this.gridStore, globalGameData.view.allTileSpritesContainer);
 
-            createTiledLayerInChunk(floorLayer, objectTypes.tombFloorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
-            createTiledLayerInChunk(wallsLayer, objectTypes.tombWallTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
-            createTiledLayerInChunk(wallsDecorLayer, objectTypes.tombWallDecorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
+            this.#createTiledLayerInChunk(floorLayer, objectTypes.tombFloorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
+            this.#createTiledLayerInChunk(wallsLayer, objectTypes.tombWallTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
+            this.#createTiledLayerInChunk(wallsDecorLayer, objectTypes.tombWallDecorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
         }
 
         for(const exit of exitLayer.objects) {
-            createTombExit(
+            this.#createTombExit(
                 exit.left * scaleX,
                 exit.top * scaleY,
                 exit.width * scaleX,
@@ -1167,45 +1170,46 @@ class TombScene {
     }
 
     stop(globalGameData, sessionData) {}
-}
 
-function getOrCreateTiledFrameTexture(frameData) {
-    const cacheKey = `${frameData.tilesetName}_${frameData.tileTextureLeft}_${frameData.tileTextureTop}_${frameData.tileTextureWidth}_${frameData.tileTextureHeight}`;
-    let texture = Assets.cache.get(cacheKey);
-    if(!texture) {
-        const tilesetTexture = Assets.get(frameData.tilesetName);
-        const frame = new Rectangle(frameData.tileTextureLeft, frameData.tileTextureTop, frameData.tileTextureWidth, frameData.tileTextureHeight);
-        texture = new Texture({ source: tilesetTexture.source, frame });
-        Assets.cache.set(cacheKey, texture);
+
+    #getOrCreateTiledFrameTexture(frameData) {
+        const cacheKey = `${frameData.tilesetName}_${frameData.tileTextureLeft}_${frameData.tileTextureTop}_${frameData.tileTextureWidth}_${frameData.tileTextureHeight}`;
+        let texture = Assets.cache.get(cacheKey);
+        if(!texture) {
+            const tilesetTexture = Assets.get(frameData.tilesetName);
+            const frame = new Rectangle(frameData.tileTextureLeft, frameData.tileTextureTop, frameData.tileTextureWidth, frameData.tileTextureHeight);
+            texture = new Texture({ source: tilesetTexture.source, frame });
+            Assets.cache.set(cacheKey, texture);
+        }
+        return texture;
     }
-    return texture;
-}
 
-function createTiledLayerInChunk(tileLayerData, tileType, chunk, allPools, sizeUnitsConverter) {
-    chunk.forEachTileCoords((globalTileX, globalTileY, localTileX, localTileY) => {
-        if(globalTileX < 0 || globalTileX >= tileLayerData.widthInTile || globalTileY < 0 || globalTileY >= tileLayerData.heightInTile) return;
+    #createTiledLayerInChunk(tileLayerData, tileType, chunk, allPools, sizeUnitsConverter) {
+        chunk.forEachTileCoords((globalTileX, globalTileY, localTileX, localTileY) => {
+            if(globalTileX < 0 || globalTileX >= tileLayerData.widthInTile || globalTileY < 0 || globalTileY >= tileLayerData.heightInTile) return;
 
-        const gid = tileLayerData.tiles[globalTileX + globalTileY * tileLayerData.widthInTile];
-        if(gid == null) return;
+            const gid = tileLayerData.tiles[globalTileX + globalTileY * tileLayerData.widthInTile];
+            if(gid == null) return;
 
-        const texture = getOrCreateTiledFrameTexture(tileLayerData.frames[gid]);
-        createTile(localTileX, localTileY, tileType, texture, chunk, allPools, sizeUnitsConverter);
-    });
-}
+            const texture = this.#getOrCreateTiledFrameTexture(tileLayerData.frames[gid]);
+            createTile(localTileX, localTileY, tileType, texture, chunk, allPools, sizeUnitsConverter);
+        });
+    }
 
-function createTombExit(globalPixelX, globalPixelY, width, height, allPools, collisionManager) {
-    const tombExit = allPools[objectTypes.tombExit].acquire(() => {
-        const exitObj = { type: objectTypes.tombExit };
-        exitObj.body = collisionManager.createRectCollider(globalPixelX, globalPixelY, width, height, 0, 0, exitObj);
-        return exitObj;
-    });
-    tombExit.x = globalPixelX;
-    tombExit.y = globalPixelY;
-    tombExit.width = width;
-    tombExit.height = height;
-    collisionManager.setPosition(tombExit.body, globalPixelX, globalPixelY);
-    collisionManager.registerBody(tombExit.body, objectTypes.tombExit);
-    return tombExit;
+    #createTombExit(globalPixelX, globalPixelY, width, height, allPools, collisionManager) {
+        const tombExit = allPools[objectTypes.tombExit].acquire(() => {
+            const exitObj = { type: objectTypes.tombExit };
+            exitObj.body = collisionManager.createRectCollider(globalPixelX, globalPixelY, width, height, 0, 0, exitObj);
+            return exitObj;
+        });
+        tombExit.x = globalPixelX;
+        tombExit.y = globalPixelY;
+        tombExit.width = width;
+        tombExit.height = height;
+        collisionManager.setPosition(tombExit.body, globalPixelX, globalPixelY);
+        collisionManager.registerBody(tombExit.body, objectTypes.tombExit);
+        return tombExit;
+    }
 }
 
 
