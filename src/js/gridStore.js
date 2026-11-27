@@ -1,10 +1,11 @@
 import './util.js';
 
 export class GridStore {
-    constructor(sizeUnitsConverter, gridContainerConfig) {
+    constructor(sizeUnitsConverter, chunkLeft = 0, chunkTop = 0) {
         this.sizeUnitsConverter = sizeUnitsConverter;
-        this.border = createBorder(sizeUnitsConverter, gridContainerConfig.chunkLeft, gridContainerConfig.chunkTop);
+        this.border = createBorder(sizeUnitsConverter, chunkLeft, chunkTop);
         this.chunks = [];
+        shiftLeftTopToChunk(this, chunkLeft, chunkTop);
     }
 
     getChunkByPixel(pixelX, pixelY) {
@@ -16,11 +17,9 @@ export class GridStore {
     shiftCenterToPixel(pixelX, pixelY) {
         const chunkX = this.sizeUnitsConverter.chunkXFromPixelX(pixelX);
         const chunkY = this.sizeUnitsConverter.chunkYFromPixelY(pixelY)
-        return shiftCenterToChunk(this, chunkX, chunkY);
-    }
-
-    shiftCenterToChunk(chunkX, chunkY) {
-        return shiftCenterToChunk(this, chunkX, chunkY);
+        const chunkLeft = chunkX - Math.floor(this.sizeUnitsConverter.worldWidthInChunk / 2);
+        const chunkTop = chunkY - Math.floor(this.sizeUnitsConverter.worldHeightInChunk / 2);
+        return shiftLeftTopToChunk(this, chunkLeft, chunkTop);
     }
 
     isPixelInMap(pixelX, pixelY) {
@@ -87,10 +86,7 @@ function getChunk(grid, chunkX, chunkY) {
     return grid.chunks[localChunkX + localChunkY * grid.sizeUnitsConverter.worldWidthInChunk];
 }
 
-function shiftCenterToChunk(grid, chunkX, chunkY) {
-    const newChunkLeft = chunkX - Math.floor(grid.sizeUnitsConverter.worldWidthInChunk / 2);
-    const newChunkTop = chunkY - Math.floor(grid.sizeUnitsConverter.worldHeightInChunk / 2);
-
+function shiftLeftTopToChunk(grid, newChunkLeft, newChunkTop) {
     const allChunks = [], createdChunks = [], removedChunks = [], retainedChunks = [];
 
     for(let y = 0; y < grid.sizeUnitsConverter.worldHeightInChunk; y++) {

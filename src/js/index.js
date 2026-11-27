@@ -600,20 +600,9 @@ function removeChunksWithAllObjs(removedChunks, allPools, lightManager, collisio
     }
 }
 
-function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer, config) {
-    const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
-    updateCamera(camera, player, result.newBorder, gameObjects);
-
-    for(let chunk of result.retainedChunks) {
-        updateChunkTileContainerPosition(chunk, gridStore);
-
-        chunk.forEachObj((obj, objType) => setSpritePosition(obj.sprite, obj.x, obj.y, camera));
-    }
-
-    removeChunksWithAllObjs(result.removedChunks, allPools, lightManager, collisionManager);
-
+function populateChunks(chunks, gridStore, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, allTileSpritesContainer, objectsSpriteContainer, config) {
     const mapGenerationOutput = {};
-    for(let chunk of result.createdChunks) {
+    for(let chunk of chunks) {
         initChunkTileContainer(chunk, gridStore, allTileSpritesContainer);
 
         const { tiles, trees, dungeonEntrance } = mapGenerator.generateChunk(chunk.chunkX, chunk.chunkY, mapGenerationOutput);
@@ -626,6 +615,18 @@ function generateChunksFor(pixelX, pixelY, player, gridStore, lightManager, coll
         chunk.hasSlimeSpawner = (countGrassTiles / sizeUnitsConverter.chunkAreaInTiles() >= config.slime.minGrassTilePercentForSpawn)
             && noiseGenerator.noise(chunk.chunkX, chunk.chunkY) <= config.slime.spawnerProbabilityInChunk;
     }
+}
+
+function recenterWorldOnPixel(pixelX, pixelY, player, gridStore, lightManager, collisionManager, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, gameObjects, allTileSpritesContainer, objectsSpriteContainer, config) {
+    const result = gridStore.shiftCenterToPixel(pixelX, pixelY);
+    updateCamera(camera, player, result.newBorder, gameObjects);
+
+    for(let chunk of result.retainedChunks) {
+        updateChunkTileContainerPosition(chunk, gridStore);
+        chunk.forEachObj((obj, objType) => setSpritePosition(obj.sprite, obj.x, obj.y, camera));
+    }
+    removeChunksWithAllObjs(result.removedChunks, allPools, lightManager, collisionManager);
+    populateChunks(result.createdChunks, gridStore, allPools, mapGenerator, sizeUnitsConverter, noiseGenerator, camera, allTileSpritesContainer, objectsSpriteContainer, config);
 }
 
 
@@ -1001,7 +1002,7 @@ class MainScene {
         //Инициализируем основные хранилища данных и модель сцены
         this.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.mainScene.sizeUnitsConverter);
         this.mapGenerator = new MapGenerator(this.sizeUnitsConverter, sessionData.noiseGenerator, globalGameData.config.mapGenerator);
-        this.gridStore = new GridStore(this.sizeUnitsConverter, globalGameData.config.mainScene.grid);
+        this.gridStore = new GridStore(this.sizeUnitsConverter);
         this.spawnSlimeTimer = IntervalTimer.ofSeconds(globalGameData.config.slime.spawnRateInSec);
         this.minimap = createMinimap(sessionData.eventManager, globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight, globalGameData.view.stage, globalGameData.config.minimap);
 
@@ -1015,8 +1016,10 @@ class MainScene {
 
         //Размещаем игрока и создаем игровые объекты сцены
         placePlayerInScene(sessionData.player, playerSpawnPoint.x, playerSpawnPoint.y, globalGameData.collisionManager);
+        this.gridStore.shiftCenterToPixel(playerSpawnPoint.x, playerSpawnPoint.y);
         sessionData.camera.centerOn(playerSpawnPoint.x, playerSpawnPoint.y);
-        generateChunksFor(playerSpawnPoint.x, playerSpawnPoint.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
+        updateCamera(sessionData.camera, sessionData.player, this.gridStore.border, globalGameData.view.gameObjects);
+        populateChunks(this.gridStore.chunks, this.gridStore, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
 
         //Включаем освещение
         globalGameData.lightManager.enableLighting();
@@ -1037,7 +1040,7 @@ class MainScene {
 
         //Подгружаем и выгружаем часть карты при необходимости
         if(this.gridStore.checkDistanceToBorder(sessionData.player.x, sessionData.player.y, globalGameData.config.mainScene.grid.loadDistanceInChunk)) {
-            generateChunksFor(sessionData.player.x, sessionData.player.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
+            recenterWorldOnPixel(sessionData.player.x, sessionData.player.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
             repaintMinimap(this.minimap, globalGameData.allPools, this.gridStore, this.sizeUnitsConverter);
         }
 
@@ -1089,7 +1092,7 @@ class TombScene {
 
     start(globalGameData, sessionData) {
         this.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.tombScene.sizeUnitsConverter);
-        this.gridStore = new GridStore(this.sizeUnitsConverter, globalGameData.config.tombScene.grid);
+        this.gridStore = new GridStore(this.sizeUnitsConverter);
 
         const floorLayer = globalGameData.tiledParser.getTileLayer('tombMap', 'floor_layer');
         const wallsLayer = globalGameData.tiledParser.getTileLayer('tombMap', 'walls/walls_layer');
@@ -1106,10 +1109,9 @@ class TombScene {
         placePlayerInScene(sessionData.player, spawnX, spawnY, globalGameData.collisionManager);
         sessionData.camera.centerOn(spawnX, spawnY);
 
-        const result = this.gridStore.shiftCenterToChunk(1, 1);
-        updateCamera(sessionData.camera, sessionData.player, result.newBorder, globalGameData.view.gameObjects);
+        updateCamera(sessionData.camera, sessionData.player, this.gridStore.border, globalGameData.view.gameObjects);
 
-        for(let chunk of result.createdChunks) {
+        for(let chunk of this.gridStore.chunks) {
             initChunkTileContainer(chunk, this.gridStore, globalGameData.view.allTileSpritesContainer);
 
             createTiledLayerInChunk(floorLayer, objectTypes.tombFloorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
@@ -1117,12 +1119,12 @@ class TombScene {
             createTiledLayerInChunk(wallsDecorLayer, objectTypes.tombWallDecorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
         }
 
-        for(const exitObjData of exitLayer.objects) {
+        for(const exit of exitLayer.objects) {
             createTombExit(
-                exitObjData.left * scaleX,
-                exitObjData.top * scaleY,
-                exitObjData.width * scaleX,
-                exitObjData.height * scaleY,
+                exit.left * scaleX,
+                exit.top * scaleY,
+                exit.width * scaleX,
+                exit.height * scaleY,
                 globalGameData.allPools,
                 globalGameData.collisionManager
             );
