@@ -162,7 +162,7 @@ function createPlayer(globalPixelX, globalPixelY, collisionManager, eventManager
     };
     player.body = collisionManager.createRectCollider(globalPixelX, globalPixelY, config.player.bodyWidth, config.player.bodyHeight, 0.5, 1, player);
 
-    eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.MouseClick);
+    eventManager.registerInbox('Player', InputEvents.KeyW, InputEvents.KeyA, InputEvents.KeyS, InputEvents.KeyD, InputEvents.PointerTap);
     objectsSpriteContainer.addChild(player.sprite);
     setAnimation(player, 'idle');
     return player;
@@ -238,10 +238,10 @@ function consumeEnergyWhileAttack(player, config) {
 }
 
 function playerAttack(player, eventManager, calendar, camera, allPools, objectsSpriteContainer, lightManager, collisionManager, config) {
-    const mouseClick = eventManager.pullEvent('Player', InputEvents.MouseClick);
-    if(mouseClick && player.fireTimer.checkThenReset(calendar.getTotalMs()) && consumeEnergyWhileAttack(player, config)) {
-        const aimX = camera.toGlobalPixelX(mouseClick.clientX);
-        const aimY = camera.toGlobalPixelY(mouseClick.clientY);
+    const pointerTap = eventManager.pullEvent('Player', InputEvents.PointerTap);
+    if(pointerTap && player.fireTimer.checkThenReset(calendar.getTotalMs()) && consumeEnergyWhileAttack(player, config)) {
+        const aimX = camera.toGlobalPixelX(pointerTap.global.x);
+        const aimY = camera.toGlobalPixelY(pointerTap.global.y);
         createFireball(player.x, player.y - player.sprite.height / 2, aimX, aimY, config.fireball.lifeTimeInMillis, config.fireball.speed, config.fireball.damage, player, allPools, objectsSpriteContainer, lightManager, collisionManager, config);
     }
 }
@@ -639,8 +639,6 @@ function recenterWorldOnPixel(pixelX, pixelY, player, gridStore, lightManager, c
 
 
 function createMinimap(eventManager, viewportWidth, viewportHeight, container, minimapConfig) {
-    eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.MouseWheel, InputEvents.MouseDown, InputEvents.MouseUp, InputEvents.MouseMove, InputEvents.Resize);
-
     const minimap = {
         container: new Container(),
         staticObjects: new Graphics(),
@@ -651,6 +649,14 @@ function createMinimap(eventManager, viewportWidth, viewportHeight, container, m
         maxScale: minimapConfig.maxScale,
         scroll: { isScrolling: false, scrollRecentX: 0, scrollRecentY: 0 }
     };
+
+    eventManager.registerInbox('Minimap', InputEvents.KeyM, InputEvents.Wheel, InputEvents.PointerDown, InputEvents.PointerUp, InputEvents.PointerMove, InputEvents.Resize);
+    minimap.container.eventMode = 'static';
+    minimap.container.on('pointerupoutside', event => eventManager.pushEvent(InputEvents.PointerUp, event, 'Minimap'));
+    minimap.container.on('pointerup', event => eventManager.pushEvent(InputEvents.PointerUp, event, 'Minimap'));
+    minimap.container.on('pointerdown', event => eventManager.pushEvent(InputEvents.PointerDown, event, 'Minimap'));
+    minimap.container.on('globalpointermove', event => eventManager.pushEvent(InputEvents.PointerMove, event, 'Minimap'));
+    minimap.container.on('wheel', event => eventManager.pushEvent(InputEvents.Wheel, event, 'Minimap'));
 
     minimap.container.addChild(minimap.staticObjects);
     minimap.container.visible = false;
@@ -753,7 +759,7 @@ function switchMinimapVisibility(minimap, allPools, gridStore, sizeUnitsConverte
 function scaleMinimap(minimap, eventManager) {
     if(!minimap.container.visible) return;
 
-    const event = eventManager.pullEvent('Minimap', InputEvents.MouseWheel);
+    const event = eventManager.pullEvent('Minimap', InputEvents.Wheel);
     if(!event) return;
 
     minimap.scale += event.deltaY > 0 ? -0.1 : 0.1;
@@ -761,44 +767,36 @@ function scaleMinimap(minimap, eventManager) {
     resizeMinimap(minimap, minimap.viewportWidth, minimap.viewportHeight);
 }
 
-function scrollMinimap(minimap, eventManager, renderer) {
-    const mouseDownEvent = eventManager.pullEvent('Minimap', InputEvents.MouseDown);
-    if(mouseDownEvent && checkCLickOnMinimap(minimap, renderer, mouseDownEvent)) {
+function scrollMinimap(minimap, eventManager) {
+    const pointerDownEvent = eventManager.pullEvent('Minimap', InputEvents.PointerDown);
+    if(pointerDownEvent) {
         minimap.scroll.isScrolling = true;
-        minimap.scroll.scrollRecentX = mouseDownEvent.clientX;
-        minimap.scroll.scrollRecentY = mouseDownEvent.clientY;
+        minimap.scroll.scrollRecentX = pointerDownEvent.global.x;
+        minimap.scroll.scrollRecentY = pointerDownEvent.global.y;
     }
 
-    const mouseMoveEvent = eventManager.pullEvent('Minimap', InputEvents.MouseMove);
-    if(mouseMoveEvent && minimap.scroll.isScrolling) {
-        minimap.left += mouseMoveEvent.clientX - minimap.scroll.scrollRecentX;
-        minimap.top += mouseMoveEvent.clientY - minimap.scroll.scrollRecentY;
+    const pointerMoveEvent = eventManager.pullEvent('Minimap', InputEvents.PointerMove);
+    if(pointerMoveEvent && minimap.scroll.isScrolling) {
+        minimap.left += pointerMoveEvent.global.x - minimap.scroll.scrollRecentX;
+        minimap.top += pointerMoveEvent.global.y - minimap.scroll.scrollRecentY;
         minimap.container.position.set(minimap.left, minimap.top);
-        minimap.scroll.scrollRecentX = mouseMoveEvent.clientX;
-        minimap.scroll.scrollRecentY = mouseMoveEvent.clientY;
+        minimap.scroll.scrollRecentX = pointerMoveEvent.global.x;
+        minimap.scroll.scrollRecentY = pointerMoveEvent.global.y;
     }
 
-    const mouseUpEvent = eventManager.pullEvent('Minimap', InputEvents.MouseUp);
-    if(mouseUpEvent) {
+    const pointerUpEvent = eventManager.pullEvent('Minimap', InputEvents.PointerUp);
+    if(pointerUpEvent) {
         minimap.scroll.isScrolling = false;
     }
 }
 
-function checkCLickOnMinimap(minimap, renderer, mouseEvent) {
-    if(!minimap?.container?.visible) return false;
-
-    const point = { x: 0, y: 0 };
-    renderer.events.mapPositionToPoint(point, mouseEvent.clientX, mouseEvent.clientY);
-    return minimap.container.getBounds().containsPoint(point.x, point.y);
-}
-
-function updateMinimapView(minimap, allPools, gridStore, sizeUnitsConverter, eventManager, renderer) {
+function updateMinimapView(minimap, allPools, gridStore, sizeUnitsConverter, eventManager) {
     const resizeEvent = eventManager.pullEvent('Minimap', InputEvents.Resize);
     if(resizeEvent) resizeMinimap(minimap, resizeEvent.windowWidth, resizeEvent.windowHeight);
 
     switchMinimapVisibility(minimap, allPools, gridStore, sizeUnitsConverter, eventManager);
     scaleMinimap(minimap, eventManager);
-    scrollMinimap(minimap, eventManager, renderer);
+    scrollMinimap(minimap, eventManager);
 }
 
 
@@ -895,7 +893,7 @@ async function initGlobalGameData() {
 }
 
 
-function subscribeOnDomEvents() {
+function subscribeOnEvents() {
     sessionData.domEventUtil.on(window, 'resize', () => {
         sessionData.camera.resize(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
         globalGameData.view.renderer.resize(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight);
@@ -914,20 +912,10 @@ function subscribeOnDomEvents() {
     sessionData.domEventUtil.on(document, 'keyup', event => {
         sessionData.eventManager.clearEventForAll(event.code);
     });
-    sessionData.domEventUtil.on(document, 'click', event => {
-        if(!checkCLickOnMinimap(sessionData.currentScene.minimap, globalGameData.view.renderer, event)) sessionData.eventManager.pushEvent(InputEvents.MouseClick, event);
-    });
-    sessionData.domEventUtil.on(document, 'wheel', event => {
-        sessionData.eventManager.pushEvent(InputEvents.MouseWheel, event);
-    });
-    sessionData.domEventUtil.on(document, 'mousedown', event => {
-        sessionData.eventManager.pushEvent(InputEvents.MouseDown, event);
-    });
-    sessionData.domEventUtil.on(document, 'mouseup', event => {
-        sessionData.eventManager.pushEvent(InputEvents.MouseUp, event);
-    });
-    sessionData.domEventUtil.on(document, 'mousemove', event => {
-        sessionData.eventManager.pushEvent(InputEvents.MouseMove, event);
+
+    globalGameData.view.gameObjects.eventMode = 'static';
+    globalGameData.view.gameObjects.on('pointertap', event => {
+        sessionData.eventManager.pushEvent(InputEvents.PointerTap, event);
     });
 }
 
@@ -939,7 +927,7 @@ function createSession() {
     sessionData.camera = new Camera(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight, globalGameData.config.camera);
     sessionData.player = createPlayer(0, 0, globalGameData.collisionManager, sessionData.eventManager, globalGameData.view.objectsSpriteContainer, globalGameData.config);
 
-    subscribeOnDomEvents();
+    subscribeOnEvents();
 
     sessionData.currentScene = new MainScene();
     globalGameData.ticker.add(updateCurrentScene);
@@ -949,6 +937,7 @@ function createSession() {
 
 function removeSession() {
     sessionData.domEventUtil.removeAllListeners();
+    globalGameData.view.gameObjects.removeAllListeners();
     sessionData.eventManager.clearAll();
     destroyPlayer(sessionData.player, globalGameData.collisionManager);
     globalGameData.ticker.remove(updateCurrentScene);
@@ -1072,7 +1061,7 @@ class MainScene {
         globalGameData.lightManager.updateLighting(sessionData.calendar, globalGameData.view.renderer);
 
         //Обновляем внешний вид миникарту по необходимости
-        updateMinimapView(this.minimap, globalGameData.allPools, this.gridStore, this.sizeUnitsConverter, sessionData.eventManager, globalGameData.view.renderer);
+        updateMinimapView(this.minimap, globalGameData.allPools, this.gridStore, this.sizeUnitsConverter, sessionData.eventManager);
 
         //Обновляем видимые границы вокруг физических тел для дебага физики
         //debugDrawAllPhysicsBodies(globalGameData.view.debugPhysicsGraphics, globalGameData.collisionManager, this.gridStore);
@@ -1169,7 +1158,14 @@ class TombScene {
         checkGameOver(sessionData.player, globalGameData.uiManager);
     }
 
-    stop(globalGameData, sessionData) {}
+    stop(globalGameData, sessionData) {
+        removeChunksWithAllObjs(this.gridStore.chunks, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager);
+        globalGameData.allPools[objectTypes.fireball].forEachUsed(fireball => removeGameObj(fireball, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager));
+        globalGameData.allPools[objectTypes.explosion].forEachUsed(fireball => removeGameObj(fireball, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager));
+
+        globalGameData.collisionManager.unregisterAllBodies();
+        globalGameData.collisionManager.unregisterAllHandlers();
+    }
 
 
     #getOrCreateTiledFrameTexture(frameData) {

@@ -66,6 +66,7 @@ canvas {
     inset: 0;
     box-sizing: border-box;
     padding: 16px;
+    pointer-events: none;
 }
 
 /* HUD. stamina bar */

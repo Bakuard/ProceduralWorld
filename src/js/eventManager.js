@@ -5,11 +5,11 @@ export const InputEvents = Object.freeze({
     KeyD: 'KeyD',
     KeyE: 'KeyE',
     KeyM: 'KeyM',
-    MouseClick: 'MouseClick',
-    MouseWheel: 'MouseWheel',
-    MouseDown: 'MouseDown',
-    MouseUp: 'MouseUp',
-    MouseMove: 'MouseMove',
+    PointerTap: 'PointerTap',
+    PointerDown: 'PointerDown',
+    PointerUp: 'PointerUp',
+    PointerMove: 'PointerMove',
+    Wheel: 'Wheel',
     Resize: 'Resize'
 });
 
@@ -40,9 +40,12 @@ export class EventManager {
         }
     }
 
-    pushEvent(eventName, event) {
+    pushEvent(eventName, event, ...inboxNames) {
         const inputBoxes = (this.eventToInputBoxes[eventName] ??= {});
-        Object.keys(inputBoxes).forEach(eventBoxName => inputBoxes[eventBoxName] = event);
+        if(inboxNames.length === 0) inboxNames = Object.keys(inputBoxes);
+        inboxNames.forEach(eventBoxName => {
+            if(Object.hasOwn(inputBoxes, eventBoxName)) inputBoxes[eventBoxName] = event
+        });
     }
 
     hasEvent(eventBoxName, eventName) {
