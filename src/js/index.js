@@ -1,9 +1,9 @@
-import {WebGLRenderer, Assets, Container, Sprite, AnimatedSprite, Ticker, Graphics, Matrix, Texture, Rectangle} from 'pixi.js';
+import {WebGLRenderer, Assets, Container, Sprite, AnimatedSprite, Graphics, Matrix, Texture, Rectangle} from 'pixi.js';
 import {objectTypes} from './objectTypes';
 import {SizeUnitsConverter} from './sizeUnitsConverter';
 import {GridStore} from './gridStore';
 import {MapGenerator} from './mapGenerator';
-import {DOMEventUtil, EventManager, InputEvents} from './eventManager';
+import {DOMEventUtil, EventManager, InputEvents} from './events';
 import {Vector} from './vector';
 import {Camera} from './camera';
 import {Calendar} from './calendar';
@@ -15,6 +15,7 @@ import {UIManager} from "./ui";
 import {NoiseGenerator} from "./noise";
 import './util.js';
 import {TiledParser} from "./tiledParser";
+import {SceneManager} from "./scenes";
 
 let globalGameData = {
     config: {},
@@ -23,8 +24,6 @@ let globalGameData = {
     uiManager: null,
     lightManager: null,
     collisionManager: null,
-
-    ticker: null,
 
     view: {
         domContainer: null,
@@ -44,7 +43,7 @@ let sessionData = {
     eventManager: null,
     domEventUtil: null,
     camera: null,
-    currentScene: null
+    sceneManager: null
 }
 
 
@@ -274,13 +273,13 @@ function updatePlayer(player, eventManager, collisionManager, calendar, camera, 
 
 function checkGameOver(player, uiManager) {
     if(player.energy.receivedDamaged === player.energy.maxEnergy) {
-        stopCurrentScene();
+        sessionData.sceneManager.stopCurrentScene();
         removeSession();
 
         uiManager.showGameOverModal(() => {
             uiManager.hideGameOverModal();
             createSession();
-            startCurrentScene();
+            sessionData.sceneManager.startScene(new MainScene(globalGameData, sessionData));
         });
     }
 }
@@ -884,7 +883,6 @@ async function initGlobalGameData() {
     globalGameData.allPools = createPools();
     globalGameData.collisionManager = new CollisionManager();
     globalGameData.tiledParser = new TiledParser();
-    globalGameData.ticker = new Ticker();
 
     createSceneGraph();
 
@@ -903,8 +901,16 @@ function subscribeOnEvents() {
     sessionData.domEventUtil.on(document, 'keydown', event => {
         if(event.key === 'Escape') {
             if(event.repeat) return;
-            if (globalGameData.ticker.started) pauseCurrentScene();
-            else resumeCurrentScene();
+            if (sessionData.sceneManager.isCurrentSceneRunning()) {
+                sessionData.sceneManager.pauseCurrentScene();
+                globalGameData.uiManager.showGamePauseModal(() => {
+                    globalGameData.uiManager.hideGamePauseModal();
+                    sessionData.sceneManager.resumeCurrentScene();
+                });
+            } else {
+                globalGameData.uiManager.hideGamePauseModal();
+                sessionData.sceneManager.resumeCurrentScene();
+            }
         } else {
             sessionData.eventManager.pushEvent(event.code, event);
         }
@@ -926,13 +932,9 @@ function createSession() {
     sessionData.domEventUtil = new DOMEventUtil();
     sessionData.camera = new Camera(globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight, globalGameData.config.camera);
     sessionData.player = createPlayer(0, 0, globalGameData.collisionManager, sessionData.eventManager, globalGameData.view.objectsSpriteContainer, globalGameData.config);
+    sessionData.sceneManager = new SceneManager();
 
     subscribeOnEvents();
-
-    sessionData.currentScene = new MainScene();
-    globalGameData.ticker.add(updateCurrentScene);
-    globalGameData.ticker.add(switchScene, null, -1);
-    sessionData.eventManager.registerInbox('SceneSwitcher', 'SwitchScene');
 }
 
 function removeSession() {
@@ -940,57 +942,14 @@ function removeSession() {
     globalGameData.view.gameObjects.removeAllListeners();
     sessionData.eventManager.clearAll();
     destroyPlayer(sessionData.player, globalGameData.collisionManager);
-    globalGameData.ticker.remove(updateCurrentScene);
-    globalGameData.ticker.remove(switchScene);
-}
-
-
-function stopCurrentScene() {
-    if(sessionData.currentScene) {
-        globalGameData.ticker.stop();
-        sessionData.currentScene.stop(globalGameData, sessionData);
-    }
-}
-
-function startCurrentScene() {
-    if(sessionData.currentScene) {
-        sessionData.currentScene.start(globalGameData, sessionData);
-        globalGameData.ticker.start();
-    }
-}
-
-function pauseCurrentScene() {
-    if (!globalGameData.ticker.started) return;
-    globalGameData.ticker.stop();
-    globalGameData.uiManager.showGamePauseModal(() => resumeCurrentScene());
-}
-
-function resumeCurrentScene() {
-    if (globalGameData.ticker.started) return;
-    globalGameData.uiManager.hideGamePauseModal();
-    globalGameData.ticker.start();
-}
-
-function updateCurrentScene(ticker) {
-    sessionData.currentScene.update(globalGameData, sessionData, ticker)
-}
-
-function requestSceneSwitch(newScene) {
-    sessionData.eventManager.pushEvent('SwitchScene', newScene);
-}
-
-function switchScene() {
-    const newScene = sessionData.eventManager.pullEvent('SceneSwitcher', 'SwitchScene');
-    if(newScene) {
-        stopCurrentScene();
-        sessionData.currentScene = newScene;
-        startCurrentScene();
-    }
+    sessionData.sceneManager.destroy();
 }
 
 
 class MainScene {
-    constructor() {
+    constructor(globalGameData, sessionData) {
+        this.globalGameData = globalGameData;
+        this.sessionData = sessionData;
         this.sizeUnitsConverter = null;
         this.mapGenerator = null;
         this.gridStore = null;
@@ -998,110 +957,112 @@ class MainScene {
         this.minimap = null;
     }
 
-    start(globalGameData, sessionData) {
+    start() {
         //Инициализируем основные хранилища данных и модель сцены
-        this.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.mainScene.sizeUnitsConverter);
-        this.mapGenerator = new MapGenerator(this.sizeUnitsConverter, sessionData.noiseGenerator, globalGameData.config.mapGenerator);
+        this.sizeUnitsConverter = new SizeUnitsConverter(this.globalGameData.config.mainScene.sizeUnitsConverter);
+        this.mapGenerator = new MapGenerator(this.sizeUnitsConverter, this.sessionData.noiseGenerator, this.globalGameData.config.mapGenerator);
         this.gridStore = new GridStore(this.sizeUnitsConverter);
-        this.spawnSlimeTimer = IntervalTimer.ofSeconds(globalGameData.config.slime.spawnRateInSec);
-        this.minimap = createMinimap(sessionData.eventManager, globalGameData.view.domContainer.clientWidth, globalGameData.view.domContainer.clientHeight, globalGameData.view.stage, globalGameData.config.minimap);
+        this.spawnSlimeTimer = IntervalTimer.ofSeconds(this.globalGameData.config.slime.spawnRateInSec);
+        this.minimap = createMinimap(this.sessionData.eventManager, this.globalGameData.view.domContainer.clientWidth, this.globalGameData.view.domContainer.clientHeight, this.globalGameData.view.stage, this.globalGameData.config.minimap);
 
         //Находим точку спавна игрока
-        const spawnTileCoords = this.mapGenerator.findNearestTileWithType(globalGameData.config.mapGenerator.spawnPoint.startTileX, globalGameData.config.mapGenerator.spawnPoint.startTileY, globalGameData.config.mapGenerator.spawnPoint.maxRadiusInTile, globalGameData.config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
-            ?? { tileX: globalGameData.config.mapGenerator.spawnPoint.startTileX, tileY: globalGameData.config.mapGenerator.spawnPoint.startTileY };
+        const spawnTileCoords = this.mapGenerator.findNearestTileWithType(this.globalGameData.config.mapGenerator.spawnPoint.startTileX, this.globalGameData.config.mapGenerator.spawnPoint.startTileY, this.globalGameData.config.mapGenerator.spawnPoint.maxRadiusInTile, this.globalGameData.config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
+            ?? { tileX: this.globalGameData.config.mapGenerator.spawnPoint.startTileX, tileY: this.globalGameData.config.mapGenerator.spawnPoint.startTileY };
         const playerSpawnPoint = {
             x: this.sizeUnitsConverter.centerPixelXOfTile(spawnTileCoords.tileX),
             y: this.sizeUnitsConverter.centerPixelYOfTile(spawnTileCoords.tileY)
         };
 
         //Размещаем игрока и создаем игровые объекты сцены
-        placePlayerInScene(sessionData.player, playerSpawnPoint.x, playerSpawnPoint.y, globalGameData.collisionManager);
+        placePlayerInScene(this.sessionData.player, playerSpawnPoint.x, playerSpawnPoint.y, this.globalGameData.collisionManager);
         this.gridStore.shiftCenterToPixel(playerSpawnPoint.x, playerSpawnPoint.y);
-        sessionData.camera.centerOn(playerSpawnPoint.x, playerSpawnPoint.y);
-        updateCamera(sessionData.camera, sessionData.player, this.gridStore.border, globalGameData.view.gameObjects);
-        populateChunks(this.gridStore.chunks, this.gridStore, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.collisionManager, globalGameData.config);
+        this.sessionData.camera.centerOn(playerSpawnPoint.x, playerSpawnPoint.y);
+        updateCamera(this.sessionData.camera, this.sessionData.player, this.gridStore.border, this.globalGameData.view.gameObjects);
+        populateChunks(this.gridStore.chunks, this.gridStore, this.globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, this.sessionData.noiseGenerator, this.sessionData.camera, this.globalGameData.view.allTileSpritesContainer, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.collisionManager, this.globalGameData.config);
 
         //Включаем освещение
-        globalGameData.lightManager.enableLighting();
+        this.globalGameData.lightManager.enableLighting();
 
         //Регистрируем обработку коллизий
-        globalGameData.collisionManager.registerHandler(objectTypes.fireball, objectTypes.slime, (fireball, slime) => {
-            handleFireballAndSlimeCollision(fireball, slime, globalGameData.allPools, this.gridStore, sessionData.camera, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.config);
+        this.globalGameData.collisionManager.registerHandler(objectTypes.fireball, objectTypes.slime, (fireball, slime) => {
+            handleFireballAndSlimeCollision(fireball, slime, this.globalGameData.allPools, this.gridStore, this.sessionData.camera, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.lightManager, this.globalGameData.collisionManager, this.globalGameData.config);
         });
-        globalGameData.collisionManager.registerHandler(objectTypes.player, objectTypes.tomb, (player, tomb) => {
-            requestSceneSwitch(new TombScene());
+        this.globalGameData.collisionManager.registerHandler(objectTypes.player, objectTypes.tomb, (player, tomb) => {
+            this.sessionData.sceneManager.requestSceneSwitch(new TombScene(this.globalGameData, this.sessionData));
         });
     }
 
-    update(globalGameData, sessionData, ticker) {
+    update(ticker) {
         //Обновляем модель
-        sessionData.calendar.addMs(ticker.deltaMS);
-        updatePlayer(sessionData.player, sessionData.eventManager, globalGameData.collisionManager, sessionData.calendar, sessionData.camera, globalGameData.allPools, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.config, ticker.deltaMS);
-        updateAllFireballs(globalGameData.allPools, sessionData.camera, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.config, ticker.deltaMS);
-        spawnSlimes(sessionData.calendar, this.spawnSlimeTimer, this.gridStore, globalGameData.allPools, globalGameData.view.objectsSpriteContainer, globalGameData.collisionManager, globalGameData.config, ticker.deltaMS);
-        updateAllSlimes(globalGameData.allPools, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, sessionData.player, globalGameData.config, ticker.deltaMS);
+        this.sessionData.calendar.addMs(ticker.deltaMS);
+        updatePlayer(this.sessionData.player, this.sessionData.eventManager, this.globalGameData.collisionManager, this.sessionData.calendar, this.sessionData.camera, this.globalGameData.allPools, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.lightManager, this.globalGameData.config, ticker.deltaMS);
+        updateAllFireballs(this.globalGameData.allPools, this.sessionData.camera, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.lightManager, this.globalGameData.collisionManager, this.globalGameData.config, ticker.deltaMS);
+        spawnSlimes(this.sessionData.calendar, this.spawnSlimeTimer, this.gridStore, this.globalGameData.allPools, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.collisionManager, this.globalGameData.config, ticker.deltaMS);
+        updateAllSlimes(this.globalGameData.allPools, this.gridStore, this.globalGameData.lightManager, this.globalGameData.collisionManager, this.sessionData.player, this.globalGameData.config, ticker.deltaMS);
 
         //Подгружаем и выгружаем часть карты при необходимости
-        if(this.gridStore.checkDistanceToBorder(sessionData.player.x, sessionData.player.y, globalGameData.config.mainScene.grid.loadDistanceInChunk)) {
-            recenterWorldOnPixel(sessionData.player.x, sessionData.player.y, sessionData.player, this.gridStore, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, sessionData.noiseGenerator, sessionData.camera, globalGameData.view.gameObjects, globalGameData.view.allTileSpritesContainer, globalGameData.view.objectsSpriteContainer, globalGameData.config);
-            repaintMinimap(this.minimap, globalGameData.allPools, this.gridStore, this.sizeUnitsConverter);
+        if(this.gridStore.checkDistanceToBorder(this.sessionData.player.x, this.sessionData.player.y, this.globalGameData.config.mainScene.grid.loadDistanceInChunk)) {
+            recenterWorldOnPixel(this.sessionData.player.x, this.sessionData.player.y, this.sessionData.player, this.gridStore, this.globalGameData.lightManager, this.globalGameData.collisionManager, this.globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, this.sessionData.noiseGenerator, this.sessionData.camera, this.globalGameData.view.gameObjects, this.globalGameData.view.allTileSpritesContainer, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.config);
+            repaintMinimap(this.minimap, this.globalGameData.allPools, this.gridStore, this.sizeUnitsConverter);
         }
 
         //Поиск коллизий
-        globalGameData.collisionManager.handleCollisions();
+        this.globalGameData.collisionManager.handleCollisions();
 
         //Обновляем внешний вид игровых объектов
-        updateCamera(sessionData.camera, sessionData.player, this.gridStore.border, globalGameData.view.gameObjects);
-        updatePlayerView(sessionData.player, sessionData.camera, ticker);
-        updateAllFireballsView(globalGameData.allPools, globalGameData.lightManager, sessionData.camera, globalGameData.config, ticker);
-        updateAllExplosionsView(globalGameData.allPools, globalGameData.lightManager, sessionData.camera, ticker);
-        updateAllSlimesView(globalGameData.allPools, sessionData.camera, ticker);
+        updateCamera(this.sessionData.camera, this.sessionData.player, this.gridStore.border, this.globalGameData.view.gameObjects);
+        updatePlayerView(this.sessionData.player, this.sessionData.camera, ticker);
+        updateAllFireballsView(this.globalGameData.allPools, this.globalGameData.lightManager, this.sessionData.camera, this.globalGameData.config, ticker);
+        updateAllExplosionsView(this.globalGameData.allPools, this.globalGameData.lightManager, this.sessionData.camera, ticker);
+        updateAllSlimesView(this.globalGameData.allPools, this.sessionData.camera, ticker);
 
         //Обновляем освещение
-        globalGameData.lightManager.updateLighting(sessionData.calendar, globalGameData.view.renderer);
+        this.globalGameData.lightManager.updateLighting(this.sessionData.calendar, this.globalGameData.view.renderer);
 
         //Обновляем внешний вид миникарту по необходимости
-        updateMinimapView(this.minimap, globalGameData.allPools, this.gridStore, this.sizeUnitsConverter, sessionData.eventManager);
+        updateMinimapView(this.minimap, this.globalGameData.allPools, this.gridStore, this.sizeUnitsConverter, this.sessionData.eventManager);
 
         //Обновляем видимые границы вокруг физических тел для дебага физики
-        //debugDrawAllPhysicsBodies(globalGameData.view.debugPhysicsGraphics, globalGameData.collisionManager, this.gridStore);
+        //debugDrawAllPhysicsBodies(this.globalGameData.view.debugPhysicsGraphics, this.globalGameData.collisionManager, this.gridStore);
 
         //Отрисовываем игровой мир
-        globalGameData.view.renderer.render(globalGameData.view.stage);
+        this.globalGameData.view.renderer.render(this.globalGameData.view.stage);
 
         //Отрисовываем UI
-        updateHUD(globalGameData.uiManager, sessionData.player);
+        updateHUD(this.globalGameData.uiManager, this.sessionData.player);
 
-        checkGameOver(sessionData.player, globalGameData.uiManager);
+        checkGameOver(this.sessionData.player, this.globalGameData.uiManager);
     }
 
-    stop(globalGameData, sessionData) {
-        removeChunksWithAllObjs(this.gridStore.chunks, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager);
-        globalGameData.allPools[objectTypes.fireball].forEachUsed(fireball => removeGameObj(fireball, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager));
-        globalGameData.allPools[objectTypes.explosion].forEachUsed(fireball => removeGameObj(fireball, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager));
+    stop() {
+        removeChunksWithAllObjs(this.gridStore.chunks, this.globalGameData.allPools, this.globalGameData.lightManager, this.globalGameData.collisionManager);
+        this.globalGameData.allPools[objectTypes.fireball].forEachUsed(fireball => removeGameObj(fireball, this.globalGameData.allPools, this.globalGameData.lightManager, this.globalGameData.collisionManager));
+        this.globalGameData.allPools[objectTypes.explosion].forEachUsed(fireball => removeGameObj(fireball, this.globalGameData.allPools, this.globalGameData.lightManager, this.globalGameData.collisionManager));
         destroyMinimap(this.minimap);
 
-        globalGameData.lightManager.disableLighting();
-        globalGameData.collisionManager.unregisterAllBodies();
-        globalGameData.collisionManager.unregisterAllHandlers();
+        this.globalGameData.lightManager.disableLighting();
+        this.globalGameData.collisionManager.unregisterAllBodies();
+        this.globalGameData.collisionManager.unregisterAllHandlers();
     }
 }
 
 class TombScene {
-    constructor() {
+    constructor(globalGameData, sessionData) {
+        this.globalGameData = globalGameData;
+        this.sessionData = sessionData;
         this.sizeUnitsConverter = null;
         this.gridStore = null;
     }
 
-    start(globalGameData, sessionData) {
-        this.sizeUnitsConverter = new SizeUnitsConverter(globalGameData.config.tombScene.sizeUnitsConverter);
+    start() {
+        this.sizeUnitsConverter = new SizeUnitsConverter(this.globalGameData.config.tombScene.sizeUnitsConverter);
         this.gridStore = new GridStore(this.sizeUnitsConverter);
 
-        const floorLayer = globalGameData.tiledParser.getTileLayer('tombMap', 'floor_layer');
-        const wallsLayer = globalGameData.tiledParser.getTileLayer('tombMap', 'walls/walls_layer');
-        const wallsDecorLayer = globalGameData.tiledParser.getTileLayer('tombMap', 'walls/walls_decor_layer');
-        const spawnPointsLayer = globalGameData.tiledParser.getObjLayerThenGroup('tombMap', 'spawn_points_layer', 'name');
-        const exitLayer = globalGameData.tiledParser.getObjLayer('tombMap', 'exit_layer');
+        const floorLayer = this.globalGameData.tiledParser.getTileLayer('tombMap', 'floor_layer');
+        const wallsLayer = this.globalGameData.tiledParser.getTileLayer('tombMap', 'walls/walls_layer');
+        const wallsDecorLayer = this.globalGameData.tiledParser.getTileLayer('tombMap', 'walls/walls_decor_layer');
+        const spawnPointsLayer = this.globalGameData.tiledParser.getObjLayerThenGroup('tombMap', 'spawn_points_layer', 'name');
+        const exitLayer = this.globalGameData.tiledParser.getObjLayer('tombMap', 'exit_layer');
 
         const scaleX = this.sizeUnitsConverter.tileWidthInPixels() / floorLayer.tileWidthInPixel;
         const scaleY = this.sizeUnitsConverter.tileHeightInPixels() / floorLayer.tileHeightInPixel;
@@ -1109,17 +1070,17 @@ class TombScene {
         const playerSpawnPoint = spawnPointsLayer.objectsMap['player'][0];
         const spawnX = playerSpawnPoint.left * scaleX;
         const spawnY = playerSpawnPoint.top * scaleY;
-        placePlayerInScene(sessionData.player, spawnX, spawnY, globalGameData.collisionManager);
-        sessionData.camera.centerOn(spawnX, spawnY);
+        placePlayerInScene(this.sessionData.player, spawnX, spawnY, this.globalGameData.collisionManager);
+        this.sessionData.camera.centerOn(spawnX, spawnY);
 
-        updateCamera(sessionData.camera, sessionData.player, this.gridStore.border, globalGameData.view.gameObjects);
+        updateCamera(this.sessionData.camera, this.sessionData.player, this.gridStore.border, this.globalGameData.view.gameObjects);
 
         for(let chunk of this.gridStore.chunks) {
-            initChunkTileContainer(chunk, this.gridStore, globalGameData.view.allTileSpritesContainer);
+            initChunkTileContainer(chunk, this.gridStore, this.globalGameData.view.allTileSpritesContainer);
 
-            this.#createTiledLayerInChunk(floorLayer, objectTypes.tombFloorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
-            this.#createTiledLayerInChunk(wallsLayer, objectTypes.tombWallTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
-            this.#createTiledLayerInChunk(wallsDecorLayer, objectTypes.tombWallDecorTile, chunk, globalGameData.allPools, this.sizeUnitsConverter);
+            this.#createTiledLayerInChunk(floorLayer, objectTypes.tombFloorTile, chunk, this.globalGameData.allPools, this.sizeUnitsConverter);
+            this.#createTiledLayerInChunk(wallsLayer, objectTypes.tombWallTile, chunk, this.globalGameData.allPools, this.sizeUnitsConverter);
+            this.#createTiledLayerInChunk(wallsDecorLayer, objectTypes.tombWallDecorTile, chunk, this.globalGameData.allPools, this.sizeUnitsConverter);
         }
 
         for(const exit of exitLayer.objects) {
@@ -1128,43 +1089,43 @@ class TombScene {
                 exit.top * scaleY,
                 exit.width * scaleX,
                 exit.height * scaleY,
-                globalGameData.allPools,
-                globalGameData.collisionManager
+                this.globalGameData.allPools,
+                this.globalGameData.collisionManager
             );
         }
 
-        globalGameData.collisionManager.registerHandler(objectTypes.player, objectTypes.tombExit, () => {
-            requestSceneSwitch(new MainScene());
+        this.globalGameData.collisionManager.registerHandler(objectTypes.player, objectTypes.tombExit, () => {
+            this.sessionData.sceneManager.requestSceneSwitch(new MainScene(this.globalGameData, this.sessionData));
         });
     }
 
-    update(globalGameData, sessionData, ticker) {
-        sessionData.calendar.addMs(ticker.deltaMS);
+    update(ticker) {
+        this.sessionData.calendar.addMs(ticker.deltaMS);
 
-        updatePlayer(sessionData.player, sessionData.eventManager, globalGameData.collisionManager, sessionData.calendar, sessionData.camera, globalGameData.allPools, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.config, ticker.deltaMS);
-        updateAllFireballs(globalGameData.allPools, sessionData.camera, globalGameData.view.objectsSpriteContainer, globalGameData.lightManager, globalGameData.collisionManager, globalGameData.config, ticker.deltaMS);
+        updatePlayer(this.sessionData.player, this.sessionData.eventManager, this.globalGameData.collisionManager, this.sessionData.calendar, this.sessionData.camera, this.globalGameData.allPools, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.lightManager, this.globalGameData.config, ticker.deltaMS);
+        updateAllFireballs(this.globalGameData.allPools, this.sessionData.camera, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.lightManager, this.globalGameData.collisionManager, this.globalGameData.config, ticker.deltaMS);
 
-        globalGameData.collisionManager.handleCollisions();
+        this.globalGameData.collisionManager.handleCollisions();
 
-        updateCamera(sessionData.camera, sessionData.player, this.gridStore.border, globalGameData.view.gameObjects);
-        updatePlayerView(sessionData.player, sessionData.camera, ticker);
-        updateAllFireballsView(globalGameData.allPools, globalGameData.lightManager, sessionData.camera, globalGameData.config, ticker);
-        updateAllExplosionsView(globalGameData.allPools, globalGameData.lightManager, sessionData.camera, ticker);
+        updateCamera(this.sessionData.camera, this.sessionData.player, this.gridStore.border, this.globalGameData.view.gameObjects);
+        updatePlayerView(this.sessionData.player, this.sessionData.camera, ticker);
+        updateAllFireballsView(this.globalGameData.allPools, this.globalGameData.lightManager, this.sessionData.camera, this.globalGameData.config, ticker);
+        updateAllExplosionsView(this.globalGameData.allPools, this.globalGameData.lightManager, this.sessionData.camera, ticker);
 
-        globalGameData.view.renderer.render(globalGameData.view.stage);
+        this.globalGameData.view.renderer.render(this.globalGameData.view.stage);
 
-        updateHUD(globalGameData.uiManager, sessionData.player);
+        updateHUD(this.globalGameData.uiManager, this.sessionData.player);
 
-        checkGameOver(sessionData.player, globalGameData.uiManager);
+        checkGameOver(this.sessionData.player, this.globalGameData.uiManager);
     }
 
-    stop(globalGameData, sessionData) {
-        removeChunksWithAllObjs(this.gridStore.chunks, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager);
-        globalGameData.allPools[objectTypes.fireball].forEachUsed(fireball => removeGameObj(fireball, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager));
-        globalGameData.allPools[objectTypes.explosion].forEachUsed(fireball => removeGameObj(fireball, globalGameData.allPools, globalGameData.lightManager, globalGameData.collisionManager));
+    stop() {
+        removeChunksWithAllObjs(this.gridStore.chunks, this.globalGameData.allPools, this.globalGameData.lightManager, this.globalGameData.collisionManager);
+        this.globalGameData.allPools[objectTypes.fireball].forEachUsed(fireball => removeGameObj(fireball, this.globalGameData.allPools, this.globalGameData.lightManager, this.globalGameData.collisionManager));
+        this.globalGameData.allPools[objectTypes.explosion].forEachUsed(fireball => removeGameObj(fireball, this.globalGameData.allPools, this.globalGameData.lightManager, this.globalGameData.collisionManager));
 
-        globalGameData.collisionManager.unregisterAllBodies();
-        globalGameData.collisionManager.unregisterAllHandlers();
+        this.globalGameData.collisionManager.unregisterAllBodies();
+        this.globalGameData.collisionManager.unregisterAllHandlers();
     }
 
 
@@ -1212,4 +1173,4 @@ class TombScene {
 loadAssets()
     .then(() => initGlobalGameData())
     .then(() => createSession())
-    .then(() => startCurrentScene());
+    .then(() => sessionData.sceneManager.startScene(new MainScene(globalGameData, sessionData)));
