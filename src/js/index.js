@@ -940,7 +940,6 @@ function createSession() {
 function removeSession() {
     sessionData.domEventUtil.removeAllListeners();
     globalGameData.view.gameObjects.removeAllListeners();
-    sessionData.eventManager.clearAll();
     destroyPlayer(sessionData.player, globalGameData.collisionManager);
     sessionData.sceneManager.destroy();
 }
@@ -973,7 +972,7 @@ class MainScene {
         //Размещаем игрока и создаем игровые объекты сцены
         placePlayerInScene(this.sessionData.player, this.playerSpawnPoint.x, this.playerSpawnPoint.y, this.globalGameData.collisionManager);
         this.gridStore.shiftCenterToPixel(this.playerSpawnPoint.x, this.playerSpawnPoint.y);
-        this.sessionData.camera.centerOn(this.playerSpawnPoint.x, this.playerSpawnPoint.y);
+        this.sessionData.camera.removeBounds().centerOn(this.playerSpawnPoint.x, this.playerSpawnPoint.y);
         updateCamera(this.sessionData.camera, this.sessionData.player, this.gridStore.border, this.globalGameData.view.gameObjects);
         populateChunks(this.gridStore.chunks, this.gridStore, this.globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, this.sessionData.noiseGenerator, this.sessionData.camera, this.globalGameData.view.allTileSpritesContainer, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.collisionManager, this.globalGameData.config);
 
@@ -1062,6 +1061,8 @@ class TombScene {
 
         this.sizeUnitsConverter = null;
         this.gridStore = null;
+        this.mapWidthInPixel = 0;
+        this.mapHeightInPixel = 0;
     }
 
     start() {
@@ -1074,6 +1075,9 @@ class TombScene {
         const spawnPointsLayer = this.globalGameData.tiledParser.getObjLayerThenGroup('tombMap', 'spawn_points_layer', 'name');
         const exitLayer = this.globalGameData.tiledParser.getObjLayer('tombMap', 'exit_layer');
 
+        this.mapWidthInPixel = floorLayer.mapWidthInTile * this.sizeUnitsConverter.tileWidthInPixels();
+        this.mapHeightInPixel = floorLayer.mapHeightInTile * this.sizeUnitsConverter.tileHeightInPixels();
+
         const scaleX = this.sizeUnitsConverter.tileWidthInPixels() / floorLayer.tileWidthInPixel;
         const scaleY = this.sizeUnitsConverter.tileHeightInPixels() / floorLayer.tileHeightInPixel;
 
@@ -1081,7 +1085,9 @@ class TombScene {
         const spawnX = playerSpawnPoint.left * scaleX;
         const spawnY = playerSpawnPoint.top * scaleY;
         placePlayerInScene(this.sessionData.player, spawnX, spawnY, this.globalGameData.collisionManager);
-        this.sessionData.camera.centerOn(spawnX, spawnY);
+        this.sessionData.camera
+            .setBounds(0, 0, this.mapWidthInPixel, this.mapHeightInPixel)
+            .centerOn(spawnX, spawnY);
 
         updateCamera(this.sessionData.camera, this.sessionData.player, this.gridStore.border, this.globalGameData.view.gameObjects);
 
