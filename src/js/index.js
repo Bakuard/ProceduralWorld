@@ -947,9 +947,11 @@ function removeSession() {
 
 
 class MainScene {
-    constructor(globalGameData, sessionData) {
+    constructor(globalGameData, sessionData, playerSpawnPoint = null) {
         this.globalGameData = globalGameData;
         this.sessionData = sessionData;
+        this.playerSpawnPoint = playerSpawnPoint;
+
         this.sizeUnitsConverter = null;
         this.mapGenerator = null;
         this.gridStore = null;
@@ -966,17 +968,12 @@ class MainScene {
         this.minimap = createMinimap(this.sessionData.eventManager, this.globalGameData.view.domContainer.clientWidth, this.globalGameData.view.domContainer.clientHeight, this.globalGameData.view.stage, this.globalGameData.config.minimap);
 
         //Находим точку спавна игрока
-        const spawnTileCoords = this.mapGenerator.findNearestTileWithType(this.globalGameData.config.mapGenerator.spawnPoint.startTileX, this.globalGameData.config.mapGenerator.spawnPoint.startTileY, this.globalGameData.config.mapGenerator.spawnPoint.maxRadiusInTile, this.globalGameData.config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
-            ?? { tileX: this.globalGameData.config.mapGenerator.spawnPoint.startTileX, tileY: this.globalGameData.config.mapGenerator.spawnPoint.startTileY };
-        const playerSpawnPoint = {
-            x: this.sizeUnitsConverter.centerPixelXOfTile(spawnTileCoords.tileX),
-            y: this.sizeUnitsConverter.centerPixelYOfTile(spawnTileCoords.tileY)
-        };
+        if(!this.playerSpawnPoint) this.playerSpawnPoint = this.#findSpawnPoint();
 
         //Размещаем игрока и создаем игровые объекты сцены
-        placePlayerInScene(this.sessionData.player, playerSpawnPoint.x, playerSpawnPoint.y, this.globalGameData.collisionManager);
-        this.gridStore.shiftCenterToPixel(playerSpawnPoint.x, playerSpawnPoint.y);
-        this.sessionData.camera.centerOn(playerSpawnPoint.x, playerSpawnPoint.y);
+        placePlayerInScene(this.sessionData.player, this.playerSpawnPoint.x, this.playerSpawnPoint.y, this.globalGameData.collisionManager);
+        this.gridStore.shiftCenterToPixel(this.playerSpawnPoint.x, this.playerSpawnPoint.y);
+        this.sessionData.camera.centerOn(this.playerSpawnPoint.x, this.playerSpawnPoint.y);
         updateCamera(this.sessionData.camera, this.sessionData.player, this.gridStore.border, this.globalGameData.view.gameObjects);
         populateChunks(this.gridStore.chunks, this.gridStore, this.globalGameData.allPools, this.mapGenerator, this.sizeUnitsConverter, this.sessionData.noiseGenerator, this.sessionData.camera, this.globalGameData.view.allTileSpritesContainer, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.collisionManager, this.globalGameData.config);
 
@@ -988,7 +985,8 @@ class MainScene {
             handleFireballAndSlimeCollision(fireball, slime, this.globalGameData.allPools, this.gridStore, this.sessionData.camera, this.globalGameData.view.objectsSpriteContainer, this.globalGameData.lightManager, this.globalGameData.collisionManager, this.globalGameData.config);
         });
         this.globalGameData.collisionManager.registerHandler(objectTypes.player, objectTypes.tomb, (player, tomb) => {
-            this.sessionData.sceneManager.requestSceneSwitch(new TombScene(this.globalGameData, this.sessionData));
+            const returnPoint = { x: tomb.x, y: tomb.y + this.globalGameData.config.player.bodyHeight + 10 };
+            this.sessionData.sceneManager.requestSceneSwitch(new TombScene(this.globalGameData, this.sessionData, returnPoint));
         });
     }
 
@@ -1044,12 +1042,24 @@ class MainScene {
         this.globalGameData.collisionManager.unregisterAllBodies();
         this.globalGameData.collisionManager.unregisterAllHandlers();
     }
+
+
+    #findSpawnPoint() {
+        const spawnTileCoords = this.mapGenerator.findNearestTileWithType(this.globalGameData.config.mapGenerator.spawnPoint.startTileX, this.globalGameData.config.mapGenerator.spawnPoint.startTileY, this.globalGameData.config.mapGenerator.spawnPoint.maxRadiusInTile, this.globalGameData.config.mapGenerator.spawnPoint.step, objectTypes.grassTile)
+            ?? { tileX: this.globalGameData.config.mapGenerator.spawnPoint.startTileX, tileY: this.globalGameData.config.mapGenerator.spawnPoint.startTileY };
+        return {
+            x: this.sizeUnitsConverter.centerPixelXOfTile(spawnTileCoords.tileX),
+            y: this.sizeUnitsConverter.centerPixelYOfTile(spawnTileCoords.tileY)
+        };
+    }
 }
 
 class TombScene {
-    constructor(globalGameData, sessionData) {
+    constructor(globalGameData, sessionData, returnPoint) {
         this.globalGameData = globalGameData;
         this.sessionData = sessionData;
+        this.returnPoint = returnPoint;
+
         this.sizeUnitsConverter = null;
         this.gridStore = null;
     }
@@ -1095,7 +1105,7 @@ class TombScene {
         }
 
         this.globalGameData.collisionManager.registerHandler(objectTypes.player, objectTypes.tombExit, () => {
-            this.sessionData.sceneManager.requestSceneSwitch(new MainScene(this.globalGameData, this.sessionData));
+            this.sessionData.sceneManager.requestSceneSwitch(new MainScene(this.globalGameData, this.sessionData, this.returnPoint));
         });
     }
 
